@@ -713,6 +713,9 @@ class _TFMixin:
                 "Model not trained for prediction"
             )
 
+        if not torch.is_tensor(x):
+            x = torch.Tensor(x)
+
         self.eval()
 
         # Recursive call if x is a DataLoader

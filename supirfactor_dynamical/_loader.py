@@ -51,8 +51,6 @@ def read(
             for k in _state_args
         }
 
-    print(kwargs)
-
     with pd.HDFStore(file_name, mode='r') as f:
         prior = pd.read_hdf(
             f,
