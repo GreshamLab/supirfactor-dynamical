@@ -1,0 +1,7 @@
+numpy
+scipy
+pandas>=1.0.0
+anndata>=0.8
+inferelator
+tqdm
+torch

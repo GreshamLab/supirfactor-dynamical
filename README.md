@@ -1,1 +1,1 @@
-# supirfactor-rnn
+# supirfactor-dynamical
