@@ -4,6 +4,7 @@ import anndata as ad
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
+import scipy.sparse as sps
 
 from torch.utils.data import DataLoader
 
@@ -82,10 +83,16 @@ class TestTimeDataset(unittest.TestCase):
         self.assertEqual(len(td), 50)
         self.assertIsNone(td.strat_idxes)
 
+        try:
+            x = self.adata.X.A
+        except AttributeError:
+            x = self.adata.X
+
         for i in range(50):
+
             npt.assert_equal(
                 td[i],
-                self.adata.X[i, :]
+                x[i, :]
             )
 
     def test_stratified_with_dataloader(self):
@@ -265,3 +272,82 @@ class TestTimeDataset(unittest.TestCase):
             )
 
         self.assertEqual(i, 0)
+
+    def test_multiple_sequence_lengths(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            sequence_length=[1, 2, 3],
+            random_seed=1
+        )
+
+        self.assertEqual(
+            td.sequence_length,
+            np.random.default_rng(1).choice([1, 2, 3])
+        )
+
+        s = set()
+
+        for _ in range(20):
+            td.shuffle()
+
+            s.add(td.sequence_length)
+
+            self.assertEqual(
+                td.sequence_length,
+                len(td.shuffle_idxes[0])
+            )
+
+        self.assertEqual(
+            len(s),
+            3
+        )
+
+    def test_time_randomize(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            shuffle_time_vector=[0, 2],
+            random_seed=1
+        )
+
+        npt.assert_equal(
+            self.adata.obs['time'].values,
+            td._base_time_vector
+        )
+
+        _last_iteration = self.adata.obs['time'].values
+        _bincount = np.bincount(_last_iteration)
+
+        for i in range(10):
+            with self.assertRaises(AssertionError):
+
+                npt.assert_equal(
+                    _last_iteration,
+                    td.time_vector
+                )
+
+            npt.assert_equal(
+                _bincount,
+                np.bincount(td.time_vector)
+            )
+
+            _last_iteration = td.time_vector
+            td.shuffle()
+
+
+class TestTimeDatasetSparse(TestTimeDataset):
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+        self.adata.obs['time'] = T
