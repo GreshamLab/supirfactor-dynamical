@@ -288,7 +288,9 @@ class TimeDataset(torch.utils.data.Dataset):
             with_replacement=True
         )
 
-        if self.sequence_length is not None:
+        if self._sequence_length_options is not None:
+            seq_length = min(self._sequence_length_options)
+        elif self.sequence_length is not None:
             seq_length = self.sequence_length
         else:
             seq_length = len(self.strat_idxes)
