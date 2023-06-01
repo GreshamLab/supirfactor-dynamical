@@ -3,7 +3,7 @@ import collections
 import torch
 import pandas as pd
 
-from .rnn_models import (
+from .models import (
     _CLASS_DICT
 )
 

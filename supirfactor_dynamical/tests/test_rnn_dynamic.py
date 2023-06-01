@@ -492,3 +492,24 @@ class TestTFRecurrentDecoder(TestTFRecurrentAutoencoder):
     @unittest.SkipTest
     def test_latent_layer():
         pass
+
+
+class TestTFRecurrentDecoderShuffler(TestTFRecurrentDecoder):
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        self.time_data = TimeDataset(
+            X,
+            T,
+            0,
+            3,
+            t_step=1,
+            shuffle_time_vector=[0, 2],
+            sequence_length=[2, 3]
+        )
+
+        self.time_dataloader = DataLoader(
+            self.time_data,
+            batch_size=1
+        )

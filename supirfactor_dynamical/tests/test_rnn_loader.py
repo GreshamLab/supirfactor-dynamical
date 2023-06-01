@@ -344,6 +344,68 @@ class TestTimeDataset(unittest.TestCase):
             td.shuffle()
 
 
+    def test_time_seq_randomize(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            shuffle_time_vector=[0, 2],
+            sequence_length=[2, 3],
+            random_seed=1
+        )
+
+        npt.assert_equal(
+            self.adata.obs['time'].values,
+            td._base_time_vector
+        )
+
+        _last_iteration = self.adata.obs['time'].values
+        _bincount = np.bincount(_last_iteration)
+
+        for i in range(10):
+            with self.assertRaises(AssertionError):
+
+                npt.assert_equal(
+                    _last_iteration,
+                    td.time_vector
+                )
+
+            npt.assert_equal(
+                _bincount,
+                np.bincount(td.time_vector)
+            )
+
+            self.assertGreater(len(td), 0)
+
+            dl = DataLoader(td, 2, drop_last=True)
+
+            for data in dl:
+
+                self.assertEqual(data.shape[0], 2)
+                self.assertEqual(data.shape[1], td.sequence_length)
+                self.assertEqual(data.shape[2], 4)
+
+            _last_iteration = td.time_vector
+            td.shuffle()
+
+    def test_time_seq_randomize_bad(self):
+
+        with self.assertRaises(ValueError):
+            td = TimeDataset(
+                self.adata.X,
+                self.adata.obs['time'],
+                0,
+                4,
+                t_step=1,
+                shuffle_time_vector=[0, 2],
+                sequence_length=10,
+                random_seed=1
+            )
+
+
 class TestTimeDatasetSparse(TestTimeDataset):
 
     def setUp(self) -> None:

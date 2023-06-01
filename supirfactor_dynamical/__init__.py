@@ -1,4 +1,4 @@
-from .rnn_models import (
+from .models import (
     TFAutoencoder,
     TFRecurrentAutoencoder,
     TFRNNDecoder,
@@ -8,7 +8,7 @@ from .rnn_models import (
     TFGRUDecoder
 )
 
-from .rnn_models._utils import (
+from .models._utils import (
     evaluate_results
 )
 

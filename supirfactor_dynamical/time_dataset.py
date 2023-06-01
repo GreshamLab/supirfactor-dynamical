@@ -168,6 +168,10 @@ class TimeDataset(torch.utils.data.Dataset):
             pass
 
     def shuffle_time_vector(self):
+        """
+        Shuffle the time labels on values between a start and
+        a stop time
+        """
 
         if self.shuffle_time_limits is None:
             return
@@ -227,9 +231,15 @@ class TimeDataset(torch.utils.data.Dataset):
                 start = self.rng.choice(start_position)
                 return slice(start, start + seq_length)
 
-        else:
+        elif seq_length == len(self.strat_idxes):
             def _get_sequence():
                 return slice(None)
+
+        else:
+            raise ValueError(
+                f"Cannot make sequence of length {seq_length} "
+                f"from {len(self.strat_idxes)} bins"
+            )
 
         return [
             np.array([

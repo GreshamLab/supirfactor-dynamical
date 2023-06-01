@@ -1,14 +1,14 @@
-from .rnn_models import (
+from .models import (
     _CLASS_DICT,
     TFAutoencoder,
     TFRecurrentAutoencoder
 )
 
-from .rnn_models._base_model import (
+from .models._base_model import (
     _TFMixin
 )
 
-from .rnn_models._utils import evaluate_results
+from .models._utils import evaluate_results
 
 
 def dynamic_model_training(

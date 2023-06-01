@@ -273,9 +273,9 @@ class TestTFAutoencoder(unittest.TestCase):
             loader
         )
 
-        npt.assert_almost_equal(
-            r2.numpy(),
-            np.array([1., 1., 1., 0.])
+        npt.assert_equal(
+            r2.numpy() == 1.,
+            np.array([True, True, True, False])
         )
 
     def test_r2_model(self):

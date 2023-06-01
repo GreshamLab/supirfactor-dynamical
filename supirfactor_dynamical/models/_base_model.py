@@ -9,7 +9,11 @@ from torch.utils.data import DataLoader
 
 from ._utils import (
     _process_weights_to_tensor,
-    _calculate_erv
+    _calculate_erv,
+    _calculate_rss,
+    _calculate_tss,
+    _calculate_r2,
+    _aggregate_r2
 )
 
 DEFAULT_OPTIMIZER_PARAMS = {
@@ -546,14 +550,18 @@ class _TFMixin:
 
         self.eval()
 
-        self.training_r2 = self._calculate_r2_score(
-            training_dataloader
-        ).mean().item()
+        self.training_r2 = _aggregate_r2(
+            self._calculate_r2_score(
+                training_dataloader
+            )
+        )
 
         if validation_dataloader is not None:
-            self.validation_r2 = self._calculate_r2_score(
-                validation_dataloader
-            ).mean().item()
+            self.validation_r2 = _aggregate_r2(
+                self._calculate_r2_score(
+                    validation_dataloader
+                )
+            )
 
         return self.training_r2, self.validation_r2
 
@@ -566,8 +574,6 @@ class _TFMixin:
         if dataloader is None:
             return None
 
-        _rss_loss = torch.nn.MSELoss(reduction='none')
-
         _rss = 0
         _ss = 0
 
@@ -577,21 +583,16 @@ class _TFMixin:
                 input_data = self.input_data(data)
                 output_data = self.output_data(data)
 
-                _rss += _rss_loss(
-                    self(input_data),
-                    output_data
-                ).sum(self.gene_loss_sum_axis)
-
-                _ss += _rss_loss(
+                _rss += _calculate_rss(
                     output_data,
-                    torch.zeros_like(output_data)
-                ).sum(self.gene_loss_sum_axis)
+                    self(input_data)
+                )
 
-        # Fix any features that have a variance of zero
-        r2 = 1 - _rss / _ss
-        r2[_ss == 0.] = 1
+                _ss += _calculate_tss(
+                    output_data
+                )
 
-        return r2
+        return _calculate_r2(_rss, _ss)
 
     @torch.inference_mode()
     def erv(
@@ -617,7 +618,6 @@ class _TFMixin:
         """
 
         with torch.no_grad():
-            loss_func = torch.nn.MSELoss(reduction='none')
 
             full_rss = torch.zeros(self.g)
             rss = torch.zeros((self.g, self.k))
@@ -630,11 +630,9 @@ class _TFMixin:
 
                 data_x = self.output_data(data_x)
 
-                full_rss += loss_func(
+                full_rss += _calculate_rss(
                     self.decoder(hidden_x),
                     data_x
-                ).sum(
-                    axis=self.gene_loss_sum_axis
                 )
 
                 # For each node in the latent layer,
@@ -648,11 +646,9 @@ class _TFMixin:
                     else:
                         latent_dropout[:, :, ik] = 0.
 
-                    rss[:, ik] += loss_func(
+                    rss[:, ik] += _calculate_rss(
                         self.decoder(latent_dropout),
                         data_x
-                    ).sum(
-                        axis=self.gene_loss_sum_axis
                     )
 
             # Calculate explained variance from the
@@ -752,8 +748,6 @@ class _TFMixin:
 
 class _TF_RNN_mixin(_TFMixin):
 
-    L = None
-
     initial_state = None
     hidden_initial = None
 
@@ -775,7 +769,7 @@ class _TF_RNN_mixin(_TFMixin):
         if self.prediction_offset is None or self.prediction_offset == 0:
             return super().input_data(x)
 
-        L = self.sequence_length(x)
+        L = x.shape[-2]
 
         if x.ndim == 2:
             return x[0:L - self.prediction_offset, :]
@@ -792,17 +786,6 @@ class _TF_RNN_mixin(_TFMixin):
         else:
             return x[:, self.prediction_offset:, :]
 
-    def sequence_length(self, x):
-
-        if self.L is not None:
-            return self.L
-        elif x.ndim == 2:
-            self.L = x.shape[0]
-        else:
-            self.L = x.shape[1]
-
-        return self.L
-
     @torch.inference_mode()
     def r2_over_time(
         self,
@@ -814,7 +797,9 @@ class _TF_RNN_mixin(_TFMixin):
         self.hidden_initial = None
 
         self.training_r2_over_time = [
-            self._calculate_r2_score([x]).mean().item()
+            _aggregate_r2(
+                self._calculate_r2_score([x])
+            )
             for x in training_dataloader.dataset.get_times_in_order()
         ]
 
@@ -822,7 +807,9 @@ class _TF_RNN_mixin(_TFMixin):
             self.hidden_initial = None
 
             self.validation_r2_over_time = [
-                self._calculate_r2_score([x]).mean().item()
+                _aggregate_r2(
+                    self._calculate_r2_score([x])
+                )
                 for x in validation_dataloader.dataset.get_times_in_order()
             ]
 
