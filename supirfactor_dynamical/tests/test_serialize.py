@@ -10,7 +10,7 @@ from scipy.linalg import pinv
 
 from supirfactor_dynamical import (
     TFAutoencoder,
-    TFRecurrentAutoencoder,
+    TFRNNDecoder,
     read
 )
 
@@ -73,8 +73,8 @@ class TestSerializer(unittest.TestCase):
 
     def test_h5_dynamic(self):
 
-        ae = TFRecurrentAutoencoder(A, use_prior_weights=True)
-        ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        ae = TFRNNDecoder(A, use_prior_weights=True)
+        ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
@@ -97,20 +97,19 @@ class TestSerializer(unittest.TestCase):
                 'layer_dropout_rate': 0.0,
                 'output_relu': True,
                 'prediction_offset': None,
-                'initial_state': None
             }
         )
 
     def test_h5_dynamic_notnone(self):
 
-        ae = TFRecurrentAutoencoder(
+        ae = TFRNNDecoder(
             A,
             use_prior_weights=False,
-            initial_state=np.ones(4, dtype=np.float32),
             prediction_offset=1,
             output_relu=False
         )
-        ae.decoder[0].weight = torch.nn.parameter.Parameter(
+
+        ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
@@ -124,12 +123,6 @@ class TestSerializer(unittest.TestCase):
         npt.assert_almost_equal(
             A,
             stub.args[0].values
-        )
-
-        istate = stub.kwargs.pop('initial_state')
-        npt.assert_almost_equal(
-            istate,
-            np.ones(4, dtype=np.float32)
         )
 
         self.assertDictEqual(

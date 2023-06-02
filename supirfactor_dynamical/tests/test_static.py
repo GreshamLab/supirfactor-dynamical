@@ -7,7 +7,11 @@ import torch
 from torch.utils.data import DataLoader
 from scipy.linalg import pinv
 
-from supirfactor_dynamical import TFAutoencoder, TimeDataset
+from supirfactor_dynamical import (
+    TFAutoencoder,
+    TFMetaAutoencoder,
+    TimeDataset
+)
 
 from ._stubs import (
     X,
@@ -392,4 +396,52 @@ class TestTFAutoencoderOffset(unittest.TestCase):
         self.assertEqual(
             predictions.shape,
             (20, 4)
+        )
+
+
+class TestTFMetaAutoencoder(TestTFAutoencoder):
+
+    def setUp(self) -> None:
+        torch.manual_seed(55)
+        self.ae = TFMetaAutoencoder(A, use_prior_weights=True)
+        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+            torch.tensor(pinv(A).T, dtype=torch.float32)
+        )
+        self.ae._intermediate[0].weight = torch.nn.parameter.Parameter(
+            torch.eye(3, dtype=torch.float32)
+        )
+
+
+class TestTFMetaAutoencoderOffset(TestTFAutoencoderOffset):
+
+    def setUp(self) -> None:
+        torch.manual_seed(55)
+
+        self.static_dataloader = DataLoader(
+            X_tensor,
+            batch_size=1
+        )
+
+        self.dynamic_dataloader = DataLoader(
+            TimeDataset(
+                X,
+                T,
+                0,
+                2,
+                t_step=1
+            ),
+            batch_size=5
+        )
+
+        self.ae = TFMetaAutoencoder(
+            A,
+            use_prior_weights=True,
+            prediction_offset=0
+        )
+
+        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+            torch.tensor(pinv(A).T, dtype=torch.float32)
+        )
+        self.ae._intermediate[0].weight = torch.nn.parameter.Parameter(
+            torch.eye(3, dtype=torch.float32)
         )

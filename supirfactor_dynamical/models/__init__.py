@@ -1,27 +1,23 @@
 from .ae_model import (
-    TFAutoencoder
+    TFAutoencoder,
+    TFMetaAutoencoder
 )
 
 from .rnn_model import (
-    TFRecurrentAutoencoder,
     TFRNNDecoder
 )
 
 from .lstm_model import (
-    TFLSTMAutoencoder,
     TFLSTMDecoder
 )
 
 from .gru_model import (
-    TFGRUAutoencoder,
     TFGRUDecoder
 )
 
 _CLASS_DICT = {
     TFAutoencoder.type_name: TFAutoencoder,
-    TFRecurrentAutoencoder.type_name: TFRecurrentAutoencoder,
-    TFLSTMAutoencoder.type_name: TFLSTMAutoencoder,
-    TFGRUAutoencoder.type_name: TFGRUAutoencoder,
+    TFMetaAutoencoder.type_name: TFMetaAutoencoder,
     TFRNNDecoder.type_name: TFRNNDecoder,
     TFGRUDecoder.type_name: TFGRUDecoder,
     TFLSTMDecoder.type_name: TFLSTMDecoder

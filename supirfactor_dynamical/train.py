@@ -1,7 +1,7 @@
 from .models import (
     _CLASS_DICT,
     TFAutoencoder,
-    TFRecurrentAutoencoder
+    TFRNNDecoder
 )
 
 from .models._base_model import (
@@ -9,6 +9,14 @@ from .models._base_model import (
 )
 
 from .models._utils import evaluate_results
+
+
+def _is_model(model):
+
+    try:
+        return issubclass(model, _TFMixin)
+    except TypeError:
+        return False
 
 
 def dynamic_model_training(
@@ -22,13 +30,12 @@ def dynamic_model_training(
     input_dropout=0.5,
     hidden_layer_dropout=0.0,
     prediction_time_offset=None,
-    recurrency_mask=None,
     model_type=None
 ):
 
     # Get model type
     if model_type is None:
-        dynamic_autoencoder = TFRecurrentAutoencoder
+        dynamic_autoencoder = TFRNNDecoder
 
     elif _is_model(model_type):
         dynamic_autoencoder = model_type
@@ -38,7 +45,6 @@ def dynamic_model_training(
 
     ae_dynamic = dynamic_autoencoder(
         prior_network,
-        recurrency_mask=recurrency_mask,
         input_dropout_rate=input_dropout,
         layer_dropout_rate=hidden_layer_dropout,
         decoder_weights=decoder_weights,
@@ -70,14 +76,6 @@ def dynamic_model_training(
     )
 
     return ae_dynamic, dyn_results
-
-
-def _is_model(model):
-
-    try:
-        return issubclass(model, _TFMixin)
-    except TypeError:
-        return False
 
 
 def static_model_training(
@@ -133,7 +131,6 @@ def joint_model_training(
     input_dropout=0.5,
     hidden_layer_dropout=0.0,
     prediction_time_offset=None,
-    dynamic_recurrency_mask=None,
     dynamic_model_type=None
 ):
 
@@ -159,65 +156,7 @@ def joint_model_training(
         input_dropout=input_dropout,
         hidden_layer_dropout=hidden_layer_dropout,
         prediction_time_offset=prediction_time_offset,
-        recurrency_mask=dynamic_recurrency_mask,
         model_type=dynamic_model_type
     )
 
     return ae_static, ae_results, ae_dynamic, dyn_results
-
-
-def highly_connected_dynamic_hidden_layer(
-    dynamic_training_dataloader,
-    dynamic_validation_dataloader,
-    prior_network,
-    epochs,
-    optimizer_params=None,
-    gold_standard=None,
-    input_dropout=0.5,
-    hidden_layer_dropout=0.0,
-    erv_threshold=0.05,
-    prediction_time_offset=None,
-    dynamic_model_type=None
-):
-
-    ae_dynamic, dyn_results_first = dynamic_model_training(
-        dynamic_training_dataloader,
-        prior_network,
-        epochs,
-        dynamic_validation_dataloader=dynamic_validation_dataloader,
-        optimizer_params=optimizer_params,
-        gold_standard=gold_standard,
-        input_dropout=input_dropout,
-        hidden_layer_dropout=hidden_layer_dropout,
-        prediction_time_offset=prediction_time_offset,
-        recurrency_mask=None,
-        model_type=dynamic_model_type
-    )
-
-    dynamic_erv = ae_dynamic.erv(
-        dynamic_training_dataloader,
-        as_data_frame=True
-    )
-
-    initialize_decoder = ae_dynamic.pruned_model_weights(
-        erv=dynamic_erv,
-        erv_threshold=erv_threshold,
-        as_dataframe=True
-    )
-
-    ae_dynamic_second, dyn_results_second = dynamic_model_training(
-        dynamic_training_dataloader,
-        prior_network,
-        epochs,
-        dynamic_validation_dataloader=dynamic_validation_dataloader,
-        optimizer_params=optimizer_params,
-        gold_standard=gold_standard,
-        input_dropout=input_dropout,
-        hidden_layer_dropout=hidden_layer_dropout,
-        prediction_time_offset=prediction_time_offset,
-        recurrency_mask=False,
-        decoder_weights=initialize_decoder,
-        model_type=dynamic_model_type
-    )
-
-    return ae_dynamic, dyn_results_first, ae_dynamic_second, dyn_results_second

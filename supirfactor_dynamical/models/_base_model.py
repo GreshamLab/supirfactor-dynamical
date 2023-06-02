@@ -27,6 +27,8 @@ class _TFMixin:
     g = 0
     k = 0
 
+    drop_tf = None
+
     prior_network = None
     prior_network_labels = None
 
@@ -82,6 +84,49 @@ class _TFMixin:
         self.k, self.g = prior_network.shape
 
         return prior_network
+
+    def set_encoder(
+        self,
+        prior_network,
+        use_prior_weights=False
+    ):
+
+        prior_network = self.process_prior(
+            prior_network
+        )
+
+        # Build the encoder module
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(self.g, self.k, bias=False),
+            torch.nn.ReLU()
+        )
+
+        # Replace initialized encoder weights with prior weights
+        self.mask_input_weights(
+            prior_network,
+            use_mask_weights=use_prior_weights,
+            layer_name='weight'
+        )
+
+    def drop_encoder(
+        self,
+        x
+    ):
+        x = self.encoder(x)
+
+        if self.drop_tf is not None:
+
+            if not isinstance(
+                self.drop_tf,
+                (tuple, list)
+            ):
+                drop_df = [self.drop_tf]
+            else:
+                drop_df = self.drop_tf
+
+            x[:, self.prior_network_labels[1].isin(drop_df)] = 0
+
+        return x
 
     @torch.inference_mode()
     def _to_dataframe(
@@ -254,46 +299,6 @@ class _TFMixin:
             encoder,
             name=layer_name,
             mask=mask != 0
-        )
-
-    def mask_recurrent_weights(
-        self,
-        mask,
-        layer_name='weight_hh_l0',
-        recurrent_object=None,
-        n_to_stack=None
-    ):
-        """
-        Apply a mask to the recurrency weights layer
-
-        :param mask: Boolean mask
-        :type mask: torch.Tensor
-        """
-
-        if recurrent_object is None:
-            recurrent_object = self.encoder
-
-        m, n = getattr(recurrent_object, layer_name).shape
-
-        if mask is False:
-            return
-
-        elif mask is None:
-            mask = torch.eye(
-                n,
-                dtype=bool
-            )
-
-        if not torch.is_tensor(mask):
-            mask = torch.tensor(mask != 0, dtype=torch.bool)
-
-        if n_to_stack is not None and mask.shape[0] != m:
-            mask = torch.vstack([mask for _ in range(n_to_stack)])
-
-        prune.custom_from_mask(
-            recurrent_object,
-            name=layer_name,
-            mask=mask
         )
 
     @torch.inference_mode()
@@ -748,8 +753,17 @@ class _TFMixin:
 
 class _TF_RNN_mixin(_TFMixin):
 
-    initial_state = None
-    hidden_initial = None
+    _serialize_args = [
+        'input_dropout_rate',
+        'layer_dropout_rate',
+        'output_relu',
+        'prediction_offset'
+    ]
+
+    input_dropout_rate = 0.5
+    layer_dropout_rate = 0.0
+    output_relu = True
+    prediction_offset = None
 
     gene_loss_sum_axis = (0, 1)
 
@@ -794,7 +808,6 @@ class _TF_RNN_mixin(_TFMixin):
     ):
 
         self.eval()
-        self.hidden_initial = None
 
         self.training_r2_over_time = [
             _aggregate_r2(
@@ -804,7 +817,6 @@ class _TF_RNN_mixin(_TFMixin):
         ]
 
         if validation_dataloader is not None:
-            self.hidden_initial = None
 
             self.validation_r2_over_time = [
                 _aggregate_r2(
@@ -844,7 +856,10 @@ class _TF_RNN_mixin(_TFMixin):
         for _ in range(n_time_steps - 1):
 
             # Keep reusing the hidden layer output
-            x_tensor = self.forward(x_tensor, self.hidden_final)
+            x_tensor = self.forward(
+                x_tensor,
+                self.hidden_final
+            )
 
             # Squeeze out extra length dimension
             # will be added back in by stack

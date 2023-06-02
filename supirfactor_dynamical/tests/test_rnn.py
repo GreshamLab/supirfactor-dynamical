@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader
 from scipy.linalg import pinv
 
 from supirfactor_dynamical import (
-    TFRecurrentAutoencoder,
     TFRNNDecoder,
     TimeDataset
 )
@@ -21,25 +20,24 @@ from ._stubs import (
 )
 
 
-class TestTFRecurrentAutoencoder(unittest.TestCase):
+class TestTFRecurrentDecoder(unittest.TestCase):
 
     weight_stack = 1
-    class_holder = TFRecurrentAutoencoder
+    class_holder = TFRNNDecoder
 
     def setUp(self) -> None:
 
         torch.manual_seed(55)
         self.dyn_ae = self.class_holder(
             A,
-            use_prior_weights=True,
-            recurrency_mask=torch.zeros(
-                (3 * self.weight_stack, 3)
-            )
+            use_prior_weights=True
         )
 
-        self.dyn_ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        self.dyn_ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A.T), dtype=torch.float32)
         )
+
+        self._reset_dynae_intermediate()
 
         self.time_data = TimeDataset(
             X,
@@ -55,8 +53,68 @@ class TestTFRecurrentAutoencoder(unittest.TestCase):
         )
 
         self.expect_mask = A.T == 0
-        self.expect_mask = np.vstack(
-            [self.expect_mask for _ in range(self.weight_stack)]
+
+    def _reset_dynae_intermediate(self):
+
+        # Make the hidden layer a passthrough
+        # By setting I for input weights and zeros for recurrent weights
+        self.dyn_ae._intermediate.weight_ih_l0 = torch.nn.parameter.Parameter(
+            torch.vstack(
+                [
+                    torch.eye(3, dtype=torch.float32)
+                    for _ in range(self.weight_stack)
+                ]
+            )
+        )
+
+        self.dyn_ae._intermediate.weight_hh_l0 = torch.nn.parameter.Parameter(
+            torch.zeros((3 * self.weight_stack, 3), dtype=torch.float32)
+        )
+
+    def test_predict(self):
+
+        self.dyn_ae.prediction_offset = 1
+        losses, vlosses = self.dyn_ae.train_model(
+            self.time_dataloader,
+            20
+        )
+
+        predictions = self.dyn_ae.predict(
+            self.time_dataloader,
+            10
+        )
+
+        self.assertEqual(
+            predictions.shape,
+            (25, 10, 4)
+        )
+
+    def test_predict_tensor(self):
+
+        self.dyn_ae.prediction_offset = 1
+        losses, vlosses = self.dyn_ae.train_model(
+            self.time_dataloader,
+            20
+        )
+
+        predictions = self.dyn_ae.predict(
+            torch.unsqueeze(X_tensor[0:25, :], 1),
+            20
+        )
+
+        self.assertEqual(
+            predictions.shape,
+            (25, 20, 4)
+        )
+
+        predictions = self.dyn_ae.predict(
+            X_tensor[0:, :],
+            20
+        )
+
+        self.assertEqual(
+            predictions.shape,
+            (20, 4)
         )
 
     def test_initialize(self):
@@ -70,46 +128,6 @@ class TestTFRecurrentAutoencoder(unittest.TestCase):
             self.dyn_ae.g,
             4
         )
-
-    def test_initialize_hidden_weights(self):
-
-        with torch.no_grad():
-            npt.assert_almost_equal(
-                np.vstack(
-                    [np.zeros((3, 3)) for _ in range(self.weight_stack)]
-                ),
-                self.dyn_ae.recurrent_weights.numpy()
-            )
-
-        diagonal_only = self.class_holder(
-            A,
-            use_prior_weights=True
-        )
-
-        with torch.no_grad():
-            npt.assert_almost_equal(
-                np.vstack(
-                    [np.eye(3, dtype=bool) for _ in range(self.weight_stack)]
-                ),
-                diagonal_only.recurrent_weights.numpy() != 0
-            )
-
-        no_mask = self.class_holder(
-            A,
-            use_prior_weights=True,
-            recurrency_mask=False
-        )
-
-        with torch.no_grad():
-            npt.assert_almost_equal(
-                np.vstack(
-                    [
-                        np.ones((3, 3), dtype=bool)
-                        for _ in range(self.weight_stack)
-                    ]
-                ),
-                no_mask.recurrent_weights.numpy() != 0
-            )
 
     def test_latent_layer(self):
 
@@ -187,9 +205,18 @@ class TestTFRecurrentAutoencoder(unittest.TestCase):
             20
         )
 
+        self._reset_dynae_intermediate()
+        self.dyn_ae.eval()
+
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
             out_weights = self.dyn_ae.output_weights()
+
+        self.time_data.sequence_length = 2
+        self.time_data.shuffle_idxes = self.time_data._get_shuffle_indexes(
+            with_replacement=self.time_data.with_replacement,
+            n=self.time_data.n
+        )
 
         X_loader = DataLoader(self.time_data, batch_size=25)
         X_time = list(X_loader)[0]
@@ -197,9 +224,22 @@ class TestTFRecurrentAutoencoder(unittest.TestCase):
         h = X_time.numpy() @ in_weights.T
         h[h < 0] = 0
 
+        self.dyn_ae(X_time)
+
         npt.assert_almost_equal(
             self.dyn_ae.latent_layer(X_time).numpy(),
             h,
+            decimal=3
+        )
+
+        try:
+            hiddens = self.dyn_ae.hidden_final.detach().numpy()[0, :, :]
+        except AttributeError:
+            hiddens = self.dyn_ae.hidden_final[0].detach().numpy()[0, :, :]
+
+        npt.assert_almost_equal(
+            hiddens,
+            h[:, 1, :],
             decimal=3
         )
 
@@ -388,112 +428,6 @@ class TestTFRecurrentAutoencoder(unittest.TestCase):
         )
 
 
-class TestTFRecurrentDecoder(TestTFRecurrentAutoencoder):
-
-    class_holder = TFRNNDecoder
-
-    def setUp(self) -> None:
-
-        torch.manual_seed(55)
-        self.dyn_ae = self.class_holder(
-            A,
-            use_prior_weights=True
-        )
-
-        self.dyn_ae._decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A.T), dtype=torch.float32)
-        )
-
-        self.time_data = TimeDataset(
-            X,
-            T,
-            0,
-            2,
-            t_step=1
-        )
-
-        self.time_dataloader = DataLoader(
-            self.time_data,
-            batch_size=1
-        )
-
-        self.expect_mask = A.T == 0
-
-    def test_predict(self):
-
-        self.dyn_ae.prediction_offset = 1
-        losses, vlosses = self.dyn_ae.train_model(
-            self.time_dataloader,
-            20
-        )
-
-        predictions = self.dyn_ae.predict(
-            self.time_dataloader,
-            10
-        )
-
-        self.assertEqual(
-            predictions.shape,
-            (25, 10, 4)
-        )
-
-    def test_predict_tensor(self):
-
-        self.dyn_ae.prediction_offset = 1
-        losses, vlosses = self.dyn_ae.train_model(
-            self.time_dataloader,
-            20
-        )
-
-        predictions = self.dyn_ae.predict(
-            torch.unsqueeze(X_tensor[0:25, :], 1),
-            20
-        )
-
-        self.assertEqual(
-            predictions.shape,
-            (25, 20, 4)
-        )
-
-        predictions = self.dyn_ae.predict(
-            X_tensor[0:, :],
-            20
-        )
-
-        self.assertEqual(
-            predictions.shape,
-            (20, 4)
-        )
-
-    @unittest.SkipTest
-    def test_initialize_hidden_weights(self):
-        pass
-
-    @unittest.SkipTest
-    def test_train_loop_offset_predict():
-        pass
-
-    @unittest.SkipTest
-    def test_r2_over_timemodel():
-        pass
-
-    @unittest.SkipTest
-    def test_r2_over_timemodel_len2():
-        pass
-
-    @unittest.SkipTest
-    def test_r2_model():
-        pass
-
-    @unittest.SkipTest
-    def test_erv():
-        pass
-
-    @unittest.SkipTest
-    def test_latent_layer():
-        pass
-
-
 class TestTFRecurrentDecoderShuffler(TestTFRecurrentDecoder):
 
     def setUp(self) -> None:
@@ -513,3 +447,7 @@ class TestTFRecurrentDecoderShuffler(TestTFRecurrentDecoder):
             self.time_data,
             batch_size=1
         )
+
+    @unittest.SkipTest
+    def test_r2_over_timemodel(self):
+        pass
