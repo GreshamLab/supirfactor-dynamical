@@ -88,9 +88,20 @@ def static_model_training(
     input_dropout=0.5,
     hidden_layer_dropout=0.0,
     prediction_time_offset=None,
+    model_type=None
 ):
 
-    ae_static = TFAutoencoder(
+    # Get model type
+    if model_type is None:
+        static_autoencoder = TFAutoencoder
+
+    elif _is_model(model_type):
+        static_autoencoder = model_type
+
+    else:
+        static_autoencoder = _CLASS_DICT[model_type]
+
+    ae_static = static_autoencoder(
         prior_network,
         input_dropout_rate=input_dropout,
         layer_dropout_rate=hidden_layer_dropout,
@@ -131,6 +142,7 @@ def joint_model_training(
     input_dropout=0.5,
     hidden_layer_dropout=0.0,
     prediction_time_offset=None,
+    static_model_type=None,
     dynamic_model_type=None
 ):
 
