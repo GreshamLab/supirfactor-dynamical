@@ -97,7 +97,7 @@ class TFGRUDecoder(torch.nn.Module, _TF_RNN_mixin):
     def forward(self, x, hidden_state=None):
 
         x = self.input_dropout(x)
-        x = self.encoder(x)
+        x = self.drop_encoder(x)
         x = self.decoder(x, hidden_state)
 
         return x

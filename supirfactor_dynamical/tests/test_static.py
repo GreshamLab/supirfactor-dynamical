@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 import numpy.testing as npt
+import pandas as pd
 
 import torch
 from torch.utils.data import DataLoader
@@ -303,6 +304,84 @@ class TestTFAutoencoder(unittest.TestCase):
             val_r2,
             0.75
         )
+
+
+class TestTFDropouts(unittest.TestCase):
+
+    def setUp(self) -> None:
+        torch.manual_seed(55)
+
+    def test_no_dropout(self):
+        self.ae = TFAutoencoder(A, use_prior_weights=True)
+        self.ae.set_drop_tfs(None)
+
+        npt.assert_almost_equal(
+            (X_tensor @ A).numpy(),
+            self.ae.latent_layer(X_tensor).numpy()
+        )
+
+    def test_no_labels(self):
+        self.ae = TFAutoencoder(A, use_prior_weights=True)
+
+        with self.assertRaises(RuntimeError):
+            self.ae.set_drop_tfs("BAD")
+
+    def test_good_dropouts(self):
+        self.ae = TFAutoencoder(
+            pd.DataFrame(A),
+            use_prior_weights=True
+        )
+
+        self.ae.set_drop_tfs(None)
+
+        npt.assert_almost_equal(
+            (X_tensor @ A).numpy(),
+            self.ae.latent_layer(X_tensor).numpy()
+        )
+
+        self.ae.set_drop_tfs(0)
+
+        ll = (X_tensor @ A).numpy()
+        ll[:, 0] = 0.
+        npt.assert_almost_equal(
+            ll,
+            self.ae.latent_layer(X_tensor).numpy()
+        )
+
+        self.ae.set_drop_tfs([0, 1])
+
+        ll = (X_tensor @ A).numpy()
+        ll[:, [0, 1]] = 0.
+        npt.assert_almost_equal(
+            ll,
+            self.ae.latent_layer(X_tensor).numpy()
+        )
+
+    def test_missing_dropout_warnings(self):
+
+        self.ae = TFAutoencoder(
+            pd.DataFrame(A),
+            use_prior_weights=True
+        )
+
+        self.ae.set_drop_tfs(None)
+
+        with self.assertWarns(RuntimeWarning):
+            self.ae.set_drop_tfs("A")
+
+        with self.assertWarns(RuntimeWarning):
+            self.ae.set_drop_tfs("C")
+
+        with self.assertWarns(RuntimeWarning):
+            self.ae.set_drop_tfs(["A", "c"])
+
+        with self.assertWarns(RuntimeWarning):
+            self.ae.set_drop_tfs(["A", 0])
+
+        with self.assertWarns(RuntimeWarning):
+            self.ae.set_drop_tfs(["A", 0, 1, 2])
+
+        self.ae.set_drop_tfs([0, 1, 2])
 
 
 class TestTFAutoencoderOffset(unittest.TestCase):

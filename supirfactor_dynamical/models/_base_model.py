@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import pandas as pd
 import tqdm
+import warnings
 
 from torch.nn.utils import prune
 from torch.utils.data import DataLoader
@@ -27,10 +28,10 @@ class _TFMixin:
     g = 0
     k = 0
 
-    drop_tf = None
+    _drop_tf = None
 
     prior_network = None
-    prior_network_labels = None
+    prior_network_labels = (None, None)
 
     training_loss = None
     validation_loss = None
@@ -114,19 +115,53 @@ class _TFMixin:
     ):
         x = self.encoder(x)
 
-        if self.drop_tf is not None:
-
-            if not isinstance(
-                self.drop_tf,
-                (tuple, list)
-            ):
-                drop_df = [self.drop_tf]
-            else:
-                drop_df = self.drop_tf
-
-            x[:, self.prior_network_labels[1].isin(drop_df)] = 0
+        if self._drop_tf is not None:
+            x[:, self.prior_network_labels[1].isin(self._drop_tf)] = 0
 
         return x
+
+    def set_drop_tfs(
+        self,
+        drop_tfs
+    ):
+        """
+        Remove specific TF nodes from the TF layer
+        by zeroing their activity
+
+        :param drop_tfs: TF name(s) matching TF prior labels.
+            None disables TF dropout.
+        :type drop_tfs: list, pd.Series
+        """
+
+        if drop_tfs is None:
+            self._drop_tf = None
+            return
+
+        elif self.prior_network_labels[1] is None:
+            raise RuntimeError(
+                "Unable to exclude TFs without TF labels; "
+                "use a labeled DataFrame for the prior network"
+            )
+
+        elif not isinstance(
+            drop_tfs,
+            (tuple, list, pd.Series, pd.Index)
+        ):
+            self._drop_tf = [drop_tfs]
+
+        else:
+            self._drop_tf = drop_tfs
+
+        _no_match = set(self._drop_tf).difference(
+            self.prior_network_labels[1]
+        )
+
+        if len(_no_match) != 0:
+            warnings.warn(
+                f"{len(_no_match)} / {len(self._drop_tf)} labels don't match "
+                f"model labels: {list(_no_match)}",
+                RuntimeWarning
+            )
 
     @torch.inference_mode()
     def _to_dataframe(
@@ -402,7 +437,7 @@ class _TFMixin:
 
     @torch.inference_mode()
     def _latent_layer_values(self, x):
-        return self.encoder(x).detach()
+        return self.drop_encoder(x).detach()
 
     def input_data(self, x):
         """
