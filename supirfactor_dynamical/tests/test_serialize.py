@@ -2,7 +2,6 @@ import unittest
 import tempfile
 import os
 
-import numpy as np
 import numpy.testing as npt
 
 import torch
@@ -28,6 +27,9 @@ class _ModelStub:
 
     def load_state_dict(self, x):
         self.state_dict = x
+
+    def set_time_parameters(self, **kwargs):
+        self.time_kwargs = kwargs
 
 
 class TestSerializer(unittest.TestCase):
@@ -65,9 +67,15 @@ class TestSerializer(unittest.TestCase):
             stub.kwargs,
             {
                 'input_dropout_rate': 0.5,
-                'layer_dropout_rate': 0.0,
-                'output_relu': True,
-                'prediction_offset': None
+                'output_relu': True
+            }
+        )
+
+        self.assertDictEqual(
+            stub.time_kwargs,
+            {
+                'prediction_length': 0,
+                'loss_offset': 0
             }
         )
 
@@ -94,9 +102,15 @@ class TestSerializer(unittest.TestCase):
             stub.kwargs,
             {
                 'input_dropout_rate': 0.5,
-                'layer_dropout_rate': 0.0,
-                'output_relu': True,
-                'prediction_offset': None,
+                'output_relu': True
+            }
+        )
+
+        self.assertDictEqual(
+            stub.time_kwargs,
+            {
+                'prediction_length': 0,
+                'loss_offset': 0
             }
         )
 
@@ -105,8 +119,12 @@ class TestSerializer(unittest.TestCase):
         ae = TFRNNDecoder(
             A,
             use_prior_weights=False,
-            prediction_offset=1,
             output_relu=False
+        )
+
+        ae.set_time_parameters(
+            prediction_length=1,
+            loss_offset=0
         )
 
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
@@ -129,9 +147,15 @@ class TestSerializer(unittest.TestCase):
             stub.kwargs,
             {
                 'input_dropout_rate': 0.5,
-                'layer_dropout_rate': 0.0,
-                'output_relu': False,
-                'prediction_offset': 1
+                'output_relu': False
+            }
+        )
+
+        self.assertDictEqual(
+            stub.time_kwargs,
+            {
+                'prediction_length': 1,
+                'loss_offset': 0
             }
         )
 

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import warnings
 
 from scipy.sparse import isspmatrix
 
@@ -120,6 +121,13 @@ class TimeDataset(torch.utils.data.Dataset):
 
             self.n = self.data.shape[0]
             self.strat_idxes = None
+
+        if self.n == 0:
+            warnings.warn(
+                f"Data with {self.data.shape[0]} observations will "
+                f"yield zero data sequences",
+                UserWarning
+            )
 
     def _generate_stratified_indices(self):
 

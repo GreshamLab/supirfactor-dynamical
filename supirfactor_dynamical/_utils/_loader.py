@@ -3,9 +3,14 @@ import collections
 import torch
 import pandas as pd
 
-from .models import (
+from ..models import (
     _CLASS_DICT
 )
+
+TIME_KWARGS = [
+    'prediction_length',
+    'loss_offset'
+]
 
 
 def read(
@@ -57,6 +62,10 @@ def read(
             'prior_network'
         )
 
+    time_kwargs = {
+        k: kwargs.pop(k, None) for k in TIME_KWARGS
+    }
+
     if model_class is None:
         model = _CLASS_DICT[_state_model](
             prior,
@@ -67,6 +76,10 @@ def read(
             prior,
             **kwargs
         )
+
+    model.set_time_parameters(
+        **time_kwargs
+    )
 
     model.load_state_dict(
         _state_dict

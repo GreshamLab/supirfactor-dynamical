@@ -3,7 +3,7 @@ import torch
 import numpy.testing as npt
 import numpy as np
 
-from supirfactor_dynamical.models._utils import (
+from supirfactor_dynamical._utils import (
     _calculate_erv,
     _calculate_rss,
     _calculate_tss,

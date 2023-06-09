@@ -1,4 +1,3 @@
-import h5py
 import torch
 import numpy as np
 import pandas as pd
@@ -8,7 +7,7 @@ import warnings
 from torch.nn.utils import prune
 from torch.utils.data import DataLoader
 
-from ._utils import (
+from .._utils import (
     _process_weights_to_tensor,
     _calculate_erv,
     _calculate_rss,
@@ -16,6 +15,9 @@ from ._utils import (
     _calculate_r2,
     _aggregate_r2
 )
+
+from ._writer import write
+
 
 DEFAULT_OPTIMIZER_PARAMS = {
     "lr": 1e-3,
@@ -42,9 +44,20 @@ class _TFMixin:
     gene_loss_sum_axis = 0
     type_name = "base"
 
-    _serialize_args = []
+    _serialize_args = [
+        'input_dropout_rate',
+        'output_relu',
+        'prediction_length',
+        'loss_offset'
+    ]
 
-    prediction_offset = None
+    input_dropout_rate = 0.5
+    output_relu = True
+
+    prediction_offset = False
+    prediction_length = 0
+    loss_offset = 0
+
     hidden_final = None
 
     @property
@@ -58,6 +71,142 @@ class _TFMixin:
     @property
     def decoder_weights(self):
         return self.decoder[0].weight
+
+    def _forward(
+        self,
+        x,
+        hidden_state=None,
+        n_time_steps=0
+    ):
+        """
+        Forward pass for data X with prediction if n_time_steps > 0.
+        Calls _forward_step and _forward_loop.
+
+
+        :param x: Input data
+        :type x: torch.Tensor
+        :param hidden_state: h_0 hidden state, defaults to None
+        :type hidden_state: torch.Tensor, tuple, optional
+        :param n_time_steps: Number of forward prediction time steps,
+            defaults to 0
+        :type n_time_steps: int, optional
+        :return: Output data (N, L, K)
+        :rtype: torch.Tensor
+        """
+
+        x = self.input_dropout(x)
+        x = self._forward_step(x, hidden_state)
+
+        if n_time_steps > 0:
+
+            # Force 1D data into 2D
+            if x.ndim == 1:
+                x = torch.unsqueeze(x, dim=0)
+
+            # Feed it into the start of the forward loop
+            forward_x = self._forward_loop(x, n_time_steps)
+
+            # Add a new dimension for sequence length
+            if x.ndim == 2:
+                x = torch.unsqueeze(x, dim=1)
+
+            # Cat together on time dimension 1
+            x = torch.cat(
+                (
+                    x,
+                    forward_x
+                ),
+                dim=1
+            )
+
+        return x
+
+    def _forward_step(
+        self,
+        x,
+        hidden_state=None
+    ):
+        """
+        Forward prop
+
+        :param x: Input data
+        :type x: torch.Tensor
+        :param hidden_state: Model hidden state h_0,
+            defaults to None
+        :type hidden_state: torch.Tensor, optional
+        :return: Predicted output
+        :rtype: torch.Tensor
+        """
+
+        x = self.drop_encoder(x)
+        x = self.decoder(x, hidden_state)
+
+        return x
+
+    def _forward_loop(
+        self,
+        x_tensor,
+        n_time_steps
+    ):
+        """
+        Forward prop recursively to predict future states.
+        Models with hidden states will be use h_final from one
+        iteration to initialize h_0 in the next iteration
+
+        :param x: Input data
+        :type x: torch.Tensor
+        :param n_time_steps: Number of time iterations
+        :type hidden_state: int
+        :return: Predicted output. Adds a dimension if
+            input data does not already have a sequence dimension
+        :rtype: torch.Tensor
+        """
+
+        output_state = []
+
+        for _ in range(n_time_steps):
+
+            x_tensor = self._forward_step(x_tensor, self.hidden_final)
+            output_state.append(x_tensor)
+
+        return self._forward_loop_merge(output_state)
+
+    @staticmethod
+    def _forward_loop_merge(tensor_list):
+        """
+        Merge data that does not have a sequence length dimension
+        by adding a new dimension
+
+        Merge data that does have a sequence length dimension
+        by concatenating on that dimension
+
+        :param tensor_list: List of predicted tensors
+        :type tensor_list: list(torch.Tensor)
+        :return: Stacked tensor
+        :rtype: torch.Tensor
+        """
+        if tensor_list[0].ndim < 3:
+            return torch.stack(
+                tensor_list,
+                dim=tensor_list[0].ndim - 1
+            )
+
+        else:
+            return torch.cat(
+                tensor_list,
+                dim=tensor_list[0].ndim - 2
+            )
+
+    def drop_encoder(
+        self,
+        x
+    ):
+        x = self.encoder(x)
+
+        if self._drop_tf is not None:
+            x[:, self.prior_network_labels[1].isin(self._drop_tf)] = 0
+
+        return x
 
     def process_prior(
         self,
@@ -109,17 +258,6 @@ class _TFMixin:
             layer_name='weight'
         )
 
-    def drop_encoder(
-        self,
-        x
-    ):
-        x = self.encoder(x)
-
-        if self._drop_tf is not None:
-            x[:, self.prior_network_labels[1].isin(self._drop_tf)] = 0
-
-        return x
-
     def set_drop_tfs(
         self,
         drop_tfs
@@ -162,6 +300,31 @@ class _TFMixin:
                 f"model labels: {list(_no_match)}",
                 RuntimeWarning
             )
+
+    def set_time_parameters(
+        self,
+        prediction_length=None,
+        loss_offset=None
+    ):
+        """
+        Set parameters for dynamic prediction
+
+        :param prediction_length: Number of time units to do forward
+            prediction, defaults to None
+        :type prediction_length: int, optional
+        :param loss_offset: How much of the input data to exclude from
+            the loss function, increasing the importance of prediction,
+            defaults to None
+        :type loss_offset: int, optional
+        """
+
+        if prediction_length is not None:
+            self.prediction_length = prediction_length
+
+        if loss_offset is not None:
+            self.loss_offset = loss_offset
+
+        self.prediction_offset = self.prediction_length > 0
 
     @torch.inference_mode()
     def _to_dataframe(
@@ -206,50 +369,7 @@ class _TFMixin:
         :type file_name: str
         """
 
-        with h5py.File(file_name, 'w') as f:
-            for k, data in self.state_dict().items():
-                f.create_dataset(
-                    k,
-                    data=data.numpy()
-                )
-
-            for s_arg in self._serialize_args:
-
-                if getattr(self, s_arg) is not None:
-                    f.create_dataset(
-                        s_arg,
-                        data=getattr(self, s_arg)
-                    )
-
-            f.create_dataset(
-                'keys',
-                data=np.array(
-                    list(self.state_dict().keys()),
-                    dtype=object
-                )
-            )
-
-            f.create_dataset(
-                'args',
-                data=np.array(
-                    self._serialize_args,
-                    dtype=object
-                )
-            )
-
-            f.create_dataset(
-                'type_name',
-                data=self.type_name
-            )
-
-        with pd.HDFStore(file_name, mode="a") as f:
-            self._to_dataframe(
-                self.prior_network,
-                transpose=True
-            ).to_hdf(
-                f,
-                'prior_network'
-            )
+        write(self, file_name)
 
     def set_decoder(
         self,
@@ -414,7 +534,7 @@ class _TFMixin:
         return out_weights
 
     @torch.inference_mode()
-    def latent_layer(self, x):
+    def latent_layer(self, x, layer=0, hidden_state=None):
         """
         Get detached tensor representing the latent layer values
         for some data X
@@ -428,21 +548,44 @@ class _TFMixin:
         with torch.no_grad():
             if isinstance(x, DataLoader):
                 return torch.stack([
-                    self._latent_layer_values(batch)
+                    self._latent_layer_values(
+                        batch,
+                        layer=layer,
+                        hidden_state=hidden_state
+                    )
                     for batch in x
                 ])
 
             else:
-                return self._latent_layer_values(x)
+                return self._latent_layer_values(
+                    x,
+                    layer=layer,
+                    hidden_state=hidden_state
+                )
 
     @torch.inference_mode()
-    def _latent_layer_values(self, x):
-        return self.drop_encoder(x).detach()
+    def _latent_layer_values(
+        self,
+        x,
+        layer=0,
+        hidden_state=None
+    ):
+
+        if layer == 0:
+            return self.drop_encoder(x).detach()
+        elif layer == 1:
+            x = self.drop_encoder(x)
+            x = self._intermediate(x, hidden_state)
+
+            if isinstance(x, tuple):
+                return [xobj.detach() for xobj in x]
+            else:
+                return x.detach()
 
     def input_data(self, x):
         """
         Process data from DataLoader for input nodes in training.
-        If prediction_offset is not None or zero, return the first data in the
+        If prediction_offset is set, return the first data point in the
         sequence length axis.
 
         :param x: Data
@@ -450,12 +593,12 @@ class _TFMixin:
         :return: Input node values
         :rtype: torch.Tensor
         """
-        if self.prediction_offset is None or self.prediction_offset == 0:
-            return x
+        if self.prediction_offset:
+            return x[:, [0], :]
         else:
-            return x[:, 0, :]
+            return x
 
-    def output_data(self, x):
+    def output_data(self, x, offset_only=False):
         """
         Process data from DataLoader for output nodes in training.
         If prediction_offset is not None or zero, return the offset data in the
@@ -466,10 +609,29 @@ class _TFMixin:
         :return: Output node values
         :rtype: torch.Tensor
         """
-        if self.prediction_offset is None or self.prediction_offset == 0:
+
+        # No need to do predictive offsets
+        if not self.prediction_offset:
             return x
+
+        # Don't shift for prediction if offset_only
+        elif offset_only and self.loss_offset == 0:
+            return x
+
+        # Shift and truncate
         else:
-            return x[:, self.prediction_offset, :]
+
+            loss_offset = self.loss_offset
+
+            if not offset_only:
+                loss_offset += 1
+
+            end_offset = 1 + self.prediction_length
+
+            if x.ndim == 2:
+                return x[loss_offset:end_offset, :]
+            else:
+                return x[:, loss_offset:end_offset, :]
 
     def train_model(
         self,
@@ -520,7 +682,7 @@ class _TFMixin:
             for train_x in training_dataloader:
 
                 mse = loss_function(
-                    self(self.input_data(train_x)),
+                    self._step_forward(train_x),
                     self.output_data(train_x)
                 )
 
@@ -545,7 +707,7 @@ class _TFMixin:
 
                         _validation_batch_losses.append(
                             loss_function(
-                                self(self.input_data(val_x)),
+                                self._step_forward(val_x),
                                 self.output_data(val_x)
                             ).item()
                         )
@@ -569,6 +731,20 @@ class _TFMixin:
         )
 
         return losses, validation_losses
+
+    def _step_forward(self, train_x):
+        if self.prediction_length < 2:
+            forward = self(
+                self.input_data(train_x)
+            )
+
+        else:
+            forward = self(
+                self.input_data(train_x),
+                n_time_steps=self.prediction_length - 1
+            )
+
+        return self.output_data(forward, offset_only=True)
 
     @torch.inference_mode()
     def r2(
@@ -620,12 +796,11 @@ class _TFMixin:
         with torch.no_grad():
             for data in dataloader:
 
-                input_data = self.input_data(data)
                 output_data = self.output_data(data)
 
                 _rss += _calculate_rss(
                     output_data,
-                    self(input_data)
+                    self._step_forward(data),
                 )
 
                 _ss += _calculate_tss(
@@ -664,14 +839,24 @@ class _TFMixin:
 
             for data_x in data_loader:
 
-                hidden_x = self.latent_layer(
-                    self.input_data(data_x)
-                )
+                # Get TFA
+                if self.prediction_length > 1:
+                    hidden_x = self.latent_layer(
+                        self._step_forward(data_x)
+                    )
+
+                else:
+                    hidden_x = self.latent_layer(
+                        self.input_data(data_x)
+                    )
 
                 data_x = self.output_data(data_x)
 
                 full_rss += _calculate_rss(
-                    self.decoder(hidden_x),
+                    self.output_data(
+                        self.decoder(hidden_x),
+                        offset_only=True
+                    ),
                     data_x
                 )
 
@@ -687,7 +872,10 @@ class _TFMixin:
                         latent_dropout[:, :, ik] = 0.
 
                     rss[:, ik] += _calculate_rss(
-                        self.decoder(latent_dropout),
+                        self.output_data(
+                            self.decoder(latent_dropout),
+                            offset_only=True
+                        ),
                         data_x
                     )
 
@@ -753,164 +941,24 @@ class _TFMixin:
 
         # Recursive call if x is a DataLoader
         if isinstance(x, DataLoader):
-            return torch.squeeze(
-                torch.stack([
-                    self.predict(batch_x, n_time_steps)
+            return torch.cat(
+                [
+                    self.forward(
+                        batch_x,
+                        n_time_steps=n_time_steps
+                    )
                     for batch_x in x
-                ]),
-                dim=1
+                ],
+                dim=0
             )
 
         elif not torch.is_tensor(x):
             x = torch.Tensor(x)
 
-        return self._predict_loop(x, n_time_steps)
-
-    @torch.inference_mode()
-    def _predict_loop(
-        self,
-        x_tensor,
-        n_time_steps
-    ):
-
-        output_state = []
-
-        for _ in range(n_time_steps):
-
-            x_tensor = self.forward(x_tensor)
-            output_state.append(x_tensor)
-
-        return torch.stack(
-            output_state,
-            dim=x_tensor.ndim - 1
+        return self.forward(
+            x,
+            n_time_steps=n_time_steps
         )
-
-
-class _TF_RNN_mixin(_TFMixin):
-
-    _serialize_args = [
-        'input_dropout_rate',
-        'layer_dropout_rate',
-        'output_relu',
-        'prediction_offset'
-    ]
-
-    input_dropout_rate = 0.5
-    layer_dropout_rate = 0.0
-    output_relu = True
-    prediction_offset = None
-
-    gene_loss_sum_axis = (0, 1)
-
-    training_r2_over_time = None
-    validation_r2_over_time = None
-
-    @property
-    def encoder_weights(self):
-        return self.encoder.weight_ih_l0
-
-    @property
-    def recurrent_weights(self):
-        return self.encoder.weight_hh_l0
-
-    def input_data(self, x):
-
-        if self.prediction_offset is None or self.prediction_offset == 0:
-            return super().input_data(x)
-
-        L = x.shape[-2]
-
-        if x.ndim == 2:
-            return x[0:L - self.prediction_offset, :]
-        else:
-            return x[:, 0:L - self.prediction_offset, :]
-
-    def output_data(self, x):
-
-        if self.prediction_offset is None or self.prediction_offset == 0:
-            return super().output_data(x)
-
-        if x.ndim == 2:
-            return x[self.prediction_offset:, :]
-        else:
-            return x[:, self.prediction_offset:, :]
-
-    @torch.inference_mode()
-    def r2_over_time(
-        self,
-        training_dataloader,
-        validation_dataloader=None
-    ):
-
-        self.eval()
-
-        self.training_r2_over_time = [
-            _aggregate_r2(
-                self._calculate_r2_score([x])
-            )
-            for x in training_dataloader.dataset.get_times_in_order()
-        ]
-
-        if validation_dataloader is not None:
-
-            self.validation_r2_over_time = [
-                _aggregate_r2(
-                    self._calculate_r2_score([x])
-                )
-                for x in validation_dataloader.dataset.get_times_in_order()
-            ]
-
-        return self.training_r2_over_time, self.validation_r2_over_time
-
-    @torch.inference_mode()
-    def _latent_layer_values(self, x):
-        return self.encoder(x)[0].detach()
-
-    @torch.inference_mode()
-    def _predict_loop(
-        self,
-        x_tensor,
-        n_time_steps
-    ):
-
-        # Reset hidden state and make first prediction
-        x_tensor = self.forward(x_tensor)
-
-        # Grab the first predicted sequence value
-        # from batched
-        if x_tensor.ndim == 3:
-            x_tensor = x_tensor[:, -1:, :]
-            output_state = [torch.squeeze(x_tensor, 1)]
-
-        # or unbatched data
-        elif x_tensor.ndim == 2:
-            x_tensor = x_tensor[-1:, :]
-            output_state = [torch.squeeze(x_tensor, 0)]
-
-        # Run the prediction loop
-        for _ in range(n_time_steps - 1):
-
-            # Keep reusing the hidden layer output
-            x_tensor = self.forward(
-                x_tensor,
-                self.hidden_final
-            )
-
-            # Squeeze out extra length dimension
-            # will be added back in by stack
-            output_state.append(
-                torch.squeeze(
-                    x_tensor,
-                    dim=0 if x_tensor.ndim == 2 else 1
-                )
-            )
-
-        output = torch.stack(
-            output_state,
-            dim=0 if x_tensor.ndim == 2 else 1
-        )
-
-        return output
 
 
 def _shuffle_time_data(dl):

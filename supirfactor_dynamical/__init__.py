@@ -6,7 +6,7 @@ from .models import (
     TFGRUDecoder
 )
 
-from .models._utils import (
+from ._utils import (
     evaluate_results
 )
 
@@ -20,4 +20,4 @@ from .train import (
     static_model_training
 )
 
-from ._loader import read
+from ._utils._loader import read

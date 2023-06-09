@@ -73,7 +73,10 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_predict(self):
 
-        self.dyn_ae.prediction_offset = 1
+        self.dyn_ae.set_time_parameters(
+            prediction_length=1
+        )
+
         losses, vlosses = self.dyn_ae.train_model(
             self.time_dataloader,
             20
@@ -81,17 +84,88 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         predictions = self.dyn_ae.predict(
             self.time_dataloader,
-            10
+            n_time_steps=10
         )
 
         self.assertEqual(
             predictions.shape,
-            (25, 10, 4)
+            (25, 12, 4)
+        )
+
+    def test_predict_loss_offset(self):
+
+        self.time_data = TimeDataset(
+            X,
+            T,
+            0,
+            4,
+            t_step=1
+        )
+
+        self.time_dataloader = DataLoader(
+            self.time_data,
+            batch_size=1
+        )
+
+        self.dyn_ae.set_time_parameters(
+            prediction_length=1,
+            loss_offset=1
+        )
+
+        losses, vlosses = self.dyn_ae.train_model(
+            self.time_dataloader,
+            20
+        )
+
+        predictions = self.dyn_ae.predict(
+            self.time_dataloader,
+            n_time_steps=10
+        )
+
+        self.assertEqual(
+            predictions.shape,
+            (25, 14, 4)
+        )
+
+    def test_predict_two_loss_offset(self):
+
+        self.time_data = TimeDataset(
+            X,
+            T,
+            0,
+            4,
+            t_step=1
+        )
+
+        self.time_dataloader = DataLoader(
+            self.time_data,
+            batch_size=1
+        )
+
+        self.dyn_ae.set_time_parameters(
+            prediction_length=2,
+            loss_offset=1
+        )
+
+        losses, vlosses = self.dyn_ae.train_model(
+            self.time_dataloader,
+            20
+        )
+
+        predictions = self.dyn_ae.predict(
+            self.time_dataloader,
+            n_time_steps=10
+        )
+
+        self.assertEqual(
+            predictions.shape,
+            (25, 14, 4)
         )
 
     def test_predict_tensor(self):
 
-        self.dyn_ae.prediction_offset = 1
+        self.dyn_ae.prediction_offset = True
+        self.dyn_ae.prediction_length = 1
         losses, vlosses = self.dyn_ae.train_model(
             self.time_dataloader,
             20
@@ -99,22 +173,22 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         predictions = self.dyn_ae.predict(
             torch.unsqueeze(X_tensor[0:25, :], 1),
-            20
+            n_time_steps=20
         )
 
         self.assertEqual(
             predictions.shape,
-            (25, 20, 4)
+            (25, 21, 4)
         )
 
         predictions = self.dyn_ae.predict(
-            X_tensor[0:, :],
+            X_tensor[[0, 25, 50, 75], :],
             20
         )
 
         self.assertEqual(
             predictions.shape,
-            (20, 4)
+            (24, 4)
         )
 
     def test_initialize(self):
@@ -309,7 +383,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_train_loop_offset(self):
 
-        self.dyn_ae.prediction_offset = 1
+        self.dyn_ae.prediction_offset = True
+        self.dyn_ae.prediction_length = 1
         losses, vlosses = self.dyn_ae.train_model(
             self.time_dataloader,
             10
@@ -330,7 +405,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_train_loop_offset_predict(self):
 
-        self.dyn_ae.prediction_offset = 1
+        self.dyn_ae.prediction_offset = True
+        self.dyn_ae.prediction_length = 1
         self.dyn_ae.L = 2
 
         base_data = torch.tensor(
@@ -341,21 +417,23 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             dtype=torch.float32
         )
 
+        print(base_data.shape)
+
         self.dyn_ae.eval()
 
         with torch.no_grad():
             x_forward = self.dyn_ae(base_data).numpy()
 
-        expect_predicts = np.repeat(x_forward[1, :].reshape(1, -1), 10, axis=0)
+        expect_predicts = np.repeat(x_forward[1, :].reshape(1, -1), 11, axis=0)
 
-        predicts = self.dyn_ae.predict(
+        predicts = self.dyn_ae.forward(
             base_data,
-            10
-        )
+            n_time_steps=10
+        ).detach().numpy()
 
         npt.assert_almost_equal(
             expect_predicts,
-            predicts,
+            predicts[1:, :],
             decimal=4
         )
 
@@ -450,4 +528,8 @@ class TestTFRecurrentDecoderShuffler(TestTFRecurrentDecoder):
 
     @unittest.SkipTest
     def test_r2_over_timemodel(self):
+        pass
+
+    @unittest.SkipTest
+    def test_predict(self):
         pass

@@ -399,18 +399,23 @@ class TestTFAutoencoderOffset(unittest.TestCase):
                 X,
                 T,
                 0,
-                2,
+                4,
                 t_step=1
             ),
             batch_size=5
         )
 
-        self.ae = TFAutoencoder(A, use_prior_weights=True, prediction_offset=0)
+        self.ae = TFAutoencoder(A, use_prior_weights=True)
         self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
     def test_offset_zero(self):
+
+        self.ae.set_time_parameters(
+            prediction_length=0,
+            loss_offset=0
+        )
 
         losses, vlosses = self.ae.train_model(
             self.static_dataloader,
@@ -421,7 +426,24 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
     def test_offset_one(self):
 
-        self.ae.prediction_offset = 1
+        self.ae.set_time_parameters(
+            prediction_length=1,
+            loss_offset=0
+        )
+
+        losses, vlosses = self.ae.train_model(
+            self.dynamic_dataloader,
+            20
+        )
+        _ = self.ae.erv(self.dynamic_dataloader)
+
+    def test_offset_long(self):
+
+        self.ae.set_time_parameters(
+            prediction_length=3,
+            loss_offset=0
+        )
+
         losses, vlosses = self.ae.train_model(
             self.dynamic_dataloader,
             20
@@ -431,7 +453,11 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
     def test_predict(self):
 
-        self.ae.prediction_offset = 1
+        self.ae.set_time_parameters(
+            prediction_length=1,
+            loss_offset=0
+        )
+
         losses, vlosses = self.ae.train_model(
             self.dynamic_dataloader,
             20
@@ -441,7 +467,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.assertEqual(
             predictions.shape,
-            (100, 10, 4)
+            (100, 11, 4)
         )
 
         predictions = self.ae.predict(
@@ -454,7 +480,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.assertEqual(
             predictions.shape,
-            (20, 5, 20, 4)
+            (100, 21, 4)
         )
 
         predictions = self.ae.predict(
@@ -464,7 +490,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.assertEqual(
             predictions.shape,
-            (25, 20, 4)
+            (25, 21, 4)
         )
 
         predictions = self.ae.predict(
@@ -474,7 +500,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.assertEqual(
             predictions.shape,
-            (20, 4)
+            (1, 21, 4)
         )
 
 
@@ -506,7 +532,7 @@ class TestTFMetaAutoencoderOffset(TestTFAutoencoderOffset):
                 X,
                 T,
                 0,
-                2,
+                4,
                 t_step=1
             ),
             batch_size=5
@@ -514,8 +540,7 @@ class TestTFMetaAutoencoderOffset(TestTFAutoencoderOffset):
 
         self.ae = TFMetaAutoencoder(
             A,
-            use_prior_weights=True,
-            prediction_offset=0
+            use_prior_weights=True
         )
 
         self.ae.decoder[0].weight = torch.nn.parameter.Parameter(

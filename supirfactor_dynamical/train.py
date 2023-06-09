@@ -8,7 +8,7 @@ from .models._base_model import (
     _TFMixin
 )
 
-from .models._utils import evaluate_results
+from . import evaluate_results
 
 
 def _is_model(model):
@@ -28,9 +28,9 @@ def dynamic_model_training(
     optimizer_params=None,
     gold_standard=None,
     input_dropout=0.5,
-    hidden_layer_dropout=0.0,
-    prediction_time_offset=None,
-    model_type=None
+    model_type=None,
+    prediction_length=None,
+    prediction_loss_offset=None
 ):
 
     # Get model type
@@ -46,9 +46,12 @@ def dynamic_model_training(
     ae_dynamic = dynamic_autoencoder(
         prior_network,
         input_dropout_rate=input_dropout,
-        layer_dropout_rate=hidden_layer_dropout,
-        decoder_weights=decoder_weights,
-        prediction_offset=prediction_time_offset
+        decoder_weights=decoder_weights
+    )
+
+    ae_dynamic.set_time_parameters(
+        prediction_length=prediction_length,
+        loss_offset=prediction_loss_offset
     )
 
     ae_dynamic.train_model(
@@ -86,9 +89,9 @@ def static_model_training(
     optimizer_params=None,
     gold_standard=None,
     input_dropout=0.5,
-    hidden_layer_dropout=0.0,
-    prediction_time_offset=None,
-    model_type=None
+    model_type=None,
+    prediction_length=None,
+    prediction_loss_offset=None
 ):
 
     # Get model type
@@ -103,9 +106,12 @@ def static_model_training(
 
     ae_static = static_autoencoder(
         prior_network,
-        input_dropout_rate=input_dropout,
-        layer_dropout_rate=hidden_layer_dropout,
-        prediction_offset=prediction_time_offset
+        input_dropout_rate=input_dropout
+    )
+
+    ae_static.set_time_parameters(
+        prediction_length=prediction_length,
+        loss_offset=prediction_loss_offset
     )
 
     ae_static.train_model(
@@ -140,8 +146,8 @@ def joint_model_training(
     optimizer_params=None,
     gold_standard=None,
     input_dropout=0.5,
-    hidden_layer_dropout=0.0,
-    prediction_time_offset=None,
+    prediction_length=None,
+    prediction_loss_offset=None,
     static_model_type=None,
     dynamic_model_type=None
 ):
@@ -154,8 +160,9 @@ def joint_model_training(
         optimizer_params=optimizer_params,
         gold_standard=gold_standard,
         input_dropout=input_dropout,
-        hidden_layer_dropout=hidden_layer_dropout,
-        prediction_time_offset=prediction_time_offset,
+        prediction_length=prediction_length,
+        prediction_loss_offset=prediction_loss_offset,
+        model_type=static_model_type
     )
 
     ae_dynamic, dyn_results = dynamic_model_training(
@@ -166,8 +173,8 @@ def joint_model_training(
         optimizer_params=optimizer_params,
         gold_standard=gold_standard,
         input_dropout=input_dropout,
-        hidden_layer_dropout=hidden_layer_dropout,
-        prediction_time_offset=prediction_time_offset,
+        prediction_length=prediction_length,
+        prediction_loss_offset=prediction_loss_offset,
         model_type=dynamic_model_type
     )
 

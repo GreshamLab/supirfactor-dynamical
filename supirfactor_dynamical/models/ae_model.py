@@ -7,26 +7,13 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
 
     type_name = "static"
 
-    _serialize_args = [
-        'input_dropout_rate',
-        'layer_dropout_rate',
-        'output_relu',
-        'prediction_offset'
-    ]
-
-    input_dropout_rate = 0.5
-    layer_dropout_rate = 0.0
-    output_relu = True
-
     def __init__(
         self,
         prior_network,
         use_prior_weights=False,
         decoder_weights=None,
         input_dropout_rate=0.5,
-        layer_dropout_rate=0.0,
-        output_relu=True,
-        prediction_offset=None
+        output_relu=True
     ):
         """
         Create a TF Autoencoder module
@@ -46,9 +33,6 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
         :param input_dropout_rate: Training dropout for input genes,
             defaults to 0.5
         :type input_dropout_rate: float, optional
-        :param layer_dropout_rate: Training dropout for hidden layer TFs,
-            defaults to 0.0
-        :type layer_dropout_rate: float, optional
         :param output_relu: Apply activation function (ReLU) to output
             layer, constrains to positive, defaults to True
         :type output_relu: bool, optional,
@@ -73,20 +57,29 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
             p=input_dropout_rate
         )
 
-        self.layer_dropout = torch.nn.Dropout(
-            p=layer_dropout_rate
+        self.input_dropout_rate = input_dropout_rate
+        self.output_relu = output_relu
+
+    def forward(
+        self,
+        x,
+        hidden_state=None,
+        n_time_steps=0
+    ):
+
+        return self._forward(
+            x,
+            hidden_state,
+            n_time_steps
         )
 
-        self.input_dropout_rate = input_dropout_rate
-        self.layer_dropout_rate = layer_dropout_rate
-        self.output_relu = output_relu
-        self.prediction_offset = prediction_offset
+    def _forward_step(
+        self,
+        x,
+        hidden_state=None
+    ):
 
-    def forward(self, x, hidden_state=None):
-
-        x = self.input_dropout(x)
         x = self.drop_encoder(x)
-        x = self.layer_dropout(x)
         x = self.decoder(x)
 
         return x
@@ -96,26 +89,13 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
 
     type_name = "static_meta"
 
-    _serialize_args = [
-        'input_dropout_rate',
-        'layer_dropout_rate',
-        'output_relu',
-        'prediction_offset'
-    ]
-
-    input_dropout_rate = 0.5
-    layer_dropout_rate = 0.0
-    output_relu = True
-
     def __init__(
         self,
         prior_network,
         use_prior_weights=False,
         decoder_weights=None,
         input_dropout_rate=0.5,
-        layer_dropout_rate=0.0,
-        output_relu=True,
-        prediction_offset=None
+        output_relu=True
     ):
         """
         Create a TF Autoencoder module
@@ -135,15 +115,9 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
         :param input_dropout_rate: Training dropout for input genes,
             defaults to 0.5
         :type input_dropout_rate: float, optional
-        :param layer_dropout_rate: Training dropout for hidden layer TFs,
-            defaults to 0.0
-        :type layer_dropout_rate: float, optional
         :param output_relu: Apply activation function (ReLU) to output
             layer, constrains to positive, defaults to True
         :type output_relu: bool, optional
-        :param prediction_offset: How many time units to offset input and
-            output nodes, None is no offset, defaults to None
-        :type prediction_offset: int, optional
         """
 
         super().__init__()
@@ -167,22 +141,30 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
             p=input_dropout_rate
         )
 
-        self.layer_dropout = torch.nn.Dropout(
-            p=layer_dropout_rate
+        self.input_dropout_rate = input_dropout_rate
+        self.output_relu = output_relu
+
+    def forward(
+        self,
+        x,
+        hidden_state=None,
+        n_time_steps=0
+    ):
+
+        return self._forward(
+            x,
+            hidden_state,
+            n_time_steps
         )
 
-        self.input_dropout_rate = input_dropout_rate
-        self.layer_dropout_rate = layer_dropout_rate
-        self.output_relu = output_relu
-        self.prediction_offset = prediction_offset
+    def _forward_step(
+        self,
+        x,
+        hidden_state=None
+    ):
 
-    def forward(self, x, hidden_state=None):
-
-        x = self.input_dropout(x)
         x = self.drop_encoder(x)
-        x = self.layer_dropout(x)
         x = self._intermediate(x)
-        x = self.layer_dropout(x)
         x = self.decoder(x)
 
         return x
