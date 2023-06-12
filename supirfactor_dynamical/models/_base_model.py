@@ -46,16 +46,19 @@ class _TFMixin:
 
     _serialize_args = [
         'input_dropout_rate',
+        'hidden_dropout_rate',
         'output_relu',
-        'prediction_length',
+        'output_t_plus_one',
+        'n_additional_predictions',
         'loss_offset'
     ]
 
     input_dropout_rate = 0.5
+    hidden_dropout_rate = 0.0
     output_relu = True
 
-    prediction_offset = False
-    prediction_length = 0
+    output_t_plus_one = False
+    n_additional_predictions = 0
     loss_offset = 0
 
     hidden_final = None
@@ -139,6 +142,7 @@ class _TFMixin:
         """
 
         x = self.drop_encoder(x)
+        x = self.hidden_dropout(x)
         x = self.decoder(x, hidden_state)
 
         return x
@@ -258,6 +262,23 @@ class _TFMixin:
             layer_name='weight'
         )
 
+    def set_dropouts(
+        self,
+        input_dropout_rate,
+        hidden_dropout_rate
+    ):
+
+        self.input_dropout = torch.nn.Dropout(
+            p=input_dropout_rate
+        )
+
+        self.hidden_dropout = torch.nn.Dropout(
+            p=hidden_dropout_rate
+        )
+
+        self.input_dropout_rate = input_dropout_rate
+        self.hidden_dropout_rate = hidden_dropout_rate
+
     def set_drop_tfs(
         self,
         drop_tfs
@@ -303,28 +324,36 @@ class _TFMixin:
 
     def set_time_parameters(
         self,
-        prediction_length=None,
+        output_t_plus_one=None,
+        n_additional_predictions=None,
         loss_offset=None
     ):
         """
         Set parameters for dynamic prediction
 
-        :param prediction_length: Number of time units to do forward
+        :param output_t_plus_one: Shift data so that models are using t for
+            input and t+1 for output.
+        :type output_t_plus_one: bool, optional
+        :param n_additional_predictions: Number of time units to do forward
             prediction, defaults to None
-        :type prediction_length: int, optional
+        :type n_additional_predictions: int, optional
         :param loss_offset: How much of the input data to exclude from
             the loss function, increasing the importance of prediction,
             defaults to None
         :type loss_offset: int, optional
         """
 
-        if prediction_length is not None:
-            self.prediction_length = prediction_length
+        if n_additional_predictions is not None:
+            self.n_additional_predictions = n_additional_predictions
 
         if loss_offset is not None:
             self.loss_offset = loss_offset
 
-        self.prediction_offset = self.prediction_length > 0
+        if output_t_plus_one is not None:
+            self.output_t_plus_one = output_t_plus_one
+
+        if self.n_additional_predictions > 0:
+            self.output_t_plus_one = True
 
     @torch.inference_mode()
     def _to_dataframe(
@@ -388,6 +417,8 @@ class _TFMixin:
             Defaults to None.
         :type decoder_weights: pd.DataFrame [G x K], np.ndarray, optional
         """
+
+        self.output_relu = relu
 
         decoder = torch.nn.Sequential(
             torch.nn.Linear(self.k, self.g, bias=False),
@@ -585,7 +616,7 @@ class _TFMixin:
     def input_data(self, x):
         """
         Process data from DataLoader for input nodes in training.
-        If prediction_offset is set, return the first data point in the
+        If output_t_plus_one is set, return the first data point in the
         sequence length axis.
 
         :param x: Data
@@ -593,15 +624,15 @@ class _TFMixin:
         :return: Input node values
         :rtype: torch.Tensor
         """
-        if self.prediction_offset:
+        if self.output_t_plus_one:
             return x[:, [0], :]
         else:
             return x
 
-    def output_data(self, x, offset_only=False):
+    def output_data(self, x, offset_only=False, truncate=True):
         """
         Process data from DataLoader for output nodes in training.
-        If prediction_offset is not None or zero, return the offset data in the
+        If output_t_plus_one is not None or zero, return the offset data in the
         sequence length axis.
 
         :param x: Data
@@ -611,7 +642,7 @@ class _TFMixin:
         """
 
         # No need to do predictive offsets
-        if not self.prediction_offset:
+        if not self.output_t_plus_one:
             return x
 
         # Don't shift for prediction if offset_only
@@ -621,17 +652,43 @@ class _TFMixin:
         # Shift and truncate
         else:
 
-            loss_offset = self.loss_offset
-
             if not offset_only:
+                _, loss_offset = self._get_data_offsets(x)
                 loss_offset += 1
-
-            end_offset = 1 + self.prediction_length
-
-            if x.ndim == 2:
-                return x[loss_offset:end_offset, :]
             else:
+                _, loss_offset = self._get_data_offsets(x, check=False)
+
+            if truncate:
+                end_offset = self.n_additional_predictions + 2
                 return x[:, loss_offset:end_offset, :]
+
+            else:
+                return x[:, loss_offset:, :]
+
+    def _get_data_offsets(self, x, check=True):
+
+        if not self.output_t_plus_one:
+            return None, None
+
+        if self.output_t_plus_one and x.ndim != 3:
+            raise ValueError(
+                "3D data (N, L, H) must be provided when "
+                "predicting time-dependent data"
+            )
+
+        L = x.shape[1]
+
+        input_offset = L - self.n_additional_predictions - 1
+        output_offset = 1 + self.loss_offset
+
+        if check and ((input_offset < 1) or (output_offset >= L)):
+            raise ValueError(
+                f"Cannot train on {L} sequence length with "
+                f"{self.n_additional_predictions} additional predictions and "
+                f"{self.loss_offset} values excluded from loss"
+            )
+
+        return input_offset, self.loss_offset
 
     def train_model(
         self,
@@ -682,7 +739,7 @@ class _TFMixin:
             for train_x in training_dataloader:
 
                 mse = loss_function(
-                    self._step_forward(train_x),
+                    self._slice_data_and_forward(train_x),
                     self.output_data(train_x)
                 )
 
@@ -707,7 +764,7 @@ class _TFMixin:
 
                         _validation_batch_losses.append(
                             loss_function(
-                                self._step_forward(val_x),
+                                self._slice_data_and_forward(val_x),
                                 self.output_data(val_x)
                             ).item()
                         )
@@ -732,17 +789,12 @@ class _TFMixin:
 
         return losses, validation_losses
 
-    def _step_forward(self, train_x):
-        if self.prediction_length < 2:
-            forward = self(
-                self.input_data(train_x)
-            )
+    def _slice_data_and_forward(self, train_x):
 
-        else:
-            forward = self(
-                self.input_data(train_x),
-                n_time_steps=self.prediction_length - 1
-            )
+        forward = self(
+            self.input_data(train_x),
+            n_time_steps=self.n_additional_predictions
+        )
 
         return self.output_data(forward, offset_only=True)
 
@@ -800,7 +852,7 @@ class _TFMixin:
 
                 _rss += _calculate_rss(
                     output_data,
-                    self._step_forward(data),
+                    self._slice_data_and_forward(data),
                 )
 
                 _ss += _calculate_tss(
@@ -840,9 +892,9 @@ class _TFMixin:
             for data_x in data_loader:
 
                 # Get TFA
-                if self.prediction_length > 1:
+                if self.n_additional_predictions > 0:
                     hidden_x = self.latent_layer(
-                        self._step_forward(data_x)
+                        self._slice_data_and_forward(data_x)
                     )
 
                 else:
@@ -932,7 +984,7 @@ class _TFMixin:
         n_time_steps
     ):
 
-        if self.prediction_offset is None or self.prediction_offset == 0:
+        if not self.output_t_plus_one:
             raise RuntimeError(
                 "Model not trained for prediction"
             )

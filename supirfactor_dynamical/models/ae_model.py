@@ -13,6 +13,7 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
         use_prior_weights=False,
         decoder_weights=None,
         input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
         output_relu=True
     ):
         """
@@ -35,10 +36,7 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
         :type input_dropout_rate: float, optional
         :param output_relu: Apply activation function (ReLU) to output
             layer, constrains to positive, defaults to True
-        :type output_relu: bool, optional,
-        :param prediction_offset: How many time units to offset input and
-            output nodes, None is no offset, defaults to None
-        :type prediction_offset: int, optional
+        :type output_relu: bool, optional
         """
 
         super().__init__()
@@ -53,12 +51,10 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
             decoder_weights=decoder_weights
         )
 
-        self.input_dropout = torch.nn.Dropout(
-            p=input_dropout_rate
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
         )
-
-        self.input_dropout_rate = input_dropout_rate
-        self.output_relu = output_relu
 
     def forward(
         self,
@@ -80,6 +76,7 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
     ):
 
         x = self.drop_encoder(x)
+        x = self.hidden_dropout(x)
         x = self.decoder(x)
 
         return x
@@ -95,6 +92,7 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
         use_prior_weights=False,
         decoder_weights=None,
         input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
         output_relu=True
     ):
         """
@@ -137,12 +135,10 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
             decoder_weights=decoder_weights
         )
 
-        self.input_dropout = torch.nn.Dropout(
-            p=input_dropout_rate
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
         )
-
-        self.input_dropout_rate = input_dropout_rate
-        self.output_relu = output_relu
 
     def forward(
         self,
@@ -164,7 +160,9 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
     ):
 
         x = self.drop_encoder(x)
+        x = self.hidden_dropout(x)
         x = self._intermediate(x)
+        x = self.hidden_dropout(x)
         x = self.decoder(x)
 
         return x

@@ -50,7 +50,8 @@ def dynamic_model_training(
     )
 
     ae_dynamic.set_time_parameters(
-        prediction_length=prediction_length,
+        output_t_plus_one=prediction_length is not None,
+        n_additional_predictions=prediction_length,
         loss_offset=prediction_loss_offset
     )
 
@@ -110,7 +111,8 @@ def static_model_training(
     )
 
     ae_static.set_time_parameters(
-        prediction_length=prediction_length,
+        output_t_plus_one=prediction_length is not None,
+        n_additional_predictions=prediction_length,
         loss_offset=prediction_loss_offset
     )
 

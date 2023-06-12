@@ -19,6 +19,10 @@ from ._stubs import (
     T
 )
 
+TEST_SHORT = torch.rand((3, 2, 4))
+TEST_MEDIUM = torch.rand((3, 10, 4))
+TEST_LONG = torch.rand((3, 50, 4))
+
 
 class TestTFRecurrentDecoder(unittest.TestCase):
 
@@ -43,7 +47,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             X,
             T,
             0,
-            2,
+            3,
             t_step=1
         )
 
@@ -71,10 +75,94 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             torch.zeros((3 * self.weight_stack, 3), dtype=torch.float32)
         )
 
+    def test_data_slice_offset(self):
+
+        self.dyn_ae.set_time_parameters(
+            output_t_plus_one=True
+        )
+
+        self.assertEqual(
+            self.dyn_ae.input_data(TEST_SHORT).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.output_data(TEST_SHORT).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.input_data(TEST_MEDIUM).shape,
+            (3, 9, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.output_data(TEST_MEDIUM).shape,
+            (3, 9, 4)
+        )
+
+    def test_data_slice_offset_plusone(self):
+
+        self.dyn_ae.set_time_parameters(
+            n_additional_predictions=1
+        )
+
+        with self.assertRaises(ValueError):
+            self.dyn_ae.input_data(TEST_SHORT).shape
+
+        with self.assertRaises(ValueError):
+            self.dyn_ae.output_data(TEST_SHORT).shape
+
+        self.assertEqual(
+            self.dyn_ae.input_data(TEST_MEDIUM).shape,
+            (3, 8, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.output_data(TEST_MEDIUM).shape,
+            (3, 9, 4)
+        )
+
+    def test_data_slice_offset_big(self):
+
+        self.dyn_ae.set_time_parameters(
+            n_additional_predictions=25,
+            loss_offset=20
+        )
+
+        with self.assertRaises(ValueError):
+            self.dyn_ae.input_data(TEST_MEDIUM).shape
+
+        with self.assertRaises(ValueError):
+            self.dyn_ae.output_data(TEST_MEDIUM).shape
+
+        self.assertEqual(
+            self.dyn_ae.input_data(TEST_LONG).shape,
+            (3, 24, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae(
+                self.dyn_ae.input_data(TEST_LONG),
+                n_time_steps=25
+            ).shape,
+            (3, 49, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae._slice_data_and_forward(TEST_LONG).shape,
+            (3, 29, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.output_data(TEST_LONG).shape,
+            (3, 29, 4)
+        )
+
     def test_predict(self):
 
         self.dyn_ae.set_time_parameters(
-            prediction_length=1
+            output_t_plus_one=True
         )
 
         losses, vlosses = self.dyn_ae.train_model(
@@ -89,7 +177,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.assertEqual(
             predictions.shape,
-            (25, 12, 4)
+            (25, 13, 4)
         )
 
     def test_predict_loss_offset(self):
@@ -108,7 +196,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
         )
 
         self.dyn_ae.set_time_parameters(
-            prediction_length=1,
+            n_additional_predictions=1,
             loss_offset=1
         )
 
@@ -143,7 +231,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
         )
 
         self.dyn_ae.set_time_parameters(
-            prediction_length=2,
+            n_additional_predictions=2,
             loss_offset=1
         )
 
@@ -164,8 +252,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_predict_tensor(self):
 
-        self.dyn_ae.prediction_offset = True
-        self.dyn_ae.prediction_length = 1
+        self.dyn_ae.output_t_plus_one = True
         losses, vlosses = self.dyn_ae.train_model(
             self.time_dataloader,
             20
@@ -383,8 +470,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_train_loop_offset(self):
 
-        self.dyn_ae.prediction_offset = True
-        self.dyn_ae.prediction_length = 1
+        self.dyn_ae.output_t_plus_one = True
         losses, vlosses = self.dyn_ae.train_model(
             self.time_dataloader,
             10
@@ -405,9 +491,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_train_loop_offset_predict(self):
 
-        self.dyn_ae.prediction_offset = True
-        self.dyn_ae.prediction_length = 1
-        self.dyn_ae.L = 2
+        self.dyn_ae.output_t_plus_one = True
 
         base_data = torch.tensor(
             np.vstack([

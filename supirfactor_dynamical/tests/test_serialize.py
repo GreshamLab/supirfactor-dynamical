@@ -67,6 +67,7 @@ class TestSerializer(unittest.TestCase):
             stub.kwargs,
             {
                 'input_dropout_rate': 0.5,
+                'hidden_dropout_rate': 0.0,
                 'output_relu': True
             }
         )
@@ -74,7 +75,8 @@ class TestSerializer(unittest.TestCase):
         self.assertDictEqual(
             stub.time_kwargs,
             {
-                'prediction_length': 0,
+                'output_t_plus_one': False,
+                'n_additional_predictions': 0,
                 'loss_offset': 0
             }
         )
@@ -102,6 +104,7 @@ class TestSerializer(unittest.TestCase):
             stub.kwargs,
             {
                 'input_dropout_rate': 0.5,
+                'hidden_dropout_rate': 0.0,
                 'output_relu': True
             }
         )
@@ -109,7 +112,8 @@ class TestSerializer(unittest.TestCase):
         self.assertDictEqual(
             stub.time_kwargs,
             {
-                'prediction_length': 0,
+                'output_t_plus_one': False,
+                'n_additional_predictions': 0,
                 'loss_offset': 0
             }
         )
@@ -123,7 +127,8 @@ class TestSerializer(unittest.TestCase):
         )
 
         ae.set_time_parameters(
-            prediction_length=1,
+            output_t_plus_one=True,
+            n_additional_predictions=1,
             loss_offset=0
         )
 
@@ -147,6 +152,7 @@ class TestSerializer(unittest.TestCase):
             stub.kwargs,
             {
                 'input_dropout_rate': 0.5,
+                'hidden_dropout_rate': 0.0,
                 'output_relu': False
             }
         )
@@ -154,7 +160,8 @@ class TestSerializer(unittest.TestCase):
         self.assertDictEqual(
             stub.time_kwargs,
             {
-                'prediction_length': 1,
+                'output_t_plus_one': True,
+                'n_additional_predictions': 1,
                 'loss_offset': 0
             }
         )

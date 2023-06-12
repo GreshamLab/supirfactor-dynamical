@@ -8,7 +8,8 @@ from ..models import (
 )
 
 TIME_KWARGS = [
-    'prediction_length',
+    'output_t_plus_one',
+    'n_additional_predictions',
     'loss_offset'
 ]
 

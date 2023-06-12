@@ -27,6 +27,7 @@ class _TF_RNN_mixin(
         prior_network,
         use_prior_weights=False,
         input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
         output_relu=True,
         decoder_weights=None
     ):
@@ -72,12 +73,10 @@ class _TF_RNN_mixin(
             decoder_weights=decoder_weights
         )
 
-        self.input_dropout = torch.nn.Dropout(
-            p=input_dropout_rate
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
         )
-
-        self.input_dropout_rate = input_dropout_rate
-        self.output_relu = output_relu
 
     @staticmethod
     def _create_intermediate(k):
@@ -85,41 +84,15 @@ class _TF_RNN_mixin(
 
     def input_data(self, x):
 
-        L = x.shape[-2]
-
-        if self.prediction_offset:
-            _input_L = L - self.prediction_length
-
-            if x.ndim == 2:
-                return x[0:_input_L, :]
-            else:
-                return x[:, 0:_input_L, :]
+        if self.output_t_plus_one:
+            input_offset, _ = self._get_data_offsets(x)
+            return x[:, 0:input_offset, :]
 
         else:
             return x
 
-    def output_data(self, x, offset_only=False):
-
-        # No need to do predictive offsets
-        if not self.prediction_offset:
-            return x
-
-        # Don't shift for prediction if offset_only
-        elif offset_only and self.loss_offset == 0:
-            return x
-
-        # Shift and truncate
-        else:
-
-            loss_offset = self.loss_offset
-
-            if not offset_only:
-                loss_offset += 1
-
-            if x.ndim == 2:
-                return x[loss_offset:, :]
-            else:
-                return x[:, loss_offset:, :]
+    def output_data(self, x, offset_only=False, truncate=True):
+        return super().output_data(x, offset_only, truncate=False)
 
     @torch.inference_mode()
     def r2_over_time(
@@ -151,6 +124,7 @@ class _TF_RNN_mixin(
     def decoder(self, x, hidden_state=None):
 
         x, self.hidden_final = self._intermediate(x, hidden_state)
+        x = self.hidden_dropout(x)
         x = self._decoder(x)
 
         return x

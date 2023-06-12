@@ -21,6 +21,10 @@ from ._stubs import (
     T
 )
 
+TEST_SHORT = torch.rand((3, 2, 4))
+TEST_MEDIUM = torch.rand((3, 10, 4))
+TEST_LONG = torch.rand((3, 50, 4))
+
 
 class TestTFAutoencoder(unittest.TestCase):
 
@@ -305,6 +309,104 @@ class TestTFAutoencoder(unittest.TestCase):
             0.75
         )
 
+    def test_data_slice_offset(self):
+
+        self.ae.set_time_parameters(
+            output_t_plus_one=True
+        )
+
+        self.assertEqual(
+            self.ae.input_data(TEST_SHORT).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.output_data(TEST_SHORT).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.input_data(TEST_MEDIUM).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.output_data(TEST_MEDIUM).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.input_data(TEST_LONG).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.output_data(TEST_LONG).shape,
+            (3, 1, 4)
+        )
+
+    def test_data_slice_offset_plusone(self):
+
+        self.ae.set_time_parameters(
+            n_additional_predictions=1
+        )
+
+        with self.assertRaises(ValueError):
+            self.ae.output_data(TEST_SHORT).shape
+
+        self.assertEqual(
+            self.ae.input_data(TEST_MEDIUM).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.output_data(TEST_MEDIUM).shape,
+            (3, 2, 4)
+        )
+
+        self.assertEqual(
+            self.ae.input_data(TEST_LONG).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae.output_data(TEST_LONG).shape,
+            (3, 2, 4)
+        )
+
+    def test_data_slice_offset_big(self):
+
+        self.ae.set_time_parameters(
+            n_additional_predictions=25,
+            loss_offset=20
+        )
+
+        with self.assertRaises(ValueError):
+            self.ae.output_data(TEST_MEDIUM).shape
+
+        self.assertEqual(
+            self.ae.input_data(TEST_LONG).shape,
+            (3, 1, 4)
+        )
+
+        self.assertEqual(
+            self.ae(
+                self.ae.input_data(TEST_LONG),
+                n_time_steps=25
+            ).shape,
+            (3, 26, 4)
+        )
+
+        self.assertEqual(
+            self.ae._slice_data_and_forward(TEST_LONG).shape,
+            (3, 6, 4)
+        )
+
+        self.assertEqual(
+            self.ae.output_data(TEST_LONG).shape,
+            (3, 6, 4)
+        )
+
 
 class TestTFDropouts(unittest.TestCase):
 
@@ -413,7 +515,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
     def test_offset_zero(self):
 
         self.ae.set_time_parameters(
-            prediction_length=0,
+            n_additional_predictions=0,
             loss_offset=0
         )
 
@@ -427,7 +529,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
     def test_offset_one(self):
 
         self.ae.set_time_parameters(
-            prediction_length=1,
+            output_t_plus_one=True,
+            n_additional_predictions=0,
             loss_offset=0
         )
 
@@ -440,7 +543,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
     def test_offset_long(self):
 
         self.ae.set_time_parameters(
-            prediction_length=3,
+            output_t_plus_one=True,
+            n_additional_predictions=2,
             loss_offset=0
         )
 
@@ -454,7 +558,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
     def test_predict(self):
 
         self.ae.set_time_parameters(
-            prediction_length=1,
+            output_t_plus_one=True,
+            n_additional_predictions=0,
             loss_offset=0
         )
 
