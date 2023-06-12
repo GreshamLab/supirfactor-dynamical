@@ -10,6 +10,8 @@ from supirfactor_dynamical import (
     TimeDataset
 )
 
+from supirfactor_dynamical.models import _CLASS_DICT
+
 from ._stubs import (
     X,
     A,
@@ -66,6 +68,14 @@ class TestCoupledTraining(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 4)
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['static']
+        )
+        self.assertIsInstance(
+            results[2],
+            _CLASS_DICT['rnn']
+        )
 
     def test_lstm_training(self):
 
@@ -79,6 +89,14 @@ class TestCoupledTraining(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 4)
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['static']
+        )
+        self.assertIsInstance(
+            results[2],
+            _CLASS_DICT['lstm']
+        )
 
     def test_gru_training(self):
 
@@ -92,3 +110,53 @@ class TestCoupledTraining(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 4)
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['static']
+        )
+        self.assertIsInstance(
+            results[2],
+            _CLASS_DICT['gru']
+        )
+
+    def test_weird_options_training(self):
+
+        results = joint_model_training(
+            self.static_dataloader,
+            self.dynamic_dataloader,
+            self.prior,
+            10,
+            gold_standard=self.prior,
+            input_dropout=0.8,
+            hidden_dropout=0.2,
+            static_model_type='static_meta'
+        )
+
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['static_meta']
+        )
+        self.assertIsInstance(
+            results[2],
+            _CLASS_DICT['rnn']
+        )
+
+        self.assertEqual(
+            results[0].input_dropout_rate,
+            0.8
+        )
+
+        self.assertEqual(
+            results[2].input_dropout_rate,
+            0.8
+        )
+
+        self.assertEqual(
+            results[0].hidden_dropout_rate,
+            0.2
+        )
+
+        self.assertEqual(
+            results[2].hidden_dropout_rate,
+            0.2
+        )

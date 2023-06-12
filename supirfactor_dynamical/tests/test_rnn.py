@@ -20,7 +20,7 @@ from ._stubs import (
 )
 
 TEST_SHORT = torch.rand((3, 2, 4))
-TEST_MEDIUM = torch.rand((3, 10, 4))
+TEST_MEDIUM = torch.rand((3, 20, 4))
 TEST_LONG = torch.rand((3, 50, 4))
 
 
@@ -93,12 +93,12 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.assertEqual(
             self.dyn_ae.input_data(TEST_MEDIUM).shape,
-            (3, 9, 4)
+            (3, 19, 4)
         )
 
         self.assertEqual(
             self.dyn_ae.output_data(TEST_MEDIUM).shape,
-            (3, 9, 4)
+            (3, 19, 4)
         )
 
     def test_data_slice_offset_plusone(self):
@@ -115,7 +115,24 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.assertEqual(
             self.dyn_ae.input_data(TEST_MEDIUM).shape,
-            (3, 8, 4)
+            (3, 18, 4)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.output_data(TEST_MEDIUM).shape,
+            (3, 19, 4)
+        )
+
+    def test_data_slice_offset_noleak(self):
+
+        self.dyn_ae.set_time_parameters(
+            n_additional_predictions=10,
+            loss_offset=10
+        )
+
+        self.assertEqual(
+            self.dyn_ae.input_data(TEST_MEDIUM).shape,
+            (3, 9, 4)
         )
 
         self.assertEqual(
