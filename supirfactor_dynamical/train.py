@@ -24,14 +24,12 @@ def dynamic_model_training(
     prior_network,
     epochs,
     dynamic_validation_dataloader=None,
-    decoder_weights=None,
     optimizer_params=None,
     gold_standard=None,
-    input_dropout=0.5,
-    hidden_dropout=0.0,
     model_type=None,
     prediction_length=None,
-    prediction_loss_offset=None
+    prediction_loss_offset=None,
+    **kwargs
 ):
 
     # Get model type
@@ -46,9 +44,7 @@ def dynamic_model_training(
 
     ae_dynamic = dynamic_autoencoder(
         prior_network,
-        input_dropout_rate=input_dropout,
-        decoder_weights=decoder_weights,
-        hidden_dropout_rate=hidden_dropout
+        **kwargs
     )
 
     ae_dynamic.set_time_parameters(
@@ -91,11 +87,10 @@ def static_model_training(
     static_validation_dataloader=None,
     optimizer_params=None,
     gold_standard=None,
-    input_dropout=0.5,
-    hidden_dropout=0.0,
     model_type=None,
     prediction_length=None,
-    prediction_loss_offset=None
+    prediction_loss_offset=None,
+    **kwargs
 ):
 
     # Get model type
@@ -110,8 +105,7 @@ def static_model_training(
 
     ae_static = static_autoencoder(
         prior_network,
-        input_dropout_rate=input_dropout,
-        hidden_dropout_rate=hidden_dropout
+        **kwargs
     )
 
     ae_static.set_time_parameters(
@@ -151,12 +145,11 @@ def joint_model_training(
     dynamic_validation_dataloader=None,
     optimizer_params=None,
     gold_standard=None,
-    input_dropout=0.5,
-    hidden_dropout=0.0,
     prediction_length=None,
     prediction_loss_offset=None,
     static_model_type=None,
-    dynamic_model_type=None
+    dynamic_model_type=None,
+    **kwargs
 ):
 
     ae_static, ae_results = static_model_training(
@@ -166,11 +159,10 @@ def joint_model_training(
         static_validation_dataloader=static_validation_dataloader,
         optimizer_params=optimizer_params,
         gold_standard=gold_standard,
-        input_dropout=input_dropout,
-        hidden_dropout=hidden_dropout,
         prediction_length=prediction_length,
         prediction_loss_offset=prediction_loss_offset,
-        model_type=static_model_type
+        model_type=static_model_type,
+        **kwargs
     )
 
     ae_dynamic, dyn_results = dynamic_model_training(
@@ -180,11 +172,10 @@ def joint_model_training(
         dynamic_validation_dataloader=dynamic_validation_dataloader,
         optimizer_params=optimizer_params,
         gold_standard=gold_standard,
-        input_dropout=input_dropout,
-        hidden_dropout=hidden_dropout,
         prediction_length=prediction_length,
         prediction_loss_offset=prediction_loss_offset,
-        model_type=dynamic_model_type
+        model_type=dynamic_model_type,
+        **kwargs
     )
 
     return ae_static, ae_results, ae_dynamic, dyn_results

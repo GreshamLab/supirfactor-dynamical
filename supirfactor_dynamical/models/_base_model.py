@@ -586,14 +586,17 @@ class _TFMixin:
 
         with torch.no_grad():
             if isinstance(x, DataLoader):
-                return torch.stack([
-                    self._latent_layer_values(
-                        batch,
-                        layer=layer,
-                        hidden_state=hidden_state
-                    )
-                    for batch in x
-                ])
+                return torch.cat(
+                    [
+                        self._latent_layer_values(
+                            batch,
+                            layer=layer,
+                            hidden_state=hidden_state
+                        )
+                        for batch in x
+                    ],
+                    dim=0
+                )
 
             else:
                 return self._latent_layer_values(
@@ -905,8 +908,13 @@ class _TFMixin:
 
                 # Get TFA
                 if self.n_additional_predictions > 0:
+
+                    # Need to run the predictions to get values for TFA
                     hidden_x = self.latent_layer(
-                        self._slice_data_and_forward(data_x)
+                        self(
+                            self.input_data(data_x),
+                            n_time_steps=self.n_additional_predictions
+                        )
                     )
 
                 else:

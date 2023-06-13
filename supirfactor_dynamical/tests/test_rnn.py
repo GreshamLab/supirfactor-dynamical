@@ -176,6 +176,35 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             (3, 29, 4)
         )
 
+    def test_erv_offset_big(self):
+
+        dl = DataLoader(
+            TEST_LONG,
+            batch_size=1
+        )
+
+        self.dyn_ae.set_time_parameters(
+            n_additional_predictions=25,
+            loss_offset=20
+        )
+
+        self.dyn_ae.train_model(dl, epochs=10)
+        self.dyn_ae.eval()
+
+        self.assertEqual(
+            self.dyn_ae.latent_layer(dl).shape,
+            (3, 50, 3)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.latent_layer(
+                self.dyn_ae._slice_data_and_forward(TEST_LONG)
+            ).shape,
+            (3, 29, 3)
+        )
+
+        _ = self.dyn_ae.erv(dl)
+
     def test_predict(self):
 
         self.dyn_ae.set_time_parameters(
