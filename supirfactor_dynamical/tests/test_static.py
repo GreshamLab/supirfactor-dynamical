@@ -128,8 +128,8 @@ class TestTFAutoencoder(unittest.TestCase):
         self.assertIsNone(vlosses)
 
         with torch.no_grad():
-            in_weights = self.ae.encoder[0].weight.numpy()
-            out_weights = self.ae.decoder[0].weight.numpy()
+            in_weights = self.ae.encoder_weights.numpy()
+            out_weights = self.ae.decoder_weights.numpy()
 
         expected_nz = np.ones_like(out_weights, dtype=bool)
         expected_nz[3, :] = False
@@ -159,8 +159,8 @@ class TestTFAutoencoder(unittest.TestCase):
         self.assertEqual(len(vlosses), 10)
 
         with torch.no_grad():
-            in_weights = self.ae.encoder[0].weight.numpy()
-            out_weights = self.ae.decoder[0].weight.numpy()
+            in_weights = self.ae.encoder_weights.numpy()
+            out_weights = self.ae.decoder_weights.numpy()
 
         expected_nz = np.ones_like(out_weights, dtype=bool)
         expected_nz[3, :] = False
@@ -182,8 +182,8 @@ class TestTFAutoencoder(unittest.TestCase):
 
         self.ae.eval()
         with torch.no_grad():
-            in_weights = self.ae.encoder[0].weight.numpy()
-            out_weights = self.ae.decoder[0].weight.numpy()
+            in_weights = self.ae.encoder_weights.numpy()
+            out_weights = self.ae.decoder_weights.numpy()
 
         h = X @ in_weights.T
         h[h < 0] = 0
@@ -193,6 +193,17 @@ class TestTFAutoencoder(unittest.TestCase):
             h,
             decimal=3
         )
+
+        if self.ae.intermediate_weights is not None:
+            with torch.no_grad():
+                h = h @ self.ae.intermediate_weights.numpy().T
+                h[h < 0] = 0
+
+            npt.assert_almost_equal(
+                self.ae.latent_layer(X_tensor, layer=1).numpy(),
+                h,
+                decimal=3
+            )
 
         y = h @ out_weights.T
         y[y < 0] = 0
@@ -209,8 +220,13 @@ class TestTFAutoencoder(unittest.TestCase):
         )
 
         for i in range(3):
-            h_partial = h.copy()
+            h_partial = self.ae.latent_layer(X_tensor).numpy()
             h_partial[:, i] = 0
+
+            if self.ae.intermediate_weights is not None:
+                with torch.no_grad():
+                    h_partial = h_partial @ self.ae.intermediate_weights.numpy().T
+                    h_partial[h_partial < 0] = 0
 
             y_partial = h_partial @ out_weights.T
             y_partial[y_partial < 0] = 0
@@ -254,7 +270,7 @@ class TestTFAutoencoder(unittest.TestCase):
         erv = self.ae.erv(loader, return_rss=False)
 
         with torch.no_grad():
-            out_weights = self.ae.decoder[0].weight.numpy()
+            out_weights = self.ae.decoder_weights.numpy()
 
         masked_weights = self.ae.pruned_model_weights(data_loader=loader)
         out_weights[erv <= 0] = 0.
@@ -614,7 +630,7 @@ class TestTFMetaAutoencoder(TestTFAutoencoder):
     def setUp(self) -> None:
         torch.manual_seed(55)
         self.ae = TFMetaAutoencoder(A, use_prior_weights=True)
-        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        self.ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
         self.ae._intermediate[0].weight = torch.nn.parameter.Parameter(
@@ -648,7 +664,7 @@ class TestTFMetaAutoencoderOffset(TestTFAutoencoderOffset):
             use_prior_weights=True
         )
 
-        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        self.ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
         self.ae._intermediate[0].weight = torch.nn.parameter.Parameter(

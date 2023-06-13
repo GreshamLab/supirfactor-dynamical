@@ -68,6 +68,10 @@ class _TFMixin:
         return self.encoder[0].weight
 
     @property
+    def intermediate_weights(self):
+        return None
+
+    @property
     def recurrent_weights(self):
         return None
 
@@ -143,7 +147,11 @@ class _TFMixin:
 
         x = self.drop_encoder(x)
         x = self.hidden_dropout(x)
-        x = self.decoder(x, hidden_state)
+
+        if hidden_state is not None:
+            x = self.decoder(x, hidden_state)
+        else:
+            x = self.decoder(x)
 
         return x
 
@@ -606,7 +614,11 @@ class _TFMixin:
             return self.drop_encoder(x).detach()
         elif layer == 1:
             x = self.drop_encoder(x)
-            x = self._intermediate(x, hidden_state)
+
+            if hidden_state is not None:
+                x = self._intermediate(x, hidden_state)
+            else:
+                x = self._intermediate(x)
 
             if isinstance(x, tuple):
                 return [xobj.detach() for xobj in x]

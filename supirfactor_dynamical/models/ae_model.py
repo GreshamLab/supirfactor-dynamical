@@ -69,22 +69,18 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
             n_time_steps
         )
 
-    def _forward_step(
-        self,
-        x,
-        hidden_state=None
-    ):
-
-        x = self.drop_encoder(x)
-        x = self.hidden_dropout(x)
-        x = self.decoder(x)
-
-        return x
-
 
 class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
 
     type_name = "static_meta"
+
+    @property
+    def intermediate_weights(self):
+        return self._intermediate[0].weight
+
+    @property
+    def decoder_weights(self):
+        return self._decoder[0].weight
 
     def __init__(
         self,
@@ -130,7 +126,7 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
             torch.nn.ReLU()
         )
 
-        self.decoder = self.set_decoder(
+        self._decoder = self.set_decoder(
             relu=output_relu,
             decoder_weights=decoder_weights
         )
@@ -153,16 +149,14 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
             n_time_steps
         )
 
-    def _forward_step(
+    def decoder(
         self,
         x,
         hidden_state=None
     ):
 
-        x = self.drop_encoder(x)
-        x = self.hidden_dropout(x)
         x = self._intermediate(x)
         x = self.hidden_dropout(x)
-        x = self.decoder(x)
+        x = self._decoder(x)
 
         return x
