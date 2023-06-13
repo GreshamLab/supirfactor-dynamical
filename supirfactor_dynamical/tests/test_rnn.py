@@ -203,6 +203,13 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             (3, 29, 3)
         )
 
+        self.assertEqual(
+            self.dyn_ae.latent_layer(
+                self.dyn_ae.output_data(TEST_LONG, no_loss_offset=True)
+            ).shape,
+            (3, 49, 3)
+        )
+
         _ = self.dyn_ae.erv(dl)
 
     def test_predict(self):

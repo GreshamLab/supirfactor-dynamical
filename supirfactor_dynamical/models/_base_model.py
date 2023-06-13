@@ -644,7 +644,13 @@ class _TFMixin:
         else:
             return x
 
-    def output_data(self, x, offset_only=False, truncate=True):
+    def output_data(
+        self,
+        x,
+        offset_only=False,
+        truncate=True,
+        no_loss_offset=False
+    ):
         """
         Process data from DataLoader for output nodes in training.
         If output_t_plus_one is not None or zero, return the offset data in the
@@ -664,12 +670,19 @@ class _TFMixin:
         elif offset_only and self.loss_offset == 0:
             return x
 
+        elif no_loss_offset and offset_only and not truncate:
+            return x
+
         # Shift and truncate
         else:
 
-            if not offset_only:
+            if not offset_only and not no_loss_offset:
                 _, loss_offset = self._get_data_offsets(x)
                 loss_offset += 1
+            elif not offset_only and no_loss_offset:
+                loss_offset = 1
+            elif offset_only and no_loss_offset:
+                loss_offset = 0
             else:
                 _, loss_offset = self._get_data_offsets(x, check=False)
 
@@ -922,13 +935,10 @@ class _TFMixin:
                         self.input_data(data_x)
                     )
 
-                data_x = self.output_data(data_x)
+                data_x = self.output_data(data_x, no_loss_offset=True)
 
                 full_rss += _calculate_rss(
-                    self.output_data(
-                        self.decoder(hidden_x),
-                        offset_only=True
-                    ),
+                    self.decoder(hidden_x),
                     data_x
                 )
 
@@ -944,10 +954,7 @@ class _TFMixin:
                         latent_dropout[:, :, ik] = 0.
 
                     rss[:, ik] += _calculate_rss(
-                        self.output_data(
-                            self.decoder(latent_dropout),
-                            offset_only=True
-                        ),
+                        self.decoder(latent_dropout),
                         data_x
                     )
 

@@ -91,8 +91,8 @@ class _TF_RNN_mixin(
         else:
             return x
 
-    def output_data(self, x, offset_only=False, truncate=True):
-        return super().output_data(x, offset_only, truncate=False)
+    def output_data(self, x, truncate=True, **kwargs):
+        return super().output_data(x, truncate=False, **kwargs)
 
     @torch.inference_mode()
     def r2_over_time(
