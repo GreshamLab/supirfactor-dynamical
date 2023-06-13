@@ -127,8 +127,8 @@ class TestCoupledTraining(unittest.TestCase):
             self.prior,
             10,
             gold_standard=self.prior,
-            input_dropout=0.8,
-            hidden_dropout=0.2,
+            input_dropout_rate=0.8,
+            hidden_dropout_rate=0.2,
             static_model_type='static_meta'
         )
 
