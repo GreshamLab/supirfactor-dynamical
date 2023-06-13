@@ -89,7 +89,8 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
         decoder_weights=None,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
-        output_relu=True
+        output_relu=True,
+        intermediate_sigmoid=False
     ):
         """
         Create a TF Autoencoder module
@@ -121,10 +122,16 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
             use_prior_weights=use_prior_weights
         )
 
-        self._intermediate = torch.nn.Sequential(
-            torch.nn.Linear(self.k, self.k, bias=False),
-            torch.nn.ReLU()
-        )
+        if intermediate_sigmoid:
+            self._intermediate = torch.nn.Sequential(
+                torch.nn.Linear(self.k, self.k, bias=False),
+                torch.nn.Sigmoid()
+            )
+        else:
+            self._intermediate = torch.nn.Sequential(
+                torch.nn.Linear(self.k, self.k, bias=False),
+                torch.nn.ReLU()
+            )
 
         self._decoder = self.set_decoder(
             relu=output_relu,
