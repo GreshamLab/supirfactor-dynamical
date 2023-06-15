@@ -216,7 +216,12 @@ class _TFMixin:
         x = self.encoder(x)
 
         if self._drop_tf is not None:
-            x[..., self.prior_network_labels[1].isin(self._drop_tf)] = 0
+
+            _mask = ~self.prior_network_labels[1].isin(self._drop_tf)
+
+            x = x @ torch.diag(
+                torch.Tensor(_mask.astype(int))
+            )
 
         return x
 
