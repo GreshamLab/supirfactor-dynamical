@@ -1,5 +1,6 @@
 import unittest
 
+import pandas as pd
 import numpy as np
 import numpy.testing as npt
 
@@ -33,7 +34,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         torch.manual_seed(55)
         self.dyn_ae = self.class_holder(
-            A,
+            pd.DataFrame(A),
             use_prior_weights=True
         )
 
@@ -73,6 +74,33 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.dyn_ae._intermediate.weight_hh_l0 = torch.nn.parameter.Parameter(
             torch.zeros((3 * self.weight_stack, 3), dtype=torch.float32)
+        )
+
+    def test_good_dropouts(self):
+
+        self.dyn_ae.set_drop_tfs(None)
+
+        npt.assert_almost_equal(
+            (X_tensor @ A).numpy(),
+            self.dyn_ae.latent_layer(X_tensor).numpy()
+        )
+
+        self.dyn_ae.set_drop_tfs(0)
+
+        ll = (X_tensor @ A).numpy()
+        ll[:, 0] = 0.
+        npt.assert_almost_equal(
+            ll,
+            self.dyn_ae.latent_layer(X_tensor).numpy()
+        )
+
+        self.dyn_ae.set_drop_tfs([0, 1])
+
+        ll = (X_tensor @ A).numpy()
+        ll[:, [0, 1]] = 0.
+        npt.assert_almost_equal(
+            ll,
+            self.dyn_ae.latent_layer(X_tensor).numpy()
         )
 
     def test_data_slice_offset(self):

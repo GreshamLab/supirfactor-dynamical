@@ -60,6 +60,8 @@ def dynamic_model_training(
         optimizer=optimizer_params
     )
 
+    ae_dynamic.eval()
+
     ae_dynamic.r2_over_time(
         dynamic_training_dataloader,
         dynamic_validation_dataloader
@@ -120,6 +122,8 @@ def static_model_training(
         validation_dataloader=static_validation_dataloader,
         optimizer=optimizer_params
     )
+
+    ae_static.eval()
 
     ae_results = evaluate_results(
         ae_static.output_weights(

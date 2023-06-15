@@ -216,7 +216,7 @@ class _TFMixin:
         x = self.encoder(x)
 
         if self._drop_tf is not None:
-            x[:, self.prior_network_labels[1].isin(self._drop_tf)] = 0
+            x[..., self.prior_network_labels[1].isin(self._drop_tf)] = 0
 
         return x
 
