@@ -948,10 +948,7 @@ class _TFMixin:
                 for ik in range(self.k):
                     latent_dropout = torch.clone(hidden_x)
 
-                    if latent_dropout.ndim == 2:
-                        latent_dropout[:, ik] = 0.
-                    else:
-                        latent_dropout[:, :, ik] = 0.
+                    latent_dropout[..., ik] = 0.
 
                     rss[:, ik] += _calculate_rss(
                         self.decoder(latent_dropout),
