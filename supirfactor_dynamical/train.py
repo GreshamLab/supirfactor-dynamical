@@ -29,6 +29,7 @@ def dynamic_model_training(
     model_type=None,
     prediction_length=None,
     prediction_loss_offset=None,
+    return_erv=False,
     **kwargs
 ):
 
@@ -67,19 +68,26 @@ def dynamic_model_training(
         dynamic_validation_dataloader
     )
 
+    _weights = ae_dynamic.output_weights(
+        as_dataframe=True
+    )
+
+    _erv = ae_dynamic.erv(
+        dynamic_training_dataloader,
+        as_data_frame=True
+    )
+
     dyn_results = evaluate_results(
-        ae_dynamic.output_weights(
-            as_dataframe=True
-        ),
-        ae_dynamic.erv(
-            dynamic_training_dataloader,
-            as_data_frame=True
-        ),
+        _weights,
+        _erv,
         prior_network,
         gold_standard if gold_standard is not None else prior_network
     )
 
-    return ae_dynamic, dyn_results
+    if return_erv:
+        return ae_dynamic, dyn_results, _erv
+    else:
+        return ae_dynamic, dyn_results
 
 
 def static_model_training(
@@ -92,6 +100,7 @@ def static_model_training(
     model_type=None,
     prediction_length=None,
     prediction_loss_offset=None,
+    return_erv=False,
     **kwargs
 ):
 
@@ -125,19 +134,26 @@ def static_model_training(
 
     ae_static.eval()
 
+    _weights = ae_static.output_weights(
+        as_dataframe=True
+    )
+
+    _erv = ae_static.erv(
+        static_training_dataloader,
+        as_data_frame=True
+    )
+
     ae_results = evaluate_results(
-        ae_static.output_weights(
-            as_dataframe=True
-        ),
-        ae_static.erv(
-            static_training_dataloader,
-            as_data_frame=True
-        ),
+        _weights,
+        _erv,
         prior_network,
         gold_standard if gold_standard is not None else prior_network
     )
 
-    return ae_static, ae_results
+    if return_erv:
+        return ae_static, ae_results, _erv
+    else:
+        return ae_static, ae_results
 
 
 def joint_model_training(
