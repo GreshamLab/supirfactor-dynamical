@@ -26,19 +26,27 @@ def _calculate_erv(rss_full, rss_reduced):
     return erv
 
 
-def _calculate_tss(data):
+def _calculate_tss(
+    data,
+    ybar=False
+):
 
     _last_axis = data.ndim - 1
 
+    if ybar:
+        _comparison = data.mean(
+                axis=list(range(_last_axis))
+            ).reshape(
+                *[1 if i != _last_axis else -1 for i in range(data.ndim)]
+            ).expand(
+                data.shape
+            )
+    else:
+        _comparison = torch.zeros_like(data)
+
     tss = torch.nn.MSELoss(reduction='none')(
         data,
-        data.mean(
-            axis=list(range(_last_axis))
-        ).reshape(
-            *[1 if i != _last_axis else -1 for i in range(data.ndim)]
-        ).expand(
-            data.shape
-        )
+        _comparison
     ).sum(
         axis=list(range(_last_axis))
     )

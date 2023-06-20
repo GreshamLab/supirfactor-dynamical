@@ -65,6 +65,40 @@ class TestMathUtils(unittest.TestCase):
             decimal=5
         )
 
+    def test_r2_ybar(self):
+
+        a_inv = pinv(A)
+
+        rss = _calculate_rss(
+            X_tensor,
+            X_tensor @ A @ a_inv
+        )
+
+        print(rss)
+
+        tss = _calculate_tss(
+            X_tensor,
+            ybar=True
+        )
+
+        print(tss)
+
+        r2 = _calculate_r2(rss, tss)
+
+        _bad_r2 = ((X[:, 3]) ** 2).sum()
+        _bad_r2 /= ((X[:, 3].mean() - X[:, 3]) ** 2).sum()
+
+        npt.assert_almost_equal(
+            [1., 1., 1., 1 - _bad_r2],
+            r2,
+            decimal=5
+        )
+
+        npt.assert_almost_equal(
+            0.75,
+            _aggregate_r2(r2)
+        )
+
     def test_r2(self):
 
         a_inv = pinv(A)
@@ -84,11 +118,8 @@ class TestMathUtils(unittest.TestCase):
 
         r2 = _calculate_r2(rss, tss)
 
-        _bad_r2 = ((X[:, 3]) ** 2).sum()
-        _bad_r2 /= ((X[:, 3].mean() - X[:, 3]) ** 2).sum()
-
         npt.assert_almost_equal(
-            [1., 1., 1., 1 - _bad_r2],
+            [1., 1., 1., 0],
             r2,
             decimal=5
         )
