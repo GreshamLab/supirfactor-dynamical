@@ -1041,6 +1041,35 @@ class _TFMixin:
             n_time_steps=n_time_steps
         )
 
+    def tf_gradient(
+        self,
+        input,
+        target,
+        loss_function=torch.nn.MSELoss()
+    ):
+        """
+        Get gradients at the encoder (TFA) level
+
+        :param input: _description_
+        :type input: _type_
+        :param target: _description_
+        :type target: _type_
+        :param loss_function: _description_, defaults to torch.nn.MSELoss()
+        :type loss_function: _type_, optional
+        :return: _description_
+        :rtype: _type_
+        """
+
+        loss_function(
+            input,
+            target
+        ).backward()
+
+        encoder_grad = self.encoder[0].weight_orig.grad.detach().numpy()
+        self.zero_grad()
+
+        return encoder_grad
+
 
 def _shuffle_time_data(dl):
     try:

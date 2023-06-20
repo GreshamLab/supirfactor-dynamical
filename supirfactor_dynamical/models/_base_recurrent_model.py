@@ -124,7 +124,6 @@ class _TF_RNN_mixin(
     def decoder(self, x, hidden_state=None):
 
         x, self.hidden_final = self._intermediate(x, hidden_state)
-        x = self.hidden_dropout(x)
         x = self._decoder(x)
 
         return x

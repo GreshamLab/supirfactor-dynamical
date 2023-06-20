@@ -163,7 +163,6 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
     ):
 
         x = self._intermediate(x)
-        x = self.hidden_dropout(x)
         x = self._decoder(x)
 
         return x
