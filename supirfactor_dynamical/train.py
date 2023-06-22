@@ -19,6 +19,53 @@ def _is_model(model):
         return False
 
 
+def pretrain_and_tune_dynamic_model(
+    pretraining_training_dataloader,
+    prediction_tuning_training_dataloader,
+    prior_network,
+    epochs,
+    optimizer_params=None,
+    pretraining_validation_dataloader=None,
+    prediction_tuning_validation_dataloader=None,
+    prediction_length=None,
+    prediction_loss_offset=None,
+    model_type=None,
+    return_erv=False,
+    **kwargs
+):
+
+    model, pretrain_results = dynamic_model_training(
+        pretraining_training_dataloader,
+        prior_network,
+        epochs,
+        dynamic_validation_dataloader=pretraining_validation_dataloader,
+        optimizer_params=optimizer_params,
+        prediction_length=False,
+        model_type=model_type,
+        **kwargs
+    )
+
+    model.train()
+
+    model, tuned_results, _final_erv = dynamic_model_training(
+        prediction_tuning_training_dataloader,
+        prior_network,
+        epochs,
+        dynamic_validation_dataloader=prediction_tuning_validation_dataloader,
+        optimizer_params=optimizer_params,
+        prediction_length=prediction_length,
+        prediction_loss_offset=prediction_loss_offset,
+        model_type=model,
+        return_erv=True,
+        **kwargs
+    )
+
+    if return_erv:
+        return model, pretrain_results, tuned_results, _final_erv
+    else:
+        return model, pretrain_results, tuned_results
+
+
 def dynamic_model_training(
     dynamic_training_dataloader,
     prior_network,
@@ -33,20 +80,27 @@ def dynamic_model_training(
     **kwargs
 ):
 
-    # Get model type
-    if model_type is None:
-        dynamic_autoencoder = TFRNNDecoder
+    # If model_type is an instance of a model
+    # use it as-is
+    if isinstance(model_type, _TFMixin):
+        ae_dynamic = model_type
 
-    elif _is_model(model_type):
-        dynamic_autoencoder = model_type
-
+    # Otherwise get a model and instantiate it
     else:
-        dynamic_autoencoder = _CLASS_DICT[model_type]
 
-    ae_dynamic = dynamic_autoencoder(
-        prior_network,
-        **kwargs
-    )
+        if model_type is None:
+            dynamic_autoencoder = TFRNNDecoder
+
+        elif _is_model(model_type):
+            dynamic_autoencoder = model_type
+
+        else:
+            dynamic_autoencoder = _CLASS_DICT[model_type]
+
+        ae_dynamic = dynamic_autoencoder(
+            prior_network,
+            **kwargs
+        )
 
     ae_dynamic.set_time_parameters(
         output_t_plus_one=prediction_length is not None,

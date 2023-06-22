@@ -10,6 +10,8 @@ from supirfactor_dynamical import (
     TimeDataset
 )
 
+from supirfactor_dynamical.train import pretrain_and_tune_dynamic_model
+
 from supirfactor_dynamical.models import _CLASS_DICT
 
 from ._stubs import (
@@ -160,3 +162,22 @@ class TestCoupledTraining(unittest.TestCase):
             results[2].hidden_dropout_rate,
             0.2
         )
+
+    def test_pretrain_tune_model(self):
+
+        results = pretrain_and_tune_dynamic_model(
+            self.dynamic_dataloader,
+            self.dynamic_dataloader,
+            self.prior,
+            10,
+            prediction_length=1,
+            prediction_loss_offset=1,
+            gold_standard=self.prior,
+        )
+
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['rnn']
+        )
+
+        self.assertEqual(len(results), 3)
