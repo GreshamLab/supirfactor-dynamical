@@ -136,7 +136,7 @@ class _TF_RNN_mixin(
     ):
         """
         Forward pass for data X with prediction if n_time_steps > 0.
-        Calls _forward_step and _forward_loop.
+        Calls forward_tf_model and _forward_loop.
 
 
         :param x: Input data
@@ -151,7 +151,7 @@ class _TF_RNN_mixin(
         """
 
         x = self.input_dropout(x)
-        x = self._forward_step(x, hidden_state)
+        x = self.forward_tf_model(x, hidden_state)
 
         if n_time_steps > 0:
 

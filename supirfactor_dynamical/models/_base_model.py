@@ -87,7 +87,7 @@ class _TFMixin:
     ):
         """
         Forward pass for data X with prediction if n_time_steps > 0.
-        Calls _forward_step and _forward_loop.
+        Calls forward_tf_model and _forward_loop.
 
 
         :param x: Input data
@@ -102,7 +102,7 @@ class _TFMixin:
         """
 
         x = self.input_dropout(x)
-        x = self._forward_step(x, hidden_state)
+        x = self.forward_tf_model(x, hidden_state)
 
         if n_time_steps > 0:
 
@@ -128,7 +128,7 @@ class _TFMixin:
 
         return x
 
-    def _forward_step(
+    def forward_tf_model(
         self,
         x,
         hidden_state=None
@@ -178,7 +178,7 @@ class _TFMixin:
 
         for _ in range(n_time_steps):
 
-            x_tensor = self._forward_step(x_tensor, self.hidden_final)
+            x_tensor = self.forward_tf_model(x_tensor, self.hidden_final)
             output_state.append(x_tensor)
 
         return self._forward_loop_merge(output_state)
@@ -757,12 +757,19 @@ class _TFMixin:
             optimizer
         )
 
-        losses = []
-
-        if validation_dataloader is not None:
-            validation_losses = []
+        # Create lists for loss per epoch if they do not exist
+        # otherwise append to the existing list
+        if self.training_loss is None:
+            losses = []
         else:
+            losses = self.training_loss
+
+        if self.validation_loss is None and validation_dataloader is not None:
+            validation_losses = []
+        elif validation_dataloader is None:
             validation_losses = None
+        else:
+            validation_losses = self.validation_loss
 
         for _ in tqdm.trange(epochs):
 
