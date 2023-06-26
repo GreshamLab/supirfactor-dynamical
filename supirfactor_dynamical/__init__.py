@@ -3,7 +3,8 @@ from .models import (
     TFMetaAutoencoder,
     TFRNNDecoder,
     TFLSTMDecoder,
-    TFGRUDecoder
+    TFGRUDecoder,
+    get_model
 )
 
 from ._utils import (

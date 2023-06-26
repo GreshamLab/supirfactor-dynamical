@@ -336,7 +336,7 @@ class TimeDataset(torch.utils.data.Dataset):
         idx
     ):
 
-        data = self.data[idx, :]
+        data = self.data[idx, ...]
 
         if isspmatrix(data):
             data = data.A
