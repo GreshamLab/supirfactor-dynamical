@@ -1,7 +1,5 @@
 import unittest
 
-import pandas as pd
-import numpy as np
 import numpy.testing as npt
 
 import torch
@@ -19,11 +17,10 @@ from ._stubs import (
     X,
     X_tensor,
     A,
-    T
+    T,
+    V,
+    V_tensor
 )
-
-V = np.diff(X, axis=0, prepend=np.zeros((1, 4), dtype=np.float32))
-V_tensor = torch.tensor(V)
 
 
 class TestVelocity(unittest.TestCase):
@@ -152,9 +149,9 @@ class TestVelocity(unittest.TestCase):
         )
 
         if self.model in ['static', 'static_meta']:
-            n=1
+            n = 1
         else:
-            n=2
+            n = 2
 
         for d in data:
             self.assertEqual(

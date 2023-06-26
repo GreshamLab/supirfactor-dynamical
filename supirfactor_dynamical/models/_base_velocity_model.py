@@ -9,9 +9,12 @@ class _VelocityMixin:
 
         return super().input_data(x[..., 0], **kwargs)
 
-    def output_data(self, x, **kwargs):
+    def output_data(self, x, keep_all_dims=False, **kwargs):
 
-        return super().output_data(x[..., 1], **kwargs)
+        if keep_all_dims:
+            return super().output_data(x, **kwargs)
+        else:
+            return super().output_data(x[..., 1], **kwargs)
 
 
 class _DecayMixin:

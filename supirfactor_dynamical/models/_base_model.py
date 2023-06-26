@@ -672,7 +672,8 @@ class _TFMixin:
         x,
         offset_only=False,
         truncate=True,
-        no_loss_offset=False
+        no_loss_offset=False,
+        keep_all_dims=False
     ):
         """
         Process data from DataLoader for output nodes in training.
@@ -854,7 +855,11 @@ class _TFMixin:
             n_time_steps=self.n_additional_predictions
         )
 
-        return self.output_data(forward, offset_only=True)
+        return self.output_data(
+            forward,
+            offset_only=True,
+            keep_all_dims=True
+        )
 
     @torch.inference_mode()
     def r2(

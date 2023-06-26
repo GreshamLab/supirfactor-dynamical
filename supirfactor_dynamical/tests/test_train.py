@@ -7,7 +7,8 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     joint_model_training,
-    TimeDataset
+    TimeDataset,
+    get_model
 )
 
 from supirfactor_dynamical.train import pretrain_and_tune_dynamic_model
@@ -17,7 +18,8 @@ from supirfactor_dynamical.models import _CLASS_DICT
 from ._stubs import (
     X,
     A,
-    T
+    T,
+    XV_tensor
 )
 
 
@@ -181,3 +183,64 @@ class TestCoupledTraining(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 3)
+
+
+class TestVelocityTraining(unittest.TestCase):
+
+    def setUp(self) -> None:
+        torch.manual_seed(55)
+
+        self.static_data = TimeDataset(
+            XV_tensor,
+            T,
+            0,
+            1
+        )
+
+        self.static_dataloader = DataLoader(
+            self.static_data,
+            batch_size=2,
+            drop_last=True
+        )
+
+        self.dynamic_data = TimeDataset(
+            XV_tensor,
+            T,
+            0,
+            4,
+            t_step=1
+        )
+
+        self.dynamic_dataloader = DataLoader(
+            self.dynamic_data,
+            batch_size=2,
+            drop_last=True
+        )
+
+        self.prior = pd.DataFrame(
+            A,
+            index=['A', 'B', 'C', 'D'],
+            columns=['A', 'B', 'C']
+        )
+
+    def test_velocity_training(self):
+
+        results = joint_model_training(
+            self.static_dataloader,
+            self.dynamic_dataloader,
+            self.prior,
+            10,
+            gold_standard=self.prior,
+            dynamic_model_type=get_model('rnn', velocity=True),
+            static_model_type=get_model('static_meta', velocity=True)
+        )
+
+        self.assertEqual(len(results), 4)
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['static_meta']
+        )
+        self.assertIsInstance(
+            results[2],
+            _CLASS_DICT['rnn']
+        )
