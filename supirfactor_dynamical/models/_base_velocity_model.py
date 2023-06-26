@@ -5,13 +5,13 @@ class _VelocityMixin:
 
     _velocity_model = True
 
-    def input_data(self, x):
+    def input_data(self, x, **kwargs):
 
-        return super().input_data(x[..., 0])
+        return super().input_data(x[..., 0], **kwargs)
 
-    def output_data(self, x):
+    def output_data(self, x, **kwargs):
 
-        return super().output_data(x[..., 1])
+        return super().output_data(x[..., 1], **kwargs)
 
 
 class _DecayMixin:
