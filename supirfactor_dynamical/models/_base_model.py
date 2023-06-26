@@ -50,7 +50,9 @@ class _TFMixin:
         'output_relu',
         'output_t_plus_one',
         'n_additional_predictions',
-        'loss_offset'
+        'loss_offset',
+        '_velocity_model',
+        '_decay_model'
     ]
 
     input_dropout_rate = 0.5
@@ -62,6 +64,9 @@ class _TFMixin:
     loss_offset = 0
 
     hidden_final = None
+
+    _velocity_model = False
+    _decay_model = False
 
     @property
     def encoder_weights(self):
@@ -87,7 +92,7 @@ class _TFMixin:
     ):
         """
         Forward pass for data X with prediction if n_time_steps > 0.
-        Calls forward_tf_model and _forward_loop.
+        Calls forward_model and _forward_loop.
 
 
         :param x: Input data
@@ -102,7 +107,7 @@ class _TFMixin:
         """
 
         x = self.input_dropout(x)
-        x = self.forward_tf_model(x, hidden_state)
+        x = self.forward_model(x, hidden_state)
 
         if n_time_steps > 0:
 
@@ -127,6 +132,17 @@ class _TFMixin:
             )
 
         return x
+
+    def forward_model(
+        self,
+        x,
+        hidden_state=None
+    ):
+        """
+        Forward step to the model,
+        override by inheritence for other models
+        """
+        return self.forward_tf_model(x, hidden_state=hidden_state)
 
     def forward_tf_model(
         self,
@@ -178,7 +194,7 @@ class _TFMixin:
 
         for _ in range(n_time_steps):
 
-            x_tensor = self.forward_tf_model(x_tensor, self.hidden_final)
+            x_tensor = self.forward_model(x_tensor, self.hidden_final)
             output_state.append(x_tensor)
 
         return self._forward_loop_merge(output_state)

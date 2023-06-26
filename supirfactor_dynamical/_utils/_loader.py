@@ -13,6 +13,11 @@ TIME_KWARGS = [
     'loss_offset'
 ]
 
+MODEL_TYPE_KWARGS = [
+    '_velocity_model',
+    '_decay_model'
+]
+
 
 def read(
     file_name,
@@ -65,6 +70,10 @@ def read(
 
     time_kwargs = {
         k: kwargs.pop(k, None) for k in TIME_KWARGS
+    }
+
+    model_type_kwargs = {
+        k: kwargs.pop(k, False) for k in MODEL_TYPE_KWARGS
     }
 
     if model_class is None:

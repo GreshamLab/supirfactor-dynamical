@@ -159,10 +159,13 @@ class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
     def decoder(
         self,
         x,
-        hidden_state=None
+        hidden_state=None,
+        intermediate_only=False
     ):
 
         x = self._intermediate(x)
-        x = self._decoder(x)
+
+        if not intermediate_only:
+            x = self._decoder(x)
 
         return x

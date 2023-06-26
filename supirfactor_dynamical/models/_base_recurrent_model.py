@@ -121,10 +121,12 @@ class _TF_RNN_mixin(
 
         return self.training_r2_over_time, self.validation_r2_over_time
 
-    def decoder(self, x, hidden_state=None):
+    def decoder(self, x, hidden_state=None, intermediate_only=False):
 
         x, self.hidden_final = self._intermediate(x, hidden_state)
-        x = self._decoder(x)
+
+        if not intermediate_only:
+            x = self._decoder(x)
 
         return x
 
@@ -136,7 +138,7 @@ class _TF_RNN_mixin(
     ):
         """
         Forward pass for data X with prediction if n_time_steps > 0.
-        Calls forward_tf_model and _forward_loop.
+        Calls forward_model and _forward_loop.
 
 
         :param x: Input data
@@ -151,7 +153,7 @@ class _TF_RNN_mixin(
         """
 
         x = self.input_dropout(x)
-        x = self.forward_tf_model(x, hidden_state)
+        x = self.forward_model(x, hidden_state)
 
         if n_time_steps > 0:
 
