@@ -3,6 +3,8 @@ import torch
 
 class _VelocityMixin:
 
+    _velocity_model = True
+
     def input_data(self, x):
 
         return super().input_data(x[..., 0])
@@ -13,6 +15,8 @@ class _VelocityMixin:
 
 
 class _DecayMixin:
+
+    _decay_model = True
 
     decay_encoder = None
     decay_decoder = None

@@ -384,6 +384,8 @@ class _TFMixin:
         if self.n_additional_predictions > 0:
             self.output_t_plus_one = True
 
+        return self
+
     @torch.inference_mode()
     def _to_dataframe(
         self,
@@ -719,7 +721,7 @@ class _TFMixin:
         if not self.output_t_plus_one:
             return None, None
 
-        if self.output_t_plus_one and x.ndim != 3:
+        if self.output_t_plus_one and x.ndim < 3:
             raise ValueError(
                 "3D data (N, L, H) must be provided when "
                 "predicting time-dependent data"
