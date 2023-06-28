@@ -8,9 +8,8 @@ import torch
 from scipy.linalg import pinv
 
 from supirfactor_dynamical import (
-    TFAutoencoder,
-    TFRNNDecoder,
-    read
+    read,
+    get_model
 )
 
 from ._stubs import (
@@ -34,6 +33,9 @@ class _ModelStub:
 
 class TestSerializer(unittest.TestCase):
 
+    velocity = False
+    decay = False
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix='pytest')
         self.temp_name = self.temp.name
@@ -46,7 +48,12 @@ class TestSerializer(unittest.TestCase):
 
     def test_h5_static(self):
 
-        ae = TFAutoencoder(A, use_prior_weights=True)
+        ae = get_model(
+            'static',
+            velocity=self.velocity,
+            decay=self.decay
+        )(A, use_prior_weights=True)
+
         ae.decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
@@ -83,7 +90,11 @@ class TestSerializer(unittest.TestCase):
 
     def test_h5_dynamic(self):
 
-        ae = TFRNNDecoder(A, use_prior_weights=True)
+        ae = get_model(
+            'rnn',
+            velocity=self.velocity,
+            decay=self.decay
+        )(A, use_prior_weights=True)
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
@@ -120,7 +131,11 @@ class TestSerializer(unittest.TestCase):
 
     def test_h5_dynamic_notnone(self):
 
-        ae = TFRNNDecoder(
+        ae = get_model(
+            'rnn',
+            velocity=self.velocity,
+            decay=self.decay
+        )(
             A,
             use_prior_weights=False,
             output_relu=False
@@ -168,7 +183,11 @@ class TestSerializer(unittest.TestCase):
 
     def test_serialize_static(self):
 
-        ae = TFAutoencoder(A, use_prior_weights=True)
+        ae = get_model(
+            'static',
+            velocity=self.velocity,
+            decay=self.decay
+        )(A, use_prior_weights=True)
         ae.decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
@@ -202,8 +221,13 @@ class TestSerializer(unittest.TestCase):
 
     def test_serialize_dynamic(self):
 
-        ae = TFAutoencoder(A, use_prior_weights=True)
-        ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        ae = get_model(
+            'rnn',
+            velocity=self.velocity,
+            decay=self.decay
+        )(A, use_prior_weights=True)
+
+        ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
@@ -225,11 +249,22 @@ class TestSerializer(unittest.TestCase):
             )
 
             npt.assert_almost_equal(
-                ae.decoder[0].weight.numpy(),
-                loaded_ae.decoder[0].weight.numpy()
+                ae._decoder[0].weight.numpy(),
+                loaded_ae._decoder[0].weight.numpy()
             )
 
             npt.assert_almost_equal(
                 ae(X_tensor).numpy(),
                 loaded_ae(X_tensor).numpy()
             )
+
+
+class TestSerializerVelocity(TestSerializer):
+
+    velocity = True
+
+
+class TestSerializerDecay(TestSerializer):
+
+    velocity = True
+    decay = True

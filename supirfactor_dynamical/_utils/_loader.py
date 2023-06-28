@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 
 from ..models import (
-    _CLASS_DICT
+    get_model
 )
 
 TIME_KWARGS = [
@@ -77,7 +77,11 @@ def read(
     }
 
     if model_class is None:
-        model = _CLASS_DICT[_state_model](
+        model = get_model(
+            _state_model,
+            velocity=model_type_kwargs['_velocity_model'],
+            decay=model_type_kwargs['_decay_model']
+        )(
             prior,
             **kwargs
         )

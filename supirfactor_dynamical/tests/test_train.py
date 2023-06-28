@@ -244,3 +244,25 @@ class TestVelocityTraining(unittest.TestCase):
             results[2],
             _CLASS_DICT['rnn']
         )
+
+    def test_decay_training(self):
+
+        results = joint_model_training(
+            self.static_dataloader,
+            self.dynamic_dataloader,
+            self.prior,
+            10,
+            gold_standard=self.prior,
+            dynamic_model_type=get_model('rnn', velocity=True, decay=True),
+            static_model_type=get_model('static_meta', velocity=True, decay=True)
+        )
+
+        self.assertEqual(len(results), 4)
+        self.assertIsInstance(
+            results[0],
+            _CLASS_DICT['static_meta']
+        )
+        self.assertIsInstance(
+            results[2],
+            _CLASS_DICT['rnn']
+        )

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 class _VelocityMixin:
@@ -21,57 +22,71 @@ class _DecayMixin:
 
     _decay_model = True
 
-    decay_encoder = None
-    decay_decoder = None
     decay_hidden = None
-
     decay_invert = None
+
+    decay_scalar_initial = None
+    decay_tensor_initial = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def initalize_decay_module(
         self,
-        k
+        L
     ):
 
-        self.decay_encoder = torch.nn.RNN(
-            self.g,
-            k
-        )
+        _no_tensor = self.decay_tensor_initial is None
+        _no_scalar = self.decay_scalar_initial is None
 
-        self.decay_decoder = torch.nn.RNN(
-            k,
-            self.g,
-            nonlinearity='ReLU'
-        )
+        if L is None:
+            tensor_shape = (self.g, )
+        else:
+            tensor_shape = (L, self.g)
 
-        self.decay_hidden = [None, None]
+        # Fill with 15 minute half-life if no intials provided
+        if _no_tensor and _no_scalar:
+            self.decay_tensor_initial = torch.full(
+                tensor_shape,
+                np.log(2) / 15.
+            )
+
+        # Fill with a given scalar value to initialize
+        elif _no_tensor:
+            self.decay_tensor_initial = torch.full(
+                tensor_shape,
+                self.decay_scalar_initial
+            )
+        # Fill with a given tensor of values to initialize
+        # Needs to match the sequence length correctly
+        else:
+            self.decay_tensor_initial = torch.clone(
+                self.decay_tensor_initial
+            )
+
+        self.decay_parameter = torch.nn.parameter.Parameter(
+            self.decay_tensor_initial
+        )
 
         self.decay_invert = torch.diag(
             torch.full(
-                self.g,
+                (self.g, ),
                 -1.0
             )
         )
 
     def forward_decay_model(
         self,
-        x,
-        x_count,
-        decay_hidden_states=None
+        x
     ):
 
-        if decay_hidden_states is None:
-            decay_hidden_states = [None, None]
+        if not hasattr(self, 'decay_parameter'):
+            if x.ndim == 2:
+                self.initalize_decay_module(None)
+            else:
+                self.initalize_decay_module(x.shape[1])
 
-        x, self.decay_hidden[0] = self.decay_encoder(
-            x, decay_hidden_states[0]
-        )
-
-        x = self.hidden_dropout(x)
-        x, self.decay_hidden[1] = self.decay_decoder(
-            x, decay_hidden_states[1]
-        )
-
-        x = torch.mul(x, x_count)
+        x = torch.mul(x, self.decay_parameter[None, :])
         x = torch.matmul(x, self.decay_invert)
 
         return x
@@ -82,30 +97,18 @@ class _DecayMixin:
         hidden_state=None
     ):
 
-        if hidden_state is None:
-            hidden_state = [None, None, None]
-
-        x_tf = self.drop_encoder(x)
-        x_tf = self.hidden_dropout(x_tf)
-        x_tf = self.decoder(x_tf, hidden_state[0], intermediate_only=True)
-
-        x_output_positive = self._decoder(x_tf)
+        x_output_positive = self.forward_tf_model(
+            x,
+            hidden_state=hidden_state
+        )
 
         x_output_negative = self.forward_decay_model(
-            x_tf,
             x,
-            [hidden_state[1], hidden_state[2]]
         )
 
         x_output = torch.add(
             x_output_positive,
             x_output_negative
         )
-
-        self.hidden_final = [
-            self.hidden_final,
-            self.decay_hidden[0],
-            self.decay_hidden[1]
-        ]
 
         return x_output
