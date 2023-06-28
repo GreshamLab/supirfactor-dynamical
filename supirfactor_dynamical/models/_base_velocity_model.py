@@ -68,6 +68,8 @@ class _DecayMixin:
             self.decay_tensor_initial
         )
 
+        self.decay_relu = torch.nn.ReLU()
+
         self.decay_invert = torch.diag(
             torch.full(
                 (self.g, ),
@@ -86,7 +88,8 @@ class _DecayMixin:
             else:
                 self.initalize_decay_module(x.shape[1])
 
-        x = torch.mul(x, self.decay_parameter[None, :])
+        decay = self.decay_relu(self.decay_parameter)
+        x = torch.mul(x, decay[None, :])
         x = torch.matmul(x, self.decay_invert)
 
         return x
