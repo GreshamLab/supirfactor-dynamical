@@ -13,3 +13,7 @@ from ._results import (
 from ._utils import (
     _process_weights_to_tensor
 )
+
+from ._trunc_robust_scaler import (
+    TruncRobustScaler
+)

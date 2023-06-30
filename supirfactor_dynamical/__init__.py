@@ -8,7 +8,8 @@ from .models import (
 )
 
 from ._utils import (
-    evaluate_results
+    evaluate_results,
+    TruncRobustScaler
 )
 
 from .time_dataset import (
