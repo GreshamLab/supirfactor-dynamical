@@ -8,7 +8,7 @@ def evaluate_results(
     gold_standard_network
 ):
 
-    return ResultsProcessor(
+    result = ResultsProcessor(
         [model_weights],
         [model_erv],
         metric="combined"
@@ -18,3 +18,7 @@ def evaluate_results(
         prior_network,
         full_model_betas=model_weights
     )
+
+    result.model_file_name = None
+
+    return result
