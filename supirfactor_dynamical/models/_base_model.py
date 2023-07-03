@@ -162,7 +162,6 @@ class _TFMixin:
         """
 
         x = self.drop_encoder(x)
-        x = self.hidden_dropout(x)
 
         if hidden_state is not None:
             x = self.decoder(x, hidden_state)
@@ -238,6 +237,8 @@ class _TFMixin:
             x = x @ torch.diag(
                 torch.Tensor(_mask.astype(int))
             )
+
+        x = self.hidden_dropout(x)
 
         return x
 
