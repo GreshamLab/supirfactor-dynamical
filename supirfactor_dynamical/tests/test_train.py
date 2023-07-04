@@ -184,6 +184,20 @@ class TestCoupledTraining(unittest.TestCase):
 
         self.assertEqual(len(results), 3)
 
+    def test_pretrain_tune_tuple_args(self):
+
+        results = pretrain_and_tune_dynamic_model(
+            self.dynamic_dataloader,
+            self.dynamic_dataloader,
+            self.prior,
+            10,
+            prediction_length=1,
+            prediction_loss_offset=1,
+            gold_standard=self.prior,
+            hidden_dropout_rate=(0.0, 0.5),
+            input_dropout_rate=(0.0, 0.25)
+        )
+
 
 class TestVelocityTraining(unittest.TestCase):
 

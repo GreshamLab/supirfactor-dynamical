@@ -10,6 +10,11 @@ from .models._base_model import (
 
 from . import evaluate_results
 
+DROPOUT_KWARGS = [
+    ('input_dropout_rate', 0.5),
+    ('hidden_dropout_rate', 0.0)
+]
+
 
 def _is_model(model):
 
@@ -34,6 +39,10 @@ def pretrain_and_tune_dynamic_model(
     **kwargs
 ):
 
+    pretrain_dropout, tune_dropout = _dropout_kwargs(
+        kwargs
+    )
+
     model, pretrain_results = dynamic_model_training(
         pretraining_training_dataloader,
         prior_network,
@@ -42,10 +51,13 @@ def pretrain_and_tune_dynamic_model(
         optimizer_params=optimizer_params,
         prediction_length=False,
         model_type=model_type,
-        **kwargs
+        **kwargs,
+        **pretrain_dropout
     )
 
     model.train()
+
+    model.set_dropouts(**tune_dropout)
 
     model, tuned_results, _final_erv = dynamic_model_training(
         prediction_tuning_training_dataloader,
@@ -253,3 +265,19 @@ def joint_model_training(
     )
 
     return ae_static, ae_results, ae_dynamic, dyn_results
+
+
+def _dropout_kwargs(kwargs):
+
+    dropout_kwargs = [
+        {
+            k: v if not isinstance(v, tuple) else v[i]
+            for k, v in {
+                k: kwargs.pop(k, v)
+                for k, v in DROPOUT_KWARGS
+            }.items()
+        }
+        for i in range(2)
+    ]
+
+    return dropout_kwargs[0], dropout_kwargs[1]
