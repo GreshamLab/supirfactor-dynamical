@@ -29,7 +29,8 @@ class _TF_RNN_mixin(
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
         output_relu=True,
-        decoder_weights=None
+        decoder_weights=None,
+        sigmoid=False
     ):
         """
         Create a recurrent TF autoencoder
@@ -59,7 +60,8 @@ class _TF_RNN_mixin(
 
         self.set_encoder(
             prior_network,
-            use_prior_weights=use_prior_weights
+            use_prior_weights=use_prior_weights,
+            sigmoid=sigmoid
         )
 
         # Build standard ReLU RNN

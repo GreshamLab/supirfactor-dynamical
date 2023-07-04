@@ -272,7 +272,8 @@ class _TFMixin:
     def set_encoder(
         self,
         prior_network,
-        use_prior_weights=False
+        use_prior_weights=False,
+        sigmoid=False
     ):
 
         prior_network = self.process_prior(
@@ -280,10 +281,16 @@ class _TFMixin:
         )
 
         # Build the encoder module
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(self.g, self.k, bias=False),
-            torch.nn.ReLU()
-        )
+        if sigmoid:
+            self.encoder = torch.nn.Sequential(
+                torch.nn.Linear(self.g, self.k, bias=False),
+                torch.nn.Sigmoid()
+            )
+        else:
+            self.encoder = torch.nn.Sequential(
+                torch.nn.Linear(self.g, self.k, bias=False),
+                torch.nn.ReLU()
+            )
 
         # Replace initialized encoder weights with prior weights
         self.mask_input_weights(
