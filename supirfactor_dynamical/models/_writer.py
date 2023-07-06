@@ -2,11 +2,28 @@ import h5py
 import numpy as np
 import pandas as pd
 
+_SERIALIZE_ARGS = [
+    'input_dropout_rate',
+    'hidden_dropout_rate',
+    'output_relu',
+    'output_t_plus_one',
+    'n_additional_predictions',
+    'loss_offset',
+    '_velocity_model',
+    '_decay_model'
+]
+
 
 def write(
     model_object,
     file_name
 ):
+
+    _serialize_args = [
+        arg
+        for arg in _SERIALIZE_ARGS
+        if hasattr(model_object, arg)
+    ]
 
     with h5py.File(file_name, 'w') as f:
         for k, data in model_object.state_dict().items():
@@ -15,7 +32,7 @@ def write(
                 data=data.numpy()
             )
 
-        for s_arg in model_object._serialize_args:
+        for s_arg in _serialize_args:
 
             if getattr(model_object, s_arg) is not None:
                 f.create_dataset(
@@ -34,7 +51,7 @@ def write(
         f.create_dataset(
             'args',
             data=np.array(
-                model_object._serialize_args,
+                _serialize_args,
                 dtype=object
             )
         )

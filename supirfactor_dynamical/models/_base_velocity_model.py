@@ -1,5 +1,7 @@
 import torch
-import numpy as np
+
+from .recurrent_models import TFRNNDecoder
+from ._base_trainer import _TrainingMixin
 
 
 class _VelocityMixin:
@@ -18,100 +20,110 @@ class _VelocityMixin:
             return super().output_data(x[..., 1], **kwargs)
 
 
-class _DecayMixin:
+class DecayModule(torch.nn.Module):
 
-    _decay_model = True
-
-    decay_hidden = None
-    decay_invert = None
-
-    decay_scalar_initial = None
-    decay_tensor_initial = None
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def initalize_decay_module(
+    def __init__(
         self,
-        L
+        g,
+        k=50,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0
     ):
+        super().__init__()
 
-        _no_tensor = self.decay_tensor_initial is None
-        _no_scalar = self.decay_scalar_initial is None
-
-        if L is None:
-            tensor_shape = (self.g, )
-        else:
-            tensor_shape = (L, self.g)
-
-        # Fill with 15 minute half-life if no intials provided
-        if _no_tensor and _no_scalar:
-            self.decay_tensor_initial = torch.full(
-                tensor_shape,
-                np.log(2) / 15.
-            )
-
-        # Fill with a given scalar value to initialize
-        elif _no_tensor:
-            self.decay_tensor_initial = torch.full(
-                tensor_shape,
-                self.decay_scalar_initial
-            )
-        # Fill with a given tensor of values to initialize
-        # Needs to match the sequence length correctly
-        else:
-            self.decay_tensor_initial = torch.clone(
-                self.decay_tensor_initial
-            )
-
-        self.decay_parameter = torch.nn.parameter.Parameter(
-            self.decay_tensor_initial
+        self._encoder = torch.nn.Sequential(
+            torch.nn.Dropout(input_dropout_rate),
+            torch.nn.Linear(
+                g,
+                k,
+                bias=False
+            ),
+            torch.nn.Sigmoid()
         )
 
-        self.decay_relu = torch.nn.ReLU()
-
-        self.decay_invert = torch.diag(
-            torch.full(
-                (self.g, ),
-                -1.0
-            )
+        self._intermediate = torch.nn.RNN(
+            k,
+            k,
+            1,
+            bias=False
         )
 
-    def forward_decay_model(
-        self,
-        x
-    ):
+        self._decoder = torch.nn.Sequential(
+            torch.nn.Dropout(hidden_dropout_rate),
+            torch.nn.Linear(
+                k,
+                g
+            ),
+            torch.nn.ReLU(),
+            lambda x: torch.mul(x, -1.0)
+        )
 
-        if not hasattr(self, 'decay_parameter'):
-            if x.ndim == 2:
-                self.initalize_decay_module(None)
-            else:
-                self.initalize_decay_module(x.shape[1])
-
-        decay = self.decay_relu(self.decay_parameter)
-        x = torch.mul(x, decay[None, :])
-        x = torch.matmul(x, self.decay_invert)
-
-        return x
-
-    def forward_model(
+    def forward(
         self,
         x,
         hidden_state=None
     ):
 
-        x_output_positive = self.forward_tf_model(
-            x,
-            hidden_state=hidden_state
+        _x = self._encoder(x)
+        _x, self.hidden_state = self._intermediate(_x, hidden_state)
+        _x = self._decoder(_x)
+
+        return torch.mul(x, _x)
+
+
+class SupirFactorDynamical(
+    torch.nn.Module,
+    _VelocityMixin,
+    _TrainingMixin
+):
+
+    def __init__(
+        self,
+        trained_count_model,
+        prior_network,
+        use_prior_weights=False,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
+    ):
+        super().__init__()
+
+        self._count_model = trained_count_model
+
+        # Freeze trained count model
+        for param in self._count_model.parameters():
+            param.requires_grad = False
+
+        self._transcription_model = TFRNNDecoder(
+            prior_network=prior_network,
+            use_prior_weights=use_prior_weights,
+            input_dropout_rate=input_dropout_rate,
+            hidden_dropout_rate=hidden_dropout_rate
         )
 
-        x_output_negative = self.forward_decay_model(
-            x,
+        self._decay_model = DecayModule(
+            self._count_model.g,
+            input_dropout_rate=input_dropout_rate,
+            hidden_dropout_rate=hidden_dropout_rate
         )
 
-        x_output = torch.add(
-            x_output_positive,
-            x_output_negative
-        )
+    def forward(
+        self,
+        x,
+        n_time_steps=None,
+        return_submodels=False
+    ):
 
-        return x_output
+        # Run the pretrained count model
+        x = self._count_model(x, n_time_steps=n_time_steps)
+
+        # Run the transcriptional model
+        x_positive = self._transcription_model(x)
+
+        # Run the decay model
+        x_negative = self._decay_model(x)
+
+        if return_submodels:
+            return x_positive, x_negative
+
+        else:
+            return torch.add(x_positive, x_negative)

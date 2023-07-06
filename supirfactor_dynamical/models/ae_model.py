@@ -1,9 +1,14 @@
 import torch
 
 from ._base_model import _TFMixin
+from ._base_trainer import _TrainingMixin
 
 
-class TFAutoencoder(torch.nn.Module, _TFMixin):
+class TFAutoencoder(
+    torch.nn.Module,
+    _TFMixin,
+    _TrainingMixin
+):
 
     type_name = "static"
 
@@ -72,7 +77,11 @@ class TFAutoencoder(torch.nn.Module, _TFMixin):
         )
 
 
-class TFMetaAutoencoder(torch.nn.Module, _TFMixin):
+class TFMetaAutoencoder(
+    torch.nn.Module,
+    _TFMixin,
+    _TrainingMixin
+):
 
     type_name = "static_meta"
 

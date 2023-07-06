@@ -1,12 +1,14 @@
 import torch
 
 from ._base_model import _TFMixin
+from ._base_trainer import _TrainingMixin
 from .._utils import _aggregate_r2
 
 
 class _TF_RNN_mixin(
     torch.nn.Module,
-    _TFMixin
+    _TFMixin,
+    _TrainingMixin
 ):
 
     gene_loss_sum_axis = (0, 1)

@@ -3,15 +3,9 @@ from .ae_model import (
     TFMetaAutoencoder
 )
 
-from .rnn_model import (
-    TFRNNDecoder
-)
-
-from .lstm_model import (
-    TFLSTMDecoder
-)
-
-from .gru_model import (
+from .recurrent_models import (
+    TFRNNDecoder,
+    TFLSTMDecoder,
     TFGRUDecoder
 )
 
@@ -21,6 +15,8 @@ from ._base_velocity_model import (
 )
 
 from ._base_model import _TFMixin
+from ._base_trainer import _TrainingMixin
+
 
 _CLASS_DICT = {
     TFAutoencoder.type_name: TFAutoencoder,
