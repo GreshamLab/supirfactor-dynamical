@@ -10,8 +10,7 @@ from .recurrent_models import (
 )
 
 from ._base_velocity_model import (
-    _VelocityMixin,
-    _DecayMixin
+    _VelocityMixin
 )
 
 from ._base_model import _TFMixin
@@ -29,8 +28,7 @@ _CLASS_DICT = {
 
 def get_model(
     model,
-    velocity=False,
-    decay=False
+    velocity=False
 ) -> _TFMixin:
 
     try:
@@ -38,23 +36,11 @@ def get_model(
     except KeyError:
         pass
 
-    if velocity and decay:
-        class TFVelocityDecay(_DecayMixin, _VelocityMixin, model):
-            pass
-
-        return TFVelocityDecay
-
-    elif velocity:
+    if velocity:
         class TFVelocity(_VelocityMixin, model):
             pass
 
         return TFVelocity
-
-    elif decay:
-        class TFDecay(_DecayMixin, model):
-            pass
-
-        return TFDecay
 
     else:
         return model

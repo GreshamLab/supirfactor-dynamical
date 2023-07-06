@@ -35,7 +35,6 @@ class _TFMixin:
     hidden_final = None
 
     _velocity_model = False
-    _decay_model = False
 
     @property
     def encoder_weights(self):

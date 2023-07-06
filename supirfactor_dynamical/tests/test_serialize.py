@@ -34,7 +34,6 @@ class _ModelStub:
 class TestSerializer(unittest.TestCase):
 
     velocity = False
-    decay = False
 
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix='pytest')
@@ -50,8 +49,7 @@ class TestSerializer(unittest.TestCase):
 
         ae = get_model(
             'static',
-            velocity=self.velocity,
-            decay=self.decay
+            velocity=self.velocity
         )(A, use_prior_weights=True)
 
         ae.decoder[0].weight = torch.nn.parameter.Parameter(
@@ -92,8 +90,7 @@ class TestSerializer(unittest.TestCase):
 
         ae = get_model(
             'rnn',
-            velocity=self.velocity,
-            decay=self.decay
+            velocity=self.velocity
         )(A, use_prior_weights=True)
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
@@ -133,8 +130,7 @@ class TestSerializer(unittest.TestCase):
 
         ae = get_model(
             'rnn',
-            velocity=self.velocity,
-            decay=self.decay
+            velocity=self.velocity
         )(
             A,
             use_prior_weights=False,
@@ -185,8 +181,7 @@ class TestSerializer(unittest.TestCase):
 
         ae = get_model(
             'static',
-            velocity=self.velocity,
-            decay=self.decay
+            velocity=self.velocity
         )(A, use_prior_weights=True)
         ae.decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
@@ -223,8 +218,7 @@ class TestSerializer(unittest.TestCase):
 
         ae = get_model(
             'rnn',
-            velocity=self.velocity,
-            decay=self.decay
+            velocity=self.velocity
         )(A, use_prior_weights=True)
 
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
@@ -262,9 +256,3 @@ class TestSerializer(unittest.TestCase):
 class TestSerializerVelocity(TestSerializer):
 
     velocity = True
-
-
-class TestSerializerDecay(TestSerializer):
-
-    velocity = True
-    decay = True

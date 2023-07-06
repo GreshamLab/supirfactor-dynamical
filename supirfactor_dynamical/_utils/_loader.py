@@ -14,8 +14,7 @@ TIME_KWARGS = [
 ]
 
 MODEL_TYPE_KWARGS = [
-    '_velocity_model',
-    '_decay_model'
+    '_velocity_model'
 ]
 
 
@@ -79,8 +78,7 @@ def read(
     if model_class is None:
         model = get_model(
             _state_model,
-            velocity=model_type_kwargs['_velocity_model'],
-            decay=model_type_kwargs['_decay_model']
+            velocity=model_type_kwargs['_velocity_model']
         )(
             prior,
             **kwargs
