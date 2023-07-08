@@ -4,6 +4,7 @@ from .models import (
     TFRNNDecoder,
     TFLSTMDecoder,
     TFGRUDecoder,
+    SupirFactorDynamical,
     get_model
 )
 
@@ -19,7 +20,8 @@ from .time_dataset import (
 from .train import (
     joint_model_training,
     dynamic_model_training,
-    static_model_training
+    static_model_training,
+    pretrain_and_tune_dynamic_model
 )
 
 from ._utils._loader import read

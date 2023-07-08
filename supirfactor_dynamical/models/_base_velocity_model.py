@@ -1,8 +1,5 @@
 import torch
 
-from .recurrent_models import TFRNNDecoder
-from ._base_trainer import _TrainingMixin
-
 
 class _VelocityMixin:
 
@@ -54,76 +51,73 @@ class DecayModule(torch.nn.Module):
                 k,
                 g
             ),
-            torch.nn.ReLU(),
-            lambda x: torch.mul(x, -1.0)
+            torch.nn.ReLU()
         )
 
     def forward(
         self,
         x,
-        hidden_state=None
+        hidden_state=None,
+        return_decay_constants=False,
+        velocity_scale_vector=None,
+        expression_scale_vector=None
     ):
 
+        # Encode into latent layer
+        # and then take the mean over the batch axis (0)
         _x = self._encoder(x)
+        _x = _x.mean(axis=0)
+
         _x, self.hidden_state = self._intermediate(_x, hidden_state)
         _x = self._decoder(_x)
-
-        return torch.mul(x, _x)
-
-
-class SupirFactorDynamical(
-    torch.nn.Module,
-    _VelocityMixin,
-    _TrainingMixin
-):
-
-    def __init__(
-        self,
-        trained_count_model,
-        prior_network,
-        use_prior_weights=False,
-        input_dropout_rate=0.5,
-        hidden_dropout_rate=0.0,
-    ):
-        super().__init__()
-
-        self._count_model = trained_count_model
-
-        # Freeze trained count model
-        for param in self._count_model.parameters():
-            param.requires_grad = False
-
-        self._transcription_model = TFRNNDecoder(
-            prior_network=prior_network,
-            use_prior_weights=use_prior_weights,
-            input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate
+        _x = torch.matmul(
+            _x,
+            self._scale_diagonal(
+                _x.shape[-1],
+                velocity_scale_vector,
+                expression_scale_vector
+            )
         )
 
-        self._decay_model = DecayModule(
-            self._count_model.g,
-            input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate
-        )
-
-    def forward(
-        self,
-        x,
-        n_time_steps=None,
-        return_submodels=False
-    ):
-
-        # Run the pretrained count model
-        x = self._count_model(x, n_time_steps=n_time_steps)
-
-        # Run the transcriptional model
-        x_positive = self._transcription_model(x)
-
-        # Run the decay model
-        x_negative = self._decay_model(x)
-
-        if return_submodels:
-            return x_positive, x_negative
-
+        if return_decay_constants:
+            return _x
         else:
-            return torch.add(x_positive, x_negative)
+            return torch.mul(x, _x[None, ...])
+
+    @staticmethod
+    def _scale_diagonal(
+        g,
+        velocity_scale_vector=None,
+        expression_scale_vector=None
+    ):
+        """
+        Rescale here to address differences in X and dX/dt scaling
+
+        :param g: Number of genes
+        :type g: int
+        :param velocity_scale_vector: Scale vector [G] for dX/dt,
+            defaults to None
+        :type velocity_scale_vector: torch.tensor, optional
+        :param expression_scale_vector: Scale vector [G] for X,
+            defaults to None
+        :type expression_scale_vector: torch.tensor, optional
+        :return: [G x G] diagonal matrix to scale decay component
+        :rtype: torch.tensor
+        """
+
+        if velocity_scale_vector is None and expression_scale_vector is None:
+            return torch.diag(
+                torch.full((g, ), -1.0)
+            )
+
+        if velocity_scale_vector is not None:
+            _scale_vector = torch.clone(velocity_scale_vector)
+        else:
+            _scale_vector = torch.ones(g)
+
+        if expression_scale_vector is not None:
+            _scale_vector /= expression_scale_vector
+
+        _scale_vector *= -1.0
+
+        return torch.diag(_scale_vector)

@@ -9,6 +9,8 @@ from .recurrent_models import (
     TFGRUDecoder
 )
 
+from .biophysical_model import SupirFactorDynamical
+
 from ._base_velocity_model import (
     _VelocityMixin
 )

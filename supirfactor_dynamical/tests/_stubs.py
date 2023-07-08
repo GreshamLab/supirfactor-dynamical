@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 
+from supirfactor_dynamical._utils._trunc_robust_scaler import TruncRobustScaler
 
 _rng = np.random.default_rng(44)
 
@@ -20,13 +21,28 @@ T = np.repeat(np.arange(4), 25)
 
 X_tensor = torch.Tensor(X)
 
-V = np.diff(X, axis=0, prepend=np.zeros((1, 4), dtype=np.float32))
+_V_BASE = np.diff(np.vstack((
+    np.zeros(4),
+    X[0:25, :].mean(axis=0),
+    X[25:50, :].mean(axis=0),
+    X[50:75, :].mean(axis=0),
+    X[75:, :].mean(axis=0)
+)), axis=0)
+
+V = np.repeat(_V_BASE, 25, axis=0)
+V += np.random.uniform(-0.1, 0.1, size=V.shape)
+V = V.astype(np.float32)
+
 V_tensor = torch.tensor(V)
 
 XV_tensor = torch.stack(
     (
-        X_tensor,
-        V_tensor
+        torch.tensor(
+            TruncRobustScaler(with_centering=False).fit_transform(X)
+        ),
+        torch.tensor(
+            TruncRobustScaler(with_centering=False).fit_transform(V)
+        )
     ),
     dim=-1
 )
