@@ -158,7 +158,7 @@ class SupirFactorBiophysical(
             for data in data_loader:
                 yield self.counts(data)
 
-        return self._transcription_model(
+        return self._transcription_model.erv(
             _count_wrapper(),
             **kwargs
         )
