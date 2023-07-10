@@ -24,7 +24,8 @@ _CLASS_DICT = {
     TFMetaAutoencoder.type_name: TFMetaAutoencoder,
     TFRNNDecoder.type_name: TFRNNDecoder,
     TFGRUDecoder.type_name: TFGRUDecoder,
-    TFLSTMDecoder.type_name: TFLSTMDecoder
+    TFLSTMDecoder.type_name: TFLSTMDecoder,
+    SupirFactorBiophysical.type_name: SupirFactorBiophysical
 }
 
 
@@ -38,7 +39,7 @@ def get_model(
     except KeyError:
         pass
 
-    if velocity:
+    if velocity and (model is not SupirFactorBiophysical):
         class TFVelocity(_VelocityMixin, model):
             pass
 

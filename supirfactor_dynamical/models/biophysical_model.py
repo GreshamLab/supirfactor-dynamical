@@ -14,7 +14,7 @@ class SupirFactorBiophysical(
     _TrainingMixin
 ):
 
-    name = 'biophysical'
+    type_name = 'biophysical'
 
     def __init__(
         self,
@@ -164,4 +164,4 @@ class SupirFactorBiophysical(
         )
 
     def output_weights(self, *args, **kwargs):
-        self._count_model.output_weights()
+        return self._count_model.output_weights()
