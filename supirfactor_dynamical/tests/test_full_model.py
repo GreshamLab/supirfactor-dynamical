@@ -11,7 +11,7 @@ from supirfactor_dynamical import (
 )
 
 from supirfactor_dynamical.models.biophysical_model import (
-    SupirFactorDynamical
+    SupirFactorBiophysical
 )
 
 from ._stubs import (
@@ -58,7 +58,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.count_model.train_model(self.count_data, 50)
 
-        self.dynamical_model = SupirFactorDynamical(
+        self.dynamical_model = SupirFactorBiophysical(
             self.count_model,
             A
         )

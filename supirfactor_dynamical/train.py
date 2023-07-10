@@ -1,7 +1,8 @@
 from .models import (
     _CLASS_DICT,
     TFAutoencoder,
-    TFRNNDecoder
+    TFRNNDecoder,
+    SupirFactorBiophysical
 )
 
 from .models._base_model import (
@@ -220,6 +221,59 @@ def static_model_training(
         return ae_static, ae_results, _erv
     else:
         return ae_static, ae_results
+
+
+def biophysical_model_training(
+    training_dataloader,
+    prior_network,
+    epochs,
+    trained_count_model,
+    validation_dataloader=None,
+    optimizer_params=None,
+    gold_standard=None,
+    prediction_length=None,
+    prediction_loss_offset=None,
+    **kwargs
+):
+
+    trained_count_model.set_time_parameters(
+        output_t_plus_one=prediction_length is not None,
+        n_additional_predictions=prediction_length,
+        loss_offset=prediction_loss_offset
+    )
+
+    biophysical_model = SupirFactorBiophysical(
+        trained_count_model,
+        prior_network,
+        **kwargs
+    )
+
+    biophysical_model.train_model(
+        training_dataloader,
+        epochs,
+        validation_dataloader=validation_dataloader,
+        optimizer=optimizer_params
+    )
+
+    biophysical_model.eval()
+
+    _weights = biophysical_model.output_weights(
+        as_dataframe=True
+    )
+
+    _erv = biophysical_model.erv(
+        training_dataloader,
+        as_data_frame=True
+    )
+
+    _results = evaluate_results(
+        _weights,
+        _erv,
+        prior_network,
+        gold_standard if gold_standard is not None else prior_network
+    )
+
+    return biophysical_model, _results, _erv
 
 
 def joint_model_training(

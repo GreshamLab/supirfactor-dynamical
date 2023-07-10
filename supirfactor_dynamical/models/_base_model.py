@@ -617,6 +617,8 @@ class _TFMixin:
 
         with torch.no_grad():
 
+            self.eval()
+
             full_rss = torch.zeros(self.g)
             rss = torch.zeros((self.g, self.k))
 

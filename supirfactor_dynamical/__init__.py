@@ -4,7 +4,7 @@ from .models import (
     TFRNNDecoder,
     TFLSTMDecoder,
     TFGRUDecoder,
-    SupirFactorDynamical,
+    SupirFactorBiophysical,
     get_model
 )
 

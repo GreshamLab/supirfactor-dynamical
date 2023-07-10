@@ -24,7 +24,9 @@ class DecayModule(torch.nn.Module):
         g,
         k=50,
         input_dropout_rate=0.5,
-        hidden_dropout_rate=0.0
+        hidden_dropout_rate=0.0,
+        time_dependent_decay=True,
+        relu=True
     ):
         super().__init__()
 
@@ -38,86 +40,58 @@ class DecayModule(torch.nn.Module):
             torch.nn.Sigmoid()
         )
 
-        self._intermediate = torch.nn.RNN(
-            k,
-            k,
-            1,
-            bias=False
-        )
+        if time_dependent_decay:
+            self._intermediate = torch.nn.RNN(
+                k,
+                k,
+                1,
+                bias=False
+            )
+
+        else:
+            self._intermediate = torch.nn.Linear(
+                k,
+                k,
+                bias=False
+            )
 
         self._decoder = torch.nn.Sequential(
             torch.nn.Dropout(hidden_dropout_rate),
             torch.nn.Linear(
                 k,
                 g
-            ),
-            torch.nn.ReLU()
+            )
         )
+
+        if relu:
+            self._decoder.append(
+                torch.nn.ReLU
+            )
+
+        self.time_dependent_decay = time_dependent_decay
 
     def forward(
         self,
         x,
         hidden_state=None,
-        return_decay_constants=False,
-        velocity_scale_vector=None,
-        expression_scale_vector=None
+        return_decay_constants=False
     ):
 
         # Encode into latent layer
         # and then take the mean over the batch axis (0)
         _x = self._encoder(x)
-        _x = _x.mean(axis=0)
 
-        _x, self.hidden_state = self._intermediate(_x, hidden_state)
+        if self.time_dependent_decay:
+            _x = _x.mean(axis=0)
+            _x, self.hidden_state = self._intermediate(_x, hidden_state)
+        else:
+            _x = _x.mean(axis=(0, 1))
+            _x = self._intermediate(_x)
+
         _x = self._decoder(_x)
-        _x = torch.matmul(
-            _x,
-            self._scale_diagonal(
-                _x.shape[-1],
-                velocity_scale_vector,
-                expression_scale_vector
-            )
-        )
+        _x = torch.mul(_x, -1.0)
 
         if return_decay_constants:
             return _x
         else:
             return torch.mul(x, _x[None, ...])
-
-    @staticmethod
-    def _scale_diagonal(
-        g,
-        velocity_scale_vector=None,
-        expression_scale_vector=None
-    ):
-        """
-        Rescale here to address differences in X and dX/dt scaling
-
-        :param g: Number of genes
-        :type g: int
-        :param velocity_scale_vector: Scale vector [G] for dX/dt,
-            defaults to None
-        :type velocity_scale_vector: torch.tensor, optional
-        :param expression_scale_vector: Scale vector [G] for X,
-            defaults to None
-        :type expression_scale_vector: torch.tensor, optional
-        :return: [G x G] diagonal matrix to scale decay component
-        :rtype: torch.tensor
-        """
-
-        if velocity_scale_vector is None and expression_scale_vector is None:
-            return torch.diag(
-                torch.full((g, ), -1.0)
-            )
-
-        if velocity_scale_vector is not None:
-            _scale_vector = torch.clone(velocity_scale_vector)
-        else:
-            _scale_vector = torch.ones(g)
-
-        if expression_scale_vector is not None:
-            _scale_vector /= expression_scale_vector
-
-        _scale_vector *= -1.0
-
-        return torch.diag(_scale_vector)

@@ -8,16 +8,13 @@ from ._base_velocity_model import (
 )
 
 
-class SupirFactorDynamical(
+class SupirFactorBiophysical(
     torch.nn.Module,
     _VelocityMixin,
     _TrainingMixin
 ):
 
-    name = 'dynamical'
-
-    _velocity_scale_vector = None
-    _expression_scale_vector = None
+    name = 'biophysical'
 
     def __init__(
         self,
@@ -26,7 +23,8 @@ class SupirFactorDynamical(
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
-        transcription_model=None
+        transcription_model=None,
+        time_dependent_decay=True
     ):
         super().__init__()
 
@@ -47,32 +45,30 @@ class SupirFactorDynamical(
             prior_network=prior_network,
             use_prior_weights=use_prior_weights,
             input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate
+            hidden_dropout_rate=hidden_dropout_rate,
+            output_relu=False
         )
 
         self._decay_model = DecayModule(
             self._count_model.g,
             input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate
+            hidden_dropout_rate=hidden_dropout_rate,
+            time_dependent_decay=time_dependent_decay,
+            relu=False
         )
 
-    def set_scaling(
-        self,
-        velocity_scale_vector=None,
-        expression_scale_vector=None
-    ):
+        # Use leakyrelu to address vanishing gradients
+        self._transcription_model._decoder.append(
+            torch.nn.LeakyReLU(1e-3)
+        )
 
-        if velocity_scale_vector is not None:
-            self._velocity_scale_vector = torch.Tensor(
-                velocity_scale_vector
-            )
+        self._decay_model._decoder.append(
+            torch.nn.LeakyReLU(1e-3)
+        )
 
-        if expression_scale_vector is not None:
-            self._expression_scale_vector = torch.Tensor(
-                expression_scale_vector
-            )
-
-        return self
+    def train(self, *args, **kwargs):
+        super().train(*args, **kwargs)
+        self._count_model.eval()
 
     def forward(
         self,
@@ -100,11 +96,7 @@ class SupirFactorDynamical(
         x_positive = self._transcription_model(x)
 
         # Run the decay model
-        x_negative = self._decay_model(
-            x,
-            velocity_scale_vector=self._velocity_scale_vector,
-            expression_scale_vector=self._expression_scale_vector
-        )
+        x_negative = self._decay_model(x)
 
         if return_submodels:
             return x_positive, x_negative
@@ -164,3 +156,23 @@ class SupirFactorDynamical(
             return self._transcription_model(
                 self.counts(x, n_time_steps=n_time_steps)
             )
+
+    @torch.inference_mode()
+    def erv(
+        self,
+        data_loader,
+        **kwargs
+    ):
+
+        def _count_wrapper():
+
+            for data in data_loader:
+                yield self.counts(data)
+
+        return self._transcription_model(
+            _count_wrapper(),
+            **kwargs
+        )
+
+    def output_weights(self, *args, **kwargs):
+        self._count_model.output_weights()
