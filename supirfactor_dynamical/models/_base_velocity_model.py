@@ -25,8 +25,7 @@ class DecayModule(torch.nn.Module):
         k=50,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
-        time_dependent_decay=True,
-        relu=True
+        time_dependent_decay=True
     ):
         super().__init__()
 
@@ -60,13 +59,9 @@ class DecayModule(torch.nn.Module):
             torch.nn.Linear(
                 k,
                 g
-            )
+            ),
+            torch.nn.LeakyReLU(1e-3)
         )
-
-        if relu:
-            self._decoder.append(
-                torch.nn.ReLU
-            )
 
         self.time_dependent_decay = time_dependent_decay
 
@@ -89,6 +84,10 @@ class DecayModule(torch.nn.Module):
             _x = self._intermediate(_x)
 
         _x = self._decoder(_x)
+
+        if not self.training:
+            _x = torch.nn.ReLU()(_x)
+
         _x = torch.mul(_x, -1.0)
 
         if return_decay_constants:

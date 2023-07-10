@@ -45,25 +45,14 @@ class SupirFactorBiophysical(
             prior_network=prior_network,
             use_prior_weights=use_prior_weights,
             input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate,
-            output_relu=False
+            hidden_dropout_rate=hidden_dropout_rate
         )
 
         self._decay_model = DecayModule(
             self._count_model.g,
             input_dropout_rate=input_dropout_rate,
             hidden_dropout_rate=hidden_dropout_rate,
-            time_dependent_decay=time_dependent_decay,
-            relu=False
-        )
-
-        # Use leakyrelu to address vanishing gradients
-        self._transcription_model._decoder.append(
-            torch.nn.LeakyReLU(1e-3)
-        )
-
-        self._decay_model._decoder.append(
-            torch.nn.LeakyReLU(1e-3)
+            time_dependent_decay=time_dependent_decay
         )
 
     def train(self, *args, **kwargs):
