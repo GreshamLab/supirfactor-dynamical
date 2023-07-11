@@ -15,7 +15,7 @@ from .._utils import (
 from ._writer import write
 
 
-class _TFMixin:
+class _PriorMixin:
 
     g = 0
     k = 0
@@ -24,6 +24,159 @@ class _TFMixin:
 
     prior_network = None
     prior_network_labels = (None, None)
+
+    def drop_encoder(
+        self,
+        x
+    ):
+        x = self.encoder(x)
+
+        if self._drop_tf is not None:
+
+            _mask = ~self.prior_network_labels[1].isin(self._drop_tf)
+
+            x = x @ torch.diag(
+                torch.Tensor(_mask.astype(int))
+            )
+
+        x = self.hidden_dropout(x)
+
+        return x
+
+    def process_prior(
+        self,
+        prior_network
+    ):
+        """
+        Process a G x K prior into a K x G tensor.
+        Sets instance variables for labels and layer size
+
+        :param prior_network: Prior network topology matrix
+        :type prior_network: pd.DataFrame, np.ndarray, torch.Tensor
+        :return: Prior network topology K x G tensor
+        :rtype: torch.Tensor
+        """
+
+        # Process prior into a [K x G] tensor
+        # and extract labels if provided
+        prior_network, prior_network_labels = _process_weights_to_tensor(
+            prior_network
+        )
+
+        # Set prior instance variables
+        self.prior_network = prior_network
+        self.prior_network_labels = prior_network_labels
+        self.k, self.g = prior_network.shape
+
+        return prior_network
+
+    def set_encoder(
+        self,
+        prior_network,
+        use_prior_weights=False,
+        sigmoid=False
+    ):
+
+        prior_network = self.process_prior(
+            prior_network
+        )
+
+        # Build the encoder module
+        if sigmoid:
+            self.encoder = torch.nn.Sequential(
+                torch.nn.Linear(self.g, self.k, bias=False),
+                torch.nn.Sigmoid()
+            )
+        else:
+            self.encoder = torch.nn.Sequential(
+                torch.nn.Linear(self.g, self.k, bias=False),
+                torch.nn.ReLU()
+            )
+
+        # Replace initialized encoder weights with prior weights
+        self.mask_input_weights(
+            prior_network,
+            use_mask_weights=use_prior_weights,
+            layer_name='weight'
+        )
+
+    def set_drop_tfs(
+        self,
+        drop_tfs
+    ):
+        """
+        Remove specific TF nodes from the TF layer
+        by zeroing their activity
+
+        :param drop_tfs: TF name(s) matching TF prior labels.
+            None disables TF dropout.
+        :type drop_tfs: list, pd.Series
+        """
+
+        if drop_tfs is None:
+            self._drop_tf = None
+            return
+
+        elif self.prior_network_labels[1] is None:
+            raise RuntimeError(
+                "Unable to exclude TFs without TF labels; "
+                "use a labeled DataFrame for the prior network"
+            )
+
+        elif not isinstance(
+            drop_tfs,
+            (tuple, list, pd.Series, pd.Index)
+        ):
+            self._drop_tf = [drop_tfs]
+
+        else:
+            self._drop_tf = drop_tfs
+
+        _no_match = set(self._drop_tf).difference(
+            self.prior_network_labels[1]
+        )
+
+        if len(_no_match) != 0:
+            warnings.warn(
+                f"{len(_no_match)} / {len(self._drop_tf)} labels don't match "
+                f"model labels: {list(_no_match)}",
+                RuntimeWarning
+            )
+
+    @torch.inference_mode()
+    def _to_dataframe(
+        self,
+        x,
+        transpose=False
+    ):
+        """
+        Turn a tensor or numpy array into a dataframe
+        labeled using the genes & regulators from the prior
+
+        :param x: [G x K] data, or [K x G] data if transpose=True
+        :type x: torch.tensor, np.ndarray
+        :param transpose: Transpose [K x G] data to [G x K],
+            defaults to False
+        :type transpose: bool, optional
+        :return: [G x K] DataFrame
+        :rtype: pd.DataFrame
+        """
+
+        try:
+            with torch.no_grad():
+                x = x.numpy()
+
+        except AttributeError:
+            pass
+
+        return pd.DataFrame(
+            x.T if transpose else x,
+            index=self.prior_network_labels[0],
+            columns=self.prior_network_labels[1]
+        )
+
+
+class _TFMixin(_PriorMixin):
 
     gene_loss_sum_axis = 0
     type_name = "base"
@@ -192,81 +345,6 @@ class _TFMixin:
                 dim=tensor_list[0].ndim - 2
             )
 
-    def drop_encoder(
-        self,
-        x
-    ):
-        x = self.encoder(x)
-
-        if self._drop_tf is not None:
-
-            _mask = ~self.prior_network_labels[1].isin(self._drop_tf)
-
-            x = x @ torch.diag(
-                torch.Tensor(_mask.astype(int))
-            )
-
-        x = self.hidden_dropout(x)
-
-        return x
-
-    def process_prior(
-        self,
-        prior_network
-    ):
-        """
-        Process a G x K prior into a K x G tensor.
-        Sets instance variables for labels and layer size
-
-        :param prior_network: Prior network topology matrix
-        :type prior_network: pd.DataFrame, np.ndarray, torch.Tensor
-        :return: Prior network topology K x G tensor
-        :rtype: torch.Tensor
-        """
-
-        # Process prior into a [K x G] tensor
-        # and extract labels if provided
-        prior_network, prior_network_labels = _process_weights_to_tensor(
-            prior_network
-        )
-
-        # Set prior instance variables
-        self.prior_network = prior_network
-        self.prior_network_labels = prior_network_labels
-        self.k, self.g = prior_network.shape
-
-        return prior_network
-
-    def set_encoder(
-        self,
-        prior_network,
-        use_prior_weights=False,
-        sigmoid=False
-    ):
-
-        prior_network = self.process_prior(
-            prior_network
-        )
-
-        # Build the encoder module
-        if sigmoid:
-            self.encoder = torch.nn.Sequential(
-                torch.nn.Linear(self.g, self.k, bias=False),
-                torch.nn.Sigmoid()
-            )
-        else:
-            self.encoder = torch.nn.Sequential(
-                torch.nn.Linear(self.g, self.k, bias=False),
-                torch.nn.ReLU()
-            )
-
-        # Replace initialized encoder weights with prior weights
-        self.mask_input_weights(
-            prior_network,
-            use_mask_weights=use_prior_weights,
-            layer_name='weight'
-        )
-
     def set_dropouts(
         self,
         input_dropout_rate,
@@ -284,84 +362,10 @@ class _TFMixin:
         self.input_dropout_rate = input_dropout_rate
         self.hidden_dropout_rate = hidden_dropout_rate
 
-    def set_drop_tfs(
-        self,
-        drop_tfs
-    ):
-        """
-        Remove specific TF nodes from the TF layer
-        by zeroing their activity
-
-        :param drop_tfs: TF name(s) matching TF prior labels.
-            None disables TF dropout.
-        :type drop_tfs: list, pd.Series
-        """
-
-        if drop_tfs is None:
-            self._drop_tf = None
-            return
-
-        elif self.prior_network_labels[1] is None:
-            raise RuntimeError(
-                "Unable to exclude TFs without TF labels; "
-                "use a labeled DataFrame for the prior network"
-            )
-
-        elif not isinstance(
-            drop_tfs,
-            (tuple, list, pd.Series, pd.Index)
-        ):
-            self._drop_tf = [drop_tfs]
-
-        else:
-            self._drop_tf = drop_tfs
-
-        _no_match = set(self._drop_tf).difference(
-            self.prior_network_labels[1]
-        )
-
-        if len(_no_match) != 0:
-            warnings.warn(
-                f"{len(_no_match)} / {len(self._drop_tf)} labels don't match "
-                f"model labels: {list(_no_match)}",
-                RuntimeWarning
-            )
-
-    @torch.inference_mode()
-    def _to_dataframe(
-        self,
-        x,
-        transpose=False
-    ):
-        """
-        Turn a tensor or numpy array into a dataframe
-        labeled using the genes & regulators from the prior
-
-        :param x: [G x K] data, or [K x G] data if transpose=True
-        :type x: torch.tensor, np.ndarray
-        :param transpose: Transpose [K x G] data to [G x K],
-            defaults to False
-        :type transpose: bool, optional
-        :return: [G x K] DataFrame
-        :rtype: pd.DataFrame
-        """
-
-        try:
-            with torch.no_grad():
-                x = x.numpy()
-
-        except AttributeError:
-            pass
-
-        return pd.DataFrame(
-            x.T if transpose else x,
-            index=self.prior_network_labels[0],
-            columns=self.prior_network_labels[1]
-        )
-
     def save(
         self,
-        file_name
+        file_name,
+        **kwargs
     ):
         """
         Save this model to a file
@@ -370,7 +374,7 @@ class _TFMixin:
         :type file_name: str
         """
 
-        write(self, file_name)
+        write(self, file_name, **kwargs)
 
     def set_decoder(
         self,

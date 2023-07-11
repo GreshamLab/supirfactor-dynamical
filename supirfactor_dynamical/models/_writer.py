@@ -9,14 +9,15 @@ _SERIALIZE_ARGS = [
     'output_t_plus_one',
     'n_additional_predictions',
     'loss_offset',
-    '_velocity_model',
-    '_decay_model'
+    '_velocity_model'
 ]
 
 
 def write(
     model_object,
-    file_name
+    file_name,
+    mode='w',
+    prefix=''
 ):
 
     _serialize_args = [
@@ -25,10 +26,10 @@ def write(
         if hasattr(model_object, arg)
     ]
 
-    with h5py.File(file_name, 'w') as f:
+    with h5py.File(file_name, mode) as f:
         for k, data in model_object.state_dict().items():
             f.create_dataset(
-                k,
+                prefix + k,
                 data=data.numpy()
             )
 
@@ -36,12 +37,12 @@ def write(
 
             if getattr(model_object, s_arg) is not None:
                 f.create_dataset(
-                    s_arg,
+                    prefix + s_arg,
                     data=getattr(model_object, s_arg)
                 )
 
         f.create_dataset(
-            'keys',
+            prefix + 'keys',
             data=np.array(
                 list(model_object.state_dict().keys()),
                 dtype=object
@@ -49,7 +50,7 @@ def write(
         )
 
         f.create_dataset(
-            'args',
+            prefix + 'args',
             data=np.array(
                 _serialize_args,
                 dtype=object
@@ -57,7 +58,7 @@ def write(
         )
 
         f.create_dataset(
-            'type_name',
+            prefix + 'type_name',
             data=model_object.type_name
         )
 
@@ -67,5 +68,5 @@ def write(
             transpose=True
         ).to_hdf(
             f,
-            'prior_network'
+            prefix + 'prior_network'
         )

@@ -2,6 +2,8 @@ import torch
 
 from .recurrent_models import TFRNNDecoder
 from ._base_trainer import _TrainingMixin
+from ._base_model import _PriorMixin
+from ._writer import write
 from ._base_velocity_model import (
     DecayModule,
     _VelocityMixin
@@ -11,6 +13,7 @@ from ._base_velocity_model import (
 class SupirFactorBiophysical(
     torch.nn.Module,
     _VelocityMixin,
+    _PriorMixin,
     _TrainingMixin
 ):
 
@@ -54,6 +57,8 @@ class SupirFactorBiophysical(
             hidden_dropout_rate=hidden_dropout_rate,
             time_dependent_decay=time_dependent_decay
         )
+
+        self.prior_network = prior_network
 
     def train(self, *args, **kwargs):
         super().train(*args, **kwargs)
@@ -164,4 +169,7 @@ class SupirFactorBiophysical(
         )
 
     def output_weights(self, *args, **kwargs):
-        return self._count_model.output_weights()
+        return self._count_model.output_weights(*args, **kwargs)
+
+    def save(self, file_name):
+        write(self, file_name)
