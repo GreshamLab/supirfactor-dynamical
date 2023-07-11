@@ -59,8 +59,9 @@ class TestDynamicalModel(unittest.TestCase):
         self.count_model.train_model(self.count_data, 50)
 
         self.dynamical_model = SupirFactorBiophysical(
-            self.count_model,
-            A
+            A,
+            trained_count_model=self.count_model
+
         )
 
         self.dynamical_model.train_model(self.velocity_data, 50)
