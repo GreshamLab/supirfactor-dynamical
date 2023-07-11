@@ -208,7 +208,7 @@ class SupirFactorBiophysical(
         )
 
     def output_weights(self, *args, **kwargs):
-        return self._count_model.output_weights(*args, **kwargs)
+        return self._transcription_model.output_weights(*args, **kwargs)
 
     def save(self, file_name):
         write(self, file_name)
