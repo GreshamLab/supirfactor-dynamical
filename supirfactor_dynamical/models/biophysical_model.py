@@ -19,10 +19,13 @@ class SupirFactorBiophysical(
 
     type_name = 'biophysical'
 
+    _pretrained_decay = False
+
     def __init__(
         self,
-        trained_count_model,
         prior_network,
+        trained_count_model=None,
+        trained_decay_model=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -31,15 +34,19 @@ class SupirFactorBiophysical(
     ):
         super().__init__()
 
-        if isinstance(trained_count_model, str):
-            from .._utils._loader import read
-            trained_count_model = read(trained_count_model)
+        self.prior_network = self.process_prior(prior_network)
 
-        self._count_model = trained_count_model
+        if trained_count_model is not None:
 
-        # Freeze trained count model
-        for param in self._count_model.parameters():
-            param.requires_grad = False
+            if isinstance(trained_count_model, str):
+                from .._utils._loader import read
+                trained_count_model = read(trained_count_model)
+
+            self._count_model = trained_count_model
+            self.freeze(self._count_model)
+
+        else:
+            self._count_model = None
 
         if transcription_model is None:
             transcription_model = TFRNNDecoder
@@ -51,18 +58,35 @@ class SupirFactorBiophysical(
             hidden_dropout_rate=hidden_dropout_rate
         )
 
-        self._decay_model = DecayModule(
-            self._count_model.g,
-            input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate,
-            time_dependent_decay=time_dependent_decay
-        )
+        if trained_decay_model is not None:
 
-        self.prior_network = prior_network
+            self._decay_model = trained_decay_model
+            self._pretrained_decay = True
+            self.freeze(self._decay_model)
+
+        else:
+
+            self._decay_model = DecayModule(
+                self.g,
+                input_dropout_rate=input_dropout_rate,
+                hidden_dropout_rate=hidden_dropout_rate,
+                time_dependent_decay=time_dependent_decay
+            )
 
     def train(self, *args, **kwargs):
         super().train(*args, **kwargs)
-        self._count_model.eval()
+
+        if self._count_model is not None:
+            self._count_model.eval()
+
+        if self._pretrained_decay:
+            self._decay_model.eval()
+
+    @staticmethod
+    def freeze(model):
+
+        for param in model.parameters():
+            param.requires_grad = False
 
     def forward(
         self,
@@ -83,8 +107,14 @@ class SupirFactorBiophysical(
         :rtype: _type_
         """
 
-        # Run the pretrained count model
-        x = self._count_model(x, n_time_steps=n_time_steps)
+        # Run the pretrained count model if provided
+        if self._count_model is not None:
+            x = self._count_model(x, n_time_steps=n_time_steps)
+
+        elif n_time_steps != 0:
+            raise RuntimeError(
+                "No pretrained count model available for prediction"
+            )
 
         # Run the transcriptional model
         x_positive = self._transcription_model(x)
@@ -105,11 +135,20 @@ class SupirFactorBiophysical(
         n_time_steps=0
     ):
 
-        with torch.no_grad():
-            # Run the pretrained count model
-            return self._count_model(
-                self.input_data(x),
-                n_time_steps=n_time_steps
+        if self._count_model is not None:
+            with torch.no_grad():
+                # Run the pretrained count model
+                return self._count_model(
+                    self.input_data(x),
+                    n_time_steps=n_time_steps
+                )
+
+        elif n_time_steps == 0:
+            return self.input_data(x)
+
+        else:
+            raise RuntimeError(
+                "No pretrained count model available for prediction"
             )
 
     @torch.inference_mode()
