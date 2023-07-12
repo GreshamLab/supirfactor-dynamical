@@ -181,8 +181,6 @@ class _TFMixin(_PriorMixin):
     gene_loss_sum_axis = 0
     type_name = "base"
 
-    input_dropout_rate = 0.5
-    hidden_dropout_rate = 0.0
     output_relu = True
 
     hidden_final = None
@@ -344,23 +342,6 @@ class _TFMixin(_PriorMixin):
                 tensor_list,
                 dim=tensor_list[0].ndim - 2
             )
-
-    def set_dropouts(
-        self,
-        input_dropout_rate,
-        hidden_dropout_rate
-    ):
-
-        self.input_dropout = torch.nn.Dropout(
-            p=input_dropout_rate
-        )
-
-        self.hidden_dropout = torch.nn.Dropout(
-            p=hidden_dropout_rate
-        )
-
-        self.input_dropout_rate = input_dropout_rate
-        self.hidden_dropout_rate = hidden_dropout_rate
 
     def save(
         self,

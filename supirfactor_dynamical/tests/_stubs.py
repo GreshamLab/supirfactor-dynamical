@@ -46,3 +46,5 @@ XV_tensor = torch.stack(
     ),
     dim=-1
 )
+
+XTV_tensor = torch.clone(XV_tensor).reshape(25, 4, 4, 2)

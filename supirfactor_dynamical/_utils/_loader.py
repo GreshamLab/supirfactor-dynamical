@@ -17,10 +17,16 @@ MODEL_TYPE_KWARGS = [
     '_velocity_model'
 ]
 
+FREEZE_ARGS = [
+    '_pretrained_count',
+    '_pretrained_decay'
+]
+
 
 def read(
     file_name,
-    model_class=None
+    model_class=None,
+    prefix=''
 ):
     """
     Load a model from a file
@@ -33,38 +39,41 @@ def read(
     :type model_class: class
     """
 
+    _pre_len = len(prefix)
+
     with h5py.File(file_name, 'r') as f:
 
         _state_dict = collections.OrderedDict()
+
         _state_dict_keys = [
-            x.decode('utf-8')
-            for x in _load_h5_dataset(f, 'keys')
+            prefix + x.decode('utf-8')
+            for x in _load_h5_dataset(f, prefix + 'keys')
         ]
 
         for k in _state_dict_keys:
-            _state_dict[k] = torch.tensor(
+            _state_dict[k[_pre_len:]] = torch.tensor(
                 _load_h5_dataset(f, k)
             )
 
         _state_args = [
-            x.decode('utf-8')
-            for x in _load_h5_dataset(f, 'args')
+            prefix + x.decode('utf-8')
+            for x in _load_h5_dataset(f, prefix + 'args')
         ]
 
         _state_model = _load_h5_dataset(
             f,
-            'type_name'
+            prefix + 'type_name'
         ).decode('utf-8')
 
         kwargs = {
-            k: _load_h5_dataset(f, k)
+            k[_pre_len:]: _load_h5_dataset(f, k)
             for k in _state_args
         }
 
     with pd.HDFStore(file_name, mode='r') as f:
         prior = pd.read_hdf(
             f,
-            'prior_network'
+            prefix + 'prior_network'
         )
 
     time_kwargs = {
@@ -74,6 +83,19 @@ def read(
     model_type_kwargs = {
         k: kwargs.pop(k, False) for k in MODEL_TYPE_KWARGS
     }
+
+    freeze_kwargs = {
+        k: kwargs.pop(k, False) for k in FREEZE_ARGS
+    }
+
+    if (
+        (_state_model == 'biophysical') and
+        freeze_kwargs['_pretrained_count']
+    ):
+        kwargs['trained_count_model'] = read(
+            file_name,
+            prefix=prefix + 'count_'
+        )
 
     if model_class is None:
         model = get_model(
@@ -96,6 +118,14 @@ def read(
     model.load_state_dict(
         _state_dict
     )
+
+    if freeze_kwargs['_pretrained_count']:
+        model.freeze(model._count_model)
+        model._pretrained_count = True
+
+    if freeze_kwargs['_pretrained_decay']:
+        model.freeze(model._decay_model)
+        model._pretrained_decay = True
 
     return model
 

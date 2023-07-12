@@ -28,6 +28,9 @@ class _TrainingMixin:
     n_additional_predictions = 0
     loss_offset = 0
 
+    input_dropout_rate = 0.5
+    hidden_dropout_rate = 0.0
+
     def train_model(
         self,
         training_dataloader,
@@ -133,6 +136,23 @@ class _TrainingMixin:
         )
 
         return losses, validation_losses
+
+    def set_dropouts(
+        self,
+        input_dropout_rate,
+        hidden_dropout_rate
+    ):
+
+        self.input_dropout = torch.nn.Dropout(
+            p=input_dropout_rate
+        )
+
+        self.hidden_dropout = torch.nn.Dropout(
+            p=hidden_dropout_rate
+        )
+
+        self.input_dropout_rate = input_dropout_rate
+        self.hidden_dropout_rate = hidden_dropout_rate
 
     def process_optimizer(
         self,

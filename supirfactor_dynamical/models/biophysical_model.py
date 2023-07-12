@@ -20,18 +20,49 @@ class SupirFactorBiophysical(
     type_name = 'biophysical'
 
     _pretrained_decay = False
+    _pretrained_count = False
+
+    time_dependent_decay = True
 
     def __init__(
         self,
         prior_network,
         trained_count_model=None,
-        trained_decay_model=None,
+        decay_model=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
         transcription_model=None,
         time_dependent_decay=True
     ):
+        """
+        Biophysical deep learning model for transcriptional regulatory
+        network inference.
+
+        :param prior_network: Prior knowledge network to constrain affine
+            transformation into the TFA layer. Genes x TFs.
+        :type prior_network: pd.DataFrame
+        :param trained_count_model: Pretrained count->count learning model
+            to denoise input counts. Will be frozen and not trained during
+            the transcriptional model training. None disables.
+            Defaults to None
+        :type trained_count_model: torch.nn.Module, optional
+        :param decay_model: A pretrained decay model which will be frozen
+            for transcriptional model. None will create a new decay model
+            that will be trained with the transcriptional model.
+            False will disable decay model training. Defaults to None
+        :type decay_model: torch.nn.Module, False, or None
+        :param use_prior_weights: _description_, defaults to False
+        :type use_prior_weights: bool, optional
+        :param input_dropout_rate: _description_, defaults to 0.5
+        :type input_dropout_rate: float, optional
+        :param hidden_dropout_rate: _description_, defaults to 0.0
+        :type hidden_dropout_rate: float, optional
+        :param transcription_model: _description_, defaults to None
+        :type transcription_model: _type_, optional
+        :param time_dependent_decay: _description_, defaults to True
+        :type time_dependent_decay: bool, optional
+        """
         super().__init__()
 
         self.prior_network = self.process_prior(prior_network)
@@ -43,6 +74,7 @@ class SupirFactorBiophysical(
                 trained_count_model = read(trained_count_model)
 
             self._count_model = trained_count_model
+            self._pretrained_count = True
             self.freeze(self._count_model)
 
         else:
@@ -55,12 +87,22 @@ class SupirFactorBiophysical(
             prior_network=prior_network,
             use_prior_weights=use_prior_weights,
             input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate
+            hidden_dropout_rate=hidden_dropout_rate,
+            output_relu=decay_model is not False
         )
 
-        if trained_decay_model is not None:
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
 
-            self._decay_model = trained_decay_model
+        if decay_model is False:
+
+            self._decay_model = None
+
+        elif decay_model is not None:
+
+            self._decay_model = decay_model
             self._pretrained_decay = True
             self.freeze(self._decay_model)
 
@@ -72,6 +114,8 @@ class SupirFactorBiophysical(
                 hidden_dropout_rate=hidden_dropout_rate,
                 time_dependent_decay=time_dependent_decay
             )
+
+            self.time_dependent_decay = time_dependent_decay
 
     def train(self, *args, **kwargs):
         super().train(*args, **kwargs)
@@ -106,6 +150,8 @@ class SupirFactorBiophysical(
         :return: _description_
         :rtype: _type_
         """
+
+        print(x.shape)
 
         # Run the pretrained count model if provided
         if self._count_model is not None:

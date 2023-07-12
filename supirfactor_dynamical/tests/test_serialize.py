@@ -14,6 +14,7 @@ from supirfactor_dynamical import (
 
 from ._stubs import (
     X_tensor,
+    XTV_tensor,
     A
 )
 
@@ -250,6 +251,71 @@ class TestSerializer(unittest.TestCase):
             npt.assert_almost_equal(
                 ae(X_tensor).numpy(),
                 loaded_ae(X_tensor).numpy()
+            )
+
+    def test_serialize_biophysical(self):
+
+        ae = get_model('static_meta')(A, use_prior_weights=True)
+
+        ae._decoder[0].weight = torch.nn.parameter.Parameter(
+            torch.tensor(pinv(A).T, dtype=torch.float32)
+        )
+
+        biophysical = get_model('biophysical')(
+            A,
+            trained_count_model=ae
+        )
+
+        biophysical.save(self.temp_file_name)
+        biophysical.eval()
+
+        loaded_biophysical = read(self.temp_file_name)
+        loaded_biophysical.eval()
+
+        with torch.no_grad():
+            npt.assert_almost_equal(
+                biophysical._count_model.encoder[0].weight_orig.numpy(),
+                loaded_biophysical._count_model.encoder[0].weight_orig.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._count_model.encoder[0].weight_mask.numpy(),
+                loaded_biophysical._count_model.encoder[0].weight_mask.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._count_model._decoder[0].weight.numpy(),
+                loaded_biophysical._count_model._decoder[0].weight.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._transcription_model.encoder[0].weight_orig.numpy(),
+                loaded_biophysical._transcription_model.encoder[0].weight_orig.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._transcription_model.encoder[0].weight_mask.numpy(),
+                loaded_biophysical._transcription_model.encoder[0].weight_mask.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._transcription_model._decoder[0].weight.numpy(),
+                loaded_biophysical._transcription_model._decoder[0].weight.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._decay_model._encoder[1].weight.numpy(),
+                loaded_biophysical._decay_model._encoder[1].weight.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical._decay_model._decoder[1].weight.numpy(),
+                loaded_biophysical._decay_model._decoder[1].weight.numpy()
+            )
+
+            npt.assert_almost_equal(
+                biophysical(biophysical.input_data(XTV_tensor)).numpy(),
+                loaded_biophysical(loaded_biophysical.input_data(XTV_tensor)).numpy()
             )
 
 
