@@ -166,10 +166,16 @@ class SupirFactorBiophysical(
         x_positive = self._transcription_model(x)
 
         # Run the decay model
-        x_negative = self._decay_model(x)
+        if self._decay_model is not None:
+            x_negative = self._decay_model(x)
+        else:
+            x_negative = None
 
         if return_submodels:
             return x_positive, x_negative
+
+        elif x_negative is None:
+            return x_positive
 
         else:
             return torch.add(x_positive, x_negative)
