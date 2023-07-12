@@ -151,8 +151,6 @@ class SupirFactorBiophysical(
         :rtype: _type_
         """
 
-        print(x.shape)
-
         # Run the pretrained count model if provided
         if self._count_model is not None:
             x = self._count_model(x, n_time_steps=n_time_steps)
