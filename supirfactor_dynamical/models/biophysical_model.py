@@ -52,15 +52,20 @@ class SupirFactorBiophysical(
             that will be trained with the transcriptional model.
             False will disable decay model training. Defaults to None
         :type decay_model: torch.nn.Module, False, or None
-        :param use_prior_weights: _description_, defaults to False
+        :param use_prior_weights: Use prior weights for the transcriptional
+            embedding into TFA, defaults to False
         :type use_prior_weights: bool, optional
-        :param input_dropout_rate: _description_, defaults to 0.5
+        :param input_dropout_rate: Input dropout for each model,
+            defaults to 0.5
         :type input_dropout_rate: float, optional
-        :param hidden_dropout_rate: _description_, defaults to 0.0
+        :param hidden_dropout_rate: Hiddenl layer dropout for each model,
+            defaults to 0.0
         :type hidden_dropout_rate: float, optional
-        :param transcription_model: _description_, defaults to None
-        :type transcription_model: _type_, optional
-        :param time_dependent_decay: _description_, defaults to True
+        :param transcription_model: Model to use for transcriptional
+            output, None uses the standard RNN, defaults to None
+        :type transcription_model: torch.nn.Module, optional
+        :param time_dependent_decay: Fit a time-dependent decay constant
+            instead of a single decay constant per gene, defaults to True
         :type time_dependent_decay: bool, optional
         """
         super().__init__()
@@ -247,13 +252,50 @@ class SupirFactorBiophysical(
         **kwargs
     ):
 
-        def _count_wrapper():
+        def _erv_wrapper():
+
+            _no_counts = self._count_model is None
+            _no_decay = self._decay_model is None
 
             for data in data_loader:
-                yield self.counts(data)
+
+                # Only transcript model - just give it the data
+                if _no_counts and _no_decay:
+                    yield data
+                    continue
+
+                # If there's a count model included, run it as the input
+                # to the ERV model
+                if not _no_counts:
+                    count_data = self._count_model(
+                        self.input_data(data),
+                        n_time_steps=self._count_model.n_additional_predictions
+                    )
+                else:
+                    count_data = self.input_data(data)
+
+                # If there's a decay model included, run it and subtract it
+                # from the output for the ERV model
+                if not _no_decay:
+                    velo_data = torch.subtract(
+                        self.output_data(data),
+                        self._decay_model(count_data)
+                    )
+                else:
+                    velo_data = self.output_data(data)
+
+                # Stack the count and velo data together for the transcript
+                # model ERV
+                yield torch.stack(
+                    (
+                        count_data,
+                        velo_data
+                    ),
+                    dim=-1
+                )
 
         return self._transcription_model.erv(
-            _count_wrapper(),
+            _erv_wrapper(),
             **kwargs
         )
 
