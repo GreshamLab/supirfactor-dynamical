@@ -252,50 +252,42 @@ class SupirFactorBiophysical(
         **kwargs
     ):
 
-        def _erv_wrapper():
+        def _erv_input_wrapper(dl):
 
-            _no_counts = self._count_model is None
-            _no_decay = self._decay_model is None
+            for data in dl:
 
-            for data in data_loader:
-
-                # Only transcript model - just give it the data
-                if _no_counts and _no_decay:
-                    yield data
-                    continue
+                if self._count_model is None:
+                    yield self.input_data(data)
 
                 # If there's a count model included, run it as the input
                 # to the ERV model
-                if not _no_counts:
-                    count_data = self._count_model(
+                else:
+                    yield self._count_model(
                         self.input_data(data),
                         n_time_steps=self._count_model.n_additional_predictions
                     )
-                else:
-                    count_data = self.input_data(data)
+
+        def _erv_output_wrapper(dl, input_wrapper):
+
+            for data, input_data in zip(dl, input_wrapper):
 
                 # If there's a decay model included, run it and subtract it
                 # from the output for the ERV model
-                if not _no_decay:
-                    velo_data = torch.subtract(
-                        self.output_data(data),
-                        self._decay_model(count_data)
-                    )
-                else:
-                    velo_data = self.output_data(data)
+                if self._decay_model is None:
+                    yield self.output_data(data)
 
-                # Stack the count and velo data together for the transcript
-                # model ERV
-                yield torch.stack(
-                    (
-                        count_data,
-                        velo_data
-                    ),
-                    dim=-1
-                )
+                else:
+                    yield torch.subtract(
+                        self.output_data(data),
+                        self._decay_model(input_data)
+                    )
 
         return self._transcription_model.erv(
-            _erv_wrapper(),
+            _erv_input_wrapper(data_loader),
+            output_data_loader=_erv_output_wrapper(
+                data_loader,
+                _erv_input_wrapper(data_loader)
+            ),
             **kwargs
         )
 

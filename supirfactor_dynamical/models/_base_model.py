@@ -581,6 +581,7 @@ class _TFMixin(_PriorMixin):
     def erv(
         self,
         data_loader,
+        output_data_loader=None,
         return_rss=False,
         as_data_frame=False
     ):
@@ -625,7 +626,10 @@ class _TFMixin(_PriorMixin):
                         self.input_data(data_x)
                     )
 
-                data_x = self.output_data(data_x, no_loss_offset=True)
+                if output_data_loader is not None:
+                    data_x = next(output_data_loader)
+                else:
+                    data_x = self.output_data(data_x, no_loss_offset=True)
 
                 full_rss += _calculate_rss(
                     self.decoder(hidden_x),
