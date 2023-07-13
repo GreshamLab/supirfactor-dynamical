@@ -32,9 +32,7 @@ class _ModelStub:
         self.time_kwargs = kwargs
 
 
-class TestSerializer(unittest.TestCase):
-
-    velocity = False
+class _SetupMixin:
 
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix='pytest')
@@ -45,6 +43,23 @@ class TestSerializer(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
         return super().tearDown()
+
+    def _compare_module(self, module1, module2):
+
+        module1_state = module1.state_dict()
+        module2_state = module2.state_dict()
+
+        with torch.no_grad():
+            for k, v in module1_state.items():
+                npt.assert_almost_equal(
+                    v.numpy(),
+                    module2_state[k].numpy()
+                )
+
+
+class TestSerializer(_SetupMixin, unittest.TestCase):
+
+    velocity = False
 
     def test_h5_static(self):
 
@@ -194,22 +209,17 @@ class TestSerializer(unittest.TestCase):
         loaded_ae = read(self.temp_file_name)
         loaded_ae.eval()
 
+        self._compare_module(
+            ae.encoder,
+            loaded_ae.encoder
+        )
+
+        self._compare_module(
+            ae.decoder,
+            loaded_ae.decoder
+        )
+
         with torch.no_grad():
-            npt.assert_almost_equal(
-                ae.encoder[0].weight_orig.numpy(),
-                loaded_ae.encoder[0].weight_orig.numpy()
-            )
-
-            npt.assert_almost_equal(
-                ae.encoder[0].weight_mask.numpy(),
-                loaded_ae.encoder[0].weight_mask.numpy()
-            )
-
-            npt.assert_almost_equal(
-                ae.decoder[0].weight.numpy(),
-                loaded_ae.decoder[0].weight.numpy()
-            )
-
             npt.assert_almost_equal(
                 ae(X_tensor).numpy(),
                 loaded_ae(X_tensor).numpy()
@@ -232,26 +242,29 @@ class TestSerializer(unittest.TestCase):
         loaded_ae = read(self.temp_file_name)
         loaded_ae.eval()
 
+        self._compare_module(
+            ae.encoder,
+            loaded_ae.encoder
+        )
+
+        self._compare_module(
+            ae._decoder,
+            loaded_ae._decoder
+        )
+
+        self._compare_module(
+            ae._intermediate,
+            loaded_ae._intermediate
+        )
+
         with torch.no_grad():
-            npt.assert_almost_equal(
-                ae.encoder[0].weight_orig.numpy(),
-                loaded_ae.encoder[0].weight_orig.numpy()
-            )
-
-            npt.assert_almost_equal(
-                ae.encoder[0].weight_mask.numpy(),
-                loaded_ae.encoder[0].weight_mask.numpy()
-            )
-
-            npt.assert_almost_equal(
-                ae._decoder[0].weight.numpy(),
-                loaded_ae._decoder[0].weight.numpy()
-            )
-
             npt.assert_almost_equal(
                 ae(X_tensor).numpy(),
                 loaded_ae(X_tensor).numpy()
             )
+
+
+class TestBiophysical(_SetupMixin, unittest.TestCase):
 
     def test_serialize_biophysical(self):
 
@@ -272,50 +285,98 @@ class TestSerializer(unittest.TestCase):
         loaded_biophysical = read(self.temp_file_name)
         loaded_biophysical.eval()
 
+        self._compare_module(
+            biophysical._count_model,
+            loaded_biophysical._count_model
+        )
+
+        self._compare_module(
+            biophysical._transcription_model,
+            loaded_biophysical._transcription_model
+        )
+
+        self._compare_module(
+            biophysical._decay_model,
+            loaded_biophysical._decay_model
+        )
+
         with torch.no_grad():
             npt.assert_almost_equal(
-                biophysical._count_model.encoder[0].weight_orig.numpy(),
-                loaded_biophysical._count_model.encoder[0].weight_orig.numpy()
+                biophysical(
+                    biophysical.input_data(XTV_tensor)
+                ).numpy(),
+                loaded_biophysical(
+                    loaded_biophysical.input_data(XTV_tensor)
+                ).numpy()
             )
 
+    def test_serialize_biophysical_nocount(self):
+
+        biophysical = get_model('biophysical')(
+            A,
+        )
+
+        biophysical.save(self.temp_file_name)
+        biophysical.eval()
+
+        loaded_biophysical = read(self.temp_file_name)
+        loaded_biophysical.eval()
+
+        self.assertIsNone(biophysical._count_model)
+        self.assertIsNone(loaded_biophysical._count_model)
+
+        self._compare_module(
+            biophysical._transcription_model,
+            loaded_biophysical._transcription_model
+        )
+
+        self._compare_module(
+            biophysical._decay_model,
+            loaded_biophysical._decay_model
+        )
+
+        with torch.no_grad():
             npt.assert_almost_equal(
-                biophysical._count_model.encoder[0].weight_mask.numpy(),
-                loaded_biophysical._count_model.encoder[0].weight_mask.numpy()
+                biophysical(
+                    biophysical.input_data(XTV_tensor)
+                ).numpy(),
+                loaded_biophysical(
+                    loaded_biophysical.input_data(XTV_tensor)
+                ).numpy()
             )
 
-            npt.assert_almost_equal(
-                biophysical._count_model._decoder[0].weight.numpy(),
-                loaded_biophysical._count_model._decoder[0].weight.numpy()
-            )
+    def test_serialize_biophysical_nodecay(self):
 
-            npt.assert_almost_equal(
-                biophysical._transcription_model.encoder[0].weight_orig.numpy(),
-                loaded_biophysical._transcription_model.encoder[0].weight_orig.numpy()
-            )
+        biophysical = get_model('biophysical')(
+            A,
+            decay_model=False
+        )
 
-            npt.assert_almost_equal(
-                biophysical._transcription_model.encoder[0].weight_mask.numpy(),
-                loaded_biophysical._transcription_model.encoder[0].weight_mask.numpy()
-            )
+        biophysical.save(self.temp_file_name)
+        biophysical.eval()
 
-            npt.assert_almost_equal(
-                biophysical._transcription_model._decoder[0].weight.numpy(),
-                loaded_biophysical._transcription_model._decoder[0].weight.numpy()
-            )
+        loaded_biophysical = read(self.temp_file_name)
+        loaded_biophysical.eval()
 
-            npt.assert_almost_equal(
-                biophysical._decay_model._encoder[1].weight.numpy(),
-                loaded_biophysical._decay_model._encoder[1].weight.numpy()
-            )
+        self.assertIsNone(biophysical._count_model)
+        self.assertIsNone(loaded_biophysical._count_model)
 
-            npt.assert_almost_equal(
-                biophysical._decay_model._decoder[1].weight.numpy(),
-                loaded_biophysical._decay_model._decoder[1].weight.numpy()
-            )
+        self._compare_module(
+            biophysical._transcription_model,
+            loaded_biophysical._transcription_model
+        )
 
+        self.assertIsNone(biophysical._decay_model)
+        self.assertIsNone(loaded_biophysical._decay_model)
+
+        with torch.no_grad():
             npt.assert_almost_equal(
-                biophysical(biophysical.input_data(XTV_tensor)).numpy(),
-                loaded_biophysical(loaded_biophysical.input_data(XTV_tensor)).numpy()
+                biophysical(
+                    biophysical.input_data(XTV_tensor)
+                ).numpy(),
+                loaded_biophysical(
+                    loaded_biophysical.input_data(XTV_tensor)
+                ).numpy()
             )
 
 

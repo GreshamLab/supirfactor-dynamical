@@ -88,14 +88,21 @@ def read(
         k: kwargs.pop(k, False) for k in FREEZE_ARGS
     }
 
-    if (
-        (_state_model == 'biophysical') and
-        freeze_kwargs['_pretrained_count']
-    ):
-        kwargs['trained_count_model'] = read(
-            file_name,
-            prefix=prefix + 'count_'
-        )
+    # Do special loading stuff for the big biophysical model
+    if _state_model == 'biophysical':
+
+        # Load a pretrained count model if the flag is set
+        if freeze_kwargs['_pretrained_count']:
+            kwargs['trained_count_model'] = read(
+                file_name,
+                prefix=prefix + 'count_'
+            )
+
+        # Load a decay model if one exists, otherwise no decay model
+        if any([k.startswith("_decay") for k in _state_dict_keys]):
+            kwargs['decay_model'] = None
+        else:
+            kwargs['decay_model'] = False
 
     if model_class is None:
         model = get_model(
