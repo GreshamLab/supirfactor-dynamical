@@ -134,7 +134,10 @@ class TestDynamicalModel(unittest.TestCase):
         x = self.dynamical_model(XTV_tensor[..., 0])
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
 
-        (xp, xn) = self.dynamical_model(XTV_tensor[..., 0], return_submodels=True)
+        (xp, xn) = self.dynamical_model(
+            XTV_tensor[..., 0],
+            return_submodels=True
+        )
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
         self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)

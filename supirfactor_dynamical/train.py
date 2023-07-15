@@ -227,7 +227,7 @@ def biophysical_model_training(
     training_dataloader,
     prior_network,
     epochs,
-    trained_count_model,
+    trained_count_model=None,
     validation_dataloader=None,
     optimizer_params=None,
     gold_standard=None,
@@ -236,17 +236,16 @@ def biophysical_model_training(
     **kwargs
 ):
 
-    if trained_count_model is not None:
-        trained_count_model.set_time_parameters(
-            output_t_plus_one=prediction_length is not None,
-            n_additional_predictions=prediction_length,
-            loss_offset=prediction_loss_offset
-        )
-
     biophysical_model = SupirFactorBiophysical(
         prior_network,
         trained_count_model=trained_count_model,
         **kwargs
+    )
+
+    biophysical_model.set_time_parameters(
+        output_t_plus_one=prediction_length is not None,
+        n_additional_predictions=prediction_length,
+        loss_offset=prediction_loss_offset
     )
 
     biophysical_model.train_model(
