@@ -379,6 +379,14 @@ class _TrainingMixin:
 
         return input_offset, self.loss_offset
 
+    @staticmethod
+    def to_tensor(x):
+
+        if not torch.is_tensor(x):
+            x = torch.Tensor(x)
+
+        return x
+
 
 def _shuffle_time_data(dl):
     try:

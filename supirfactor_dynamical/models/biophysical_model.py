@@ -1,8 +1,8 @@
 import torch
 
 from .recurrent_models import TFRNNDecoder
+from ._base_model import _TFMixin
 from ._base_trainer import _TrainingMixin
-from ._base_model import _PriorMixin
 from ._writer import write
 from ._base_velocity_model import (
     DecayModule,
@@ -13,7 +13,7 @@ from ._base_velocity_model import (
 class SupirFactorBiophysical(
     torch.nn.Module,
     _VelocityMixin,
-    _PriorMixin,
+    _TFMixin,
     _TrainingMixin
 ):
 
@@ -21,6 +21,10 @@ class SupirFactorBiophysical(
 
     _pretrained_decay = False
     _pretrained_count = False
+
+    _velocity_inverse_scaler = None
+    _count_inverse_scaler = None
+    _count_scaler = None
 
     time_dependent_decay = True
 
@@ -122,6 +126,47 @@ class SupirFactorBiophysical(
 
             self.time_dependent_decay = time_dependent_decay
 
+    def set_scaling(
+        self,
+        count_scaling=False,
+        velocity_scaling=False
+    ):
+        """
+        If count or velocity is scaled, fix the scaling so that
+        they match
+
+        :param count_scaling: Count scaler [G] vector,
+            None disables count scaling.
+        :type count_scaling: torch.Tensor, np.ndarray, optional
+        :param velocity_scaling: Velocity scaler [G] vector,
+            None disables velocity scaling
+        :type velocity_scaling: torch.Tensor, np.ndarray, optional
+        """
+
+        if count_scaling is None:
+            self._count_inverse_scaler = None
+            self._count_scaler = None
+
+        elif count_scaling is not False:
+            self._count_inverse_scaler = torch.diag(
+                self.to_tensor(count_scaling)
+            )
+
+            _count_scaler = torch.divide(1, self.to_tensor(count_scaling))
+            _count_scaler[count_scaling == 0] = 1
+
+            self._count_scaler = torch.diag(
+                _count_scaler
+            )
+
+        if velocity_scaling is None:
+            self._velocity_inverse_scaler = None
+
+        elif velocity_scaling is not False:
+            self._velocity_inverse_scaler = torch.diag(
+                self.to_tensor(velocity_scaling)
+            )
+
     def train(self, *args, **kwargs):
         super().train(*args, **kwargs)
 
@@ -143,6 +188,64 @@ class SupirFactorBiophysical(
         n_time_steps=0,
         return_submodels=False
     ):
+
+        v = self.forward_model(x, return_submodels=return_submodels)
+
+        if n_time_steps > 0:
+
+            _x = x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
+            _v = v[:, [-1], :] if x.ndim == 3 else v[[-1], :]
+
+            _output_data = [v]
+
+            for _ in range(n_time_steps):
+
+                if return_submodels:
+                    _x = self.next_count_from_velocity(
+                        _x,
+                        torch.add(_v[0], _v[1])
+                    )
+                else:
+                    _x = self.next_count_from_velocity(
+                        _x,
+                        _v
+                    )
+
+                _v = self.forward_model(
+                    _x,
+                    hidden_state=True,
+                    return_submodels=return_submodels
+                )
+
+                _output_data.append(_v)
+
+            if return_submodels:
+
+                v = (
+                    torch.cat(
+                        [d[0] for d in _output_data],
+                        dim=x.ndim - 2
+                    ),
+                    torch.cat(
+                        [d[1] for d in _output_data],
+                        dim=x.ndim - 2
+                    )
+                )
+
+            else:
+                v = torch.cat(
+                    _output_data,
+                    dim=x.ndim - 2
+                )
+
+        return v
+
+    def forward_model(
+        self,
+        x,
+        return_submodels=False,
+        hidden_state=False
+    ):
         """
         Velocity from Count Data
 
@@ -158,19 +261,39 @@ class SupirFactorBiophysical(
 
         # Run the pretrained count model if provided
         if self._count_model is not None:
-            x = self._count_model(x, n_time_steps=n_time_steps)
 
-        elif n_time_steps != 0:
-            raise RuntimeError(
-                "No pretrained count model available for prediction"
+            if hidden_state:
+                _hidden = self._count_model.hidden_final
+            else:
+                _hidden = None
+
+            x = self._count_model(
+                x,
+                hidden_state=_hidden
             )
 
         # Run the transcriptional model
-        x_positive = self._transcription_model(x)
+        if hidden_state:
+            _hidden = self._transcription_model.hidden_final
+        else:
+            _hidden = None
+
+        x_positive = self._transcription_model(
+            x,
+            hidden_state=_hidden
+        )
 
         # Run the decay model
         if self._decay_model is not None:
-            x_negative = self._decay_model(x)
+            if hidden_state:
+                _hidden = self._decay_model.hidden_state
+            else:
+                _hidden = None
+
+            x_negative = self._decay_model(
+                x,
+                hidden_state=_hidden
+            )
         else:
             x_negative = None
 
@@ -182,6 +305,26 @@ class SupirFactorBiophysical(
 
         else:
             return torch.add(x_positive, x_negative)
+
+    def next_count_from_velocity(
+        self,
+        counts,
+        velocity
+    ):
+
+        if self._count_inverse_scaler is not None:
+            counts = torch.matmul(counts, self._count_inverse_scaler)
+
+        if self._velocity_inverse_scaler is not None:
+            velocity = torch.matmul(counts, self._velocity_inverse_scaler)
+
+        counts = torch.add(counts, velocity)
+
+        if self._count_scaler is not None:
+            return torch.matmul(counts, self._count_scaler)
+
+        else:
+            return counts
 
     @torch.inference_mode()
     def counts(
