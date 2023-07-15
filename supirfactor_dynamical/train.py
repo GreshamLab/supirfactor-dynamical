@@ -242,6 +242,11 @@ def biophysical_model_training(
         **kwargs
     )
 
+    biophysical_model.set_scaling(
+        count_scaling=kwargs.pop('count_scaling', None),
+        velocity_scaling=kwargs.pop('velocity_scaling', None)
+    )
+
     biophysical_model.set_time_parameters(
         output_t_plus_one=prediction_length is not None,
         n_additional_predictions=prediction_length,
