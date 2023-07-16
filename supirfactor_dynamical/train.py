@@ -236,6 +236,11 @@ def biophysical_model_training(
     **kwargs
 ):
 
+    scaling = dict(
+        count_scaling=kwargs.pop('count_scaling', None),
+        velocity_scaling=kwargs.pop('velocity_scaling', None)
+    )
+
     biophysical_model = SupirFactorBiophysical(
         prior_network,
         trained_count_model=trained_count_model,
@@ -243,8 +248,7 @@ def biophysical_model_training(
     )
 
     biophysical_model.set_scaling(
-        count_scaling=kwargs.pop('count_scaling', None),
-        velocity_scaling=kwargs.pop('velocity_scaling', None)
+        **scaling
     )
 
     biophysical_model.set_time_parameters(

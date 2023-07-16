@@ -149,3 +149,36 @@ class TestDynamicalModel(unittest.TestCase):
             xn.detach().numpy() + xp.detach().numpy(),
             x.detach().numpy()
         )
+
+    def test_training_scale(self):
+
+        self.dynamical_model = SupirFactorBiophysical(
+            A
+        )
+
+        self.dynamical_model.set_scaling(
+            velocity_scaling=np.ones(4),
+            count_scaling=np.ones(4)
+        )
+
+        self.dynamical_model.train_model(self.velocity_data, 50)
+        self.dynamical_model.eval()
+
+        x = self.dynamical_model(XTV_tensor[..., 0])
+        self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
+
+        (xp, xn) = self.dynamical_model(
+            XTV_tensor[..., 0],
+            return_submodels=True
+        )
+
+        self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
+        self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+
+        self.assertTrue(np.all(xn.detach().numpy() <= 0))
+        self.assertTrue(np.all(xp.detach().numpy() >= 0))
+
+        npt.assert_almost_equal(
+            xn.detach().numpy() + xp.detach().numpy(),
+            x.detach().numpy()
+        )
