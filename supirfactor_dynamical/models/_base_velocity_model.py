@@ -19,6 +19,8 @@ class _VelocityMixin:
 
 class DecayModule(torch.nn.Module):
 
+    hidden_state = None
+
     def __init__(
         self,
         g,
