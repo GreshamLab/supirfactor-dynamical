@@ -74,7 +74,7 @@ class TestCoupledTraining(unittest.TestCase):
         self.assertEqual(len(results), 4)
         self.assertIsInstance(
             results[0],
-            _CLASS_DICT['static']
+            _CLASS_DICT['static_meta']
         )
         self.assertIsInstance(
             results[2],
@@ -95,7 +95,7 @@ class TestCoupledTraining(unittest.TestCase):
         self.assertEqual(len(results), 4)
         self.assertIsInstance(
             results[0],
-            _CLASS_DICT['static']
+            _CLASS_DICT['static_meta']
         )
         self.assertIsInstance(
             results[2],
@@ -116,7 +116,7 @@ class TestCoupledTraining(unittest.TestCase):
         self.assertEqual(len(results), 4)
         self.assertIsInstance(
             results[0],
-            _CLASS_DICT['static']
+            _CLASS_DICT['static_meta']
         )
         self.assertIsInstance(
             results[2],

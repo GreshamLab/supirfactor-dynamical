@@ -13,7 +13,7 @@ from supirfactor_dynamical import (
 )
 
 from supirfactor_dynamical.train import (
-    biophysical_model_training
+    model_training
 )
 
 from supirfactor_dynamical.models.biophysical_model import (
@@ -307,14 +307,16 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_train_loop(self):
 
-        bioph_obj, res, erv = biophysical_model_training(
+        bioph_obj, res, erv = model_training(
             self.velocity_data,
             pd.DataFrame(A),
             50,
             validation_dataloader=self.velocity_data,
             decay_model=self.decay_model,
             prediction_length=1,
-            prediction_loss_offset=1
+            prediction_loss_offset=1,
+            model_type='biophysical',
+            return_erv=True
         )
 
     def test_erv(self):

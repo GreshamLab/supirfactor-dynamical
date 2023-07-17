@@ -3,7 +3,6 @@ import torch
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
 from ._base_trainer import _TrainingMixin
-from ._writer import write
 from ._base_velocity_model import _VelocityMixin
 from .decay_model import DecayModule
 
@@ -19,10 +18,6 @@ class SupirFactorBiophysical(
 
     _pretrained_decay = False
     _pretrained_count = False
-
-    _velocity_inverse_scaler = None
-    _count_inverse_scaler = None
-    _count_scaler = None
 
     time_dependent_decay = True
 
@@ -126,47 +121,6 @@ class SupirFactorBiophysical(
             self.time_dependent_decay = time_dependent_decay
 
         self.output_relu = output_relu
-
-    def set_scaling(
-        self,
-        count_scaling=False,
-        velocity_scaling=False
-    ):
-        """
-        If count or velocity is scaled, fix the scaling so that
-        they match
-
-        :param count_scaling: Count scaler [G] vector,
-            None disables count scaling.
-        :type count_scaling: torch.Tensor, np.ndarray, optional
-        :param velocity_scaling: Velocity scaler [G] vector,
-            None disables velocity scaling
-        :type velocity_scaling: torch.Tensor, np.ndarray, optional
-        """
-
-        if count_scaling is None:
-            self._count_inverse_scaler = None
-            self._count_scaler = None
-
-        elif count_scaling is not False:
-            self._count_inverse_scaler = torch.diag(
-                self.to_tensor(count_scaling)
-            )
-
-            _count_scaler = torch.divide(1, self.to_tensor(count_scaling))
-            _count_scaler[count_scaling == 0] = 1
-
-            self._count_scaler = torch.diag(
-                _count_scaler
-            )
-
-        if velocity_scaling is None:
-            self._velocity_inverse_scaler = None
-
-        elif velocity_scaling is not False:
-            self._velocity_inverse_scaler = torch.diag(
-                self.to_tensor(velocity_scaling)
-            )
 
     def train(self, *args, **kwargs):
         super().train(*args, **kwargs)
@@ -308,26 +262,6 @@ class SupirFactorBiophysical(
         else:
             return torch.add(x_positive, x_negative)
 
-    def next_count_from_velocity(
-        self,
-        counts,
-        velocity
-    ):
-
-        if self._count_inverse_scaler is not None:
-            counts = torch.matmul(counts, self._count_inverse_scaler)
-
-        if self._velocity_inverse_scaler is not None:
-            velocity = torch.matmul(counts, self._velocity_inverse_scaler)
-
-        counts = torch.add(counts, velocity)
-
-        if self._count_scaler is not None:
-            return torch.matmul(counts, self._count_scaler)
-
-        else:
-            return counts
-
     @torch.inference_mode()
     def counts(
         self,
@@ -438,6 +372,3 @@ class SupirFactorBiophysical(
 
     def output_weights(self, *args, **kwargs):
         return self._transcription_model.output_weights(*args, **kwargs)
-
-    def save(self, file_name):
-        write(self, file_name)

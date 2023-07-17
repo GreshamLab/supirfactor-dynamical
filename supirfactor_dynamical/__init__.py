@@ -18,9 +18,8 @@ from .time_dataset import (
 )
 
 from .train import (
+    model_training,
     joint_model_training,
-    dynamic_model_training,
-    static_model_training,
     pretrain_and_tune_dynamic_model
 )
 
