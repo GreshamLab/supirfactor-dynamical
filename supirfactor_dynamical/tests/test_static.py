@@ -119,13 +119,13 @@ class TestTFAutoencoder(unittest.TestCase):
             batch_size=2
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             loader,
             10
         )
 
-        self.assertEqual(len(losses), 10)
-        self.assertIsNone(vlosses)
+        self.assertEqual(len(self.ae.training_loss), 10)
+        self.assertEqual(len(self.ae.validation_loss), 0)
 
         with torch.no_grad():
             in_weights = self.ae.encoder_weights.numpy()
@@ -149,14 +149,14 @@ class TestTFAutoencoder(unittest.TestCase):
             batch_size=2
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             loader,
             10,
             validation_dataloader=vloader
         )
 
-        self.assertEqual(len(losses), 10)
-        self.assertEqual(len(vlosses), 10)
+        self.assertEqual(len(self.ae.training_loss), 10)
+        self.assertEqual(len(self.ae.validation_loss), 10)
 
         with torch.no_grad():
             in_weights = self.ae.encoder_weights.numpy()
@@ -175,7 +175,7 @@ class TestTFAutoencoder(unittest.TestCase):
             batch_size=2
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             loader,
             20
         )
@@ -262,7 +262,7 @@ class TestTFAutoencoder(unittest.TestCase):
             batch_size=2
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             loader,
             20
         )
@@ -535,7 +535,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
             loss_offset=0
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             self.static_dataloader,
             20
         )
@@ -550,7 +550,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
             loss_offset=0
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             self.dynamic_dataloader,
             20
         )
@@ -564,7 +564,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
             loss_offset=0
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             self.dynamic_dataloader,
             20
         )
@@ -579,7 +579,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
             loss_offset=0
         )
 
-        losses, vlosses = self.ae.train_model(
+        self.ae.train_model(
             self.dynamic_dataloader,
             20
         )

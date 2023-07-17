@@ -18,8 +18,8 @@ DEFAULT_OPTIMIZER_PARAMS = {
 
 class _TrainingMixin:
 
-    training_loss = None
-    validation_loss = None
+    _training_loss = None
+    _validation_loss = None
 
     training_r2 = None
     validation_r2 = None
@@ -30,6 +30,20 @@ class _TrainingMixin:
 
     input_dropout_rate = 0.5
     hidden_dropout_rate = 0.0
+
+    @property
+    def training_loss(self):
+        if self._training_loss is None:
+            self._training_loss = []
+
+        return self._training_loss
+
+    @property
+    def validation_loss(self):
+        if self._validation_loss is None:
+            self._validation_loss = []
+
+        return self._validation_loss
 
     def train_model(
         self,
@@ -65,20 +79,6 @@ class _TrainingMixin:
             optimizer
         )
 
-        # Create lists for loss per epoch if they do not exist
-        # otherwise append to the existing list
-        if self.training_loss is None:
-            losses = []
-        else:
-            losses = self.training_loss
-
-        if self.validation_loss is None and validation_dataloader is not None:
-            validation_losses = []
-        elif validation_dataloader is None:
-            validation_losses = None
-        else:
-            validation_losses = self.validation_loss
-
         for _ in tqdm.trange(epochs):
 
             self.train()
@@ -97,7 +97,7 @@ class _TrainingMixin:
 
                 _batch_losses.append(mse.item())
 
-            losses.append(
+            self.training_loss.append(
                 np.mean(_batch_losses)
             )
 
@@ -117,7 +117,7 @@ class _TrainingMixin:
                             ).item()
                         )
 
-                validation_losses.append(
+                self.validation_loss.append(
                     np.mean(_validation_batch_losses)
                 )
 
@@ -126,16 +126,13 @@ class _TrainingMixin:
             _shuffle_time_data(training_dataloader)
             _shuffle_time_data(validation_dataloader)
 
-        self.training_loss = losses
-        self.validation_loss = validation_losses
-
         self.eval()
         self.r2(
             training_dataloader,
             validation_dataloader
         )
 
-        return losses, validation_losses
+        return self
 
     def set_dropouts(
         self,

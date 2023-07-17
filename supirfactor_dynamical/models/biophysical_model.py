@@ -4,10 +4,8 @@ from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
 from ._base_trainer import _TrainingMixin
 from ._writer import write
-from ._base_velocity_model import (
-    DecayModule,
-    _VelocityMixin
-)
+from ._base_velocity_model import _VelocityMixin
+from .decay_model import DecayModule
 
 
 class SupirFactorBiophysical(
@@ -252,14 +250,15 @@ class SupirFactorBiophysical(
         """
         Velocity from Count Data
 
-        :param x: _description_
-        :type x: _type_
-        :param n_time_steps: _description_, defaults to 0
+        :param x: Count data tensor
+        :type x: torch.Tensor
+        :param n_time_steps: Time steps to predict forward, defaults to 0
         :type n_time_steps: int, optional
-        :param return_submodels: _description_, defaults to False
+        :param return_submodels: Return positive and negative components of
+            prediction instead of adding them, defaults to False
         :type return_submodels: bool, optional
-        :return: _description_
-        :rtype: _type_
+        :return: Predicted velocity tensor
+        :rtype: torch.Tensor
         """
 
         # Run the pretrained count model if provided

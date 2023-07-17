@@ -246,7 +246,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             output_t_plus_one=True
         )
 
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             20
         )
@@ -281,7 +281,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             loss_offset=1
         )
 
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             20
         )
@@ -316,7 +316,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             loss_offset=1
         )
 
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             20
         )
@@ -334,7 +334,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
     def test_predict_tensor(self):
 
         self.dyn_ae.output_t_plus_one = True
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             20
         )
@@ -397,13 +397,13 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_train_loop(self):
 
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             10
         )
 
-        self.assertEqual(len(losses), 10)
-        self.assertIsNone(vlosses)
+        self.assertEqual(len(self.dyn_ae.training_loss), 10)
+        self.assertEqual(len(self.dyn_ae.validation_loss), 0)
 
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
@@ -417,7 +417,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_train_loop_with_validation(self):
 
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             10,
             validation_dataloader=DataLoader(
@@ -426,8 +426,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             )
         )
 
-        self.assertEqual(len(losses), 10)
-        self.assertEqual(len(vlosses), 10)
+        self.assertEqual(len(self.dyn_ae.training_loss), 10)
+        self.assertEqual(len(self.dyn_ae.validation_loss), 10)
 
         self.dyn_ae.eval()
         with torch.no_grad():
@@ -442,7 +442,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
     def test_erv(self):
 
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             20
         )
@@ -552,13 +552,13 @@ class TestTFRecurrentDecoder(unittest.TestCase):
     def test_train_loop_offset(self):
 
         self.dyn_ae.output_t_plus_one = True
-        losses, vlosses = self.dyn_ae.train_model(
+        self.dyn_ae.train_model(
             self.time_dataloader,
             10
         )
 
-        self.assertEqual(len(losses), 10)
-        self.assertIsNone(vlosses)
+        self.assertEqual(len(self.dyn_ae.training_loss), 10)
+        self.assertEqual(len(self.dyn_ae.validation_loss), 0)
 
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
