@@ -7,7 +7,7 @@ class _VelocityMixin:
 
     _velocity_inverse_scaler = None
     _count_inverse_scaler = None
-    _count_scaler = None
+    scaler = None
 
     def set_scaling(
         self,
@@ -20,6 +20,8 @@ class _VelocityMixin:
 
         Needed to calculate t+1 from count and velocity at t
 
+        x_(t+1) = x(t) + dx/dx * (count_scaling / velocity_scaling)
+
         :param count_scaling: Count scaler [G] vector,
             None disables count scaling.
         :type count_scaling: torch.Tensor, np.ndarray, optional
@@ -30,27 +32,35 @@ class _VelocityMixin:
 
         if count_scaling is None:
             self._count_inverse_scaler = None
-            self._count_scaler = None
 
         elif count_scaling is not False:
-            self._count_inverse_scaler = torch.diag(
-                self.to_tensor(count_scaling)
-            )
-
-            _count_scaler = torch.divide(1, self.to_tensor(count_scaling))
-            _count_scaler[count_scaling == 0] = 1
-
-            self._count_scaler = torch.diag(
-                _count_scaler
-            )
+            self._count_inverse_scaler = self.to_tensor(count_scaling)
 
         if velocity_scaling is None:
             self._velocity_inverse_scaler = None
 
         elif velocity_scaling is not False:
-            self._velocity_inverse_scaler = torch.diag(
-                self.to_tensor(velocity_scaling)
+            self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
+
+        _s1 = self._count_inverse_scaler is not None
+        _s2 = self._velocity_inverse_scaler is not None
+
+        if _s1 and _s2:
+            _scaler = torch.div(
+                self._count_inverse_scaler,
+                self._velocity_inverse_scaler
             )
+
+            _scaler[self._velocity_inverse_scaler == 0] = 0
+
+            self.scaler = torch.diag(_scaler)
+
+        elif _s1:
+            self.scaler = torch.diag(self._count_inverse_scaler)
+        elif _s2:
+            self.scaler = torch.diag(self._velocity_inverse_scaler)
+        else:
+            self.scaler = None
 
     def input_data(self, x, **kwargs):
 
@@ -75,16 +85,7 @@ class _VelocityMixin:
         velocity
     ):
 
-        if self._count_inverse_scaler is not None:
-            counts = torch.matmul(counts, self._count_inverse_scaler)
+        if self.scaler is not None:
+            velocity = torch.matmul(velocity, self.scaler)
 
-        if self._velocity_inverse_scaler is not None:
-            velocity = torch.matmul(counts, self._velocity_inverse_scaler)
-
-        counts = torch.add(counts, velocity)
-
-        if self._count_scaler is not None:
-            return torch.matmul(counts, self._count_scaler)
-
-        else:
-            return counts
+        return torch.add(counts, velocity)
