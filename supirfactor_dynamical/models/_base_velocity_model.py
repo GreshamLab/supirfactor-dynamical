@@ -7,7 +7,9 @@ class _VelocityMixin:
 
     _velocity_inverse_scaler = None
     _count_inverse_scaler = None
+
     scaler = None
+    inv_scaler = None
 
     def set_scaling(
         self,
@@ -53,24 +55,25 @@ class _VelocityMixin:
 
             _scaler[self._velocity_inverse_scaler == 0] = 0
 
-            self.scaler = torch.diag(_scaler)
+            self.scaler, self.inv_scaler = self.make_scalers(
+                _scaler
+            )
 
         elif _s1:
-            self.scaler = torch.diag(self._count_inverse_scaler)
+            self.scaler, self.inv_scaler = self.make_scalers(
+                self._count_inverse_scaler
+            )
         elif _s2:
-            self.scaler = torch.diag(self._velocity_inverse_scaler)
+            self.scaler, self.inv_scaler = self.make_scalers(
+                self._velocity_inverse_scaler
+            )
         else:
             self.scaler = None
+            self.inv_scaler = None
 
     def input_data(self, x, **kwargs):
 
-        if x.shape[-1] == 2:
-            return super().input_data(x[..., 0], **kwargs)
-        else:
-            return (
-                super().input_data(x[..., 0], **kwargs),
-                super().input_data(x[..., 2], **kwargs)
-            )
+        return super().input_data(x[..., 0], **kwargs)
 
     def output_data(self, x, keep_all_dims=False, **kwargs):
 
@@ -79,13 +82,41 @@ class _VelocityMixin:
         else:
             return super().output_data(x[..., 1], **kwargs)
 
+    def scale_count_to_velocity(
+        self,
+        count
+    ):
+        if self.inv_scaler is not None:
+            return torch.matmul(count, self.inv_scaler)
+        else:
+            return count
+
+    def scale_velocity_to_count(
+        self,
+        velocity
+    ):
+        if self.scaler is not None:
+            return torch.matmul(velocity, self.scaler)
+        else:
+            return velocity
+
     def next_count_from_velocity(
         self,
         counts,
         velocity
     ):
 
-        if self.scaler is not None:
-            velocity = torch.matmul(velocity, self.scaler)
+        return torch.add(
+            counts,
+            self.scale_velocity_to_count(velocity)
+        )
 
-        return torch.add(counts, velocity)
+    @staticmethod
+    def make_scalers(vec):
+
+        scaler_1 = torch.diag(vec)
+        scaler_2 = 1 / vec
+        scaler_2[vec == 0] = 0
+        scaler_2 = torch.diag(scaler_2)
+
+        return scaler_1, scaler_2

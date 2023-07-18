@@ -250,6 +250,9 @@ class SupirFactorBiophysical(
                 x,
                 hidden_state=_hidden
             )
+
+            # Rescale because decay is \lambda * x
+            x_negative = self.scale_count_to_velocity(x_negative)
         else:
             x_negative = None
 
@@ -261,68 +264,6 @@ class SupirFactorBiophysical(
 
         else:
             return torch.add(x_positive, x_negative)
-
-    @torch.inference_mode()
-    def counts(
-        self,
-        x,
-        n_time_steps=0
-    ):
-
-        if self._count_model is not None:
-            with torch.no_grad():
-                # Run the pretrained count model
-                return self._count_model(
-                    self.input_data(x),
-                    n_time_steps=n_time_steps
-                )
-
-        elif n_time_steps == 0:
-            return self.input_data(x)
-
-        else:
-            raise RuntimeError(
-                "No pretrained count model available for prediction"
-            )
-
-    @torch.inference_mode()
-    def velocity(
-        self,
-        x,
-        n_time_steps=0
-    ):
-
-        with torch.no_grad():
-            return self(
-                self.input_data(x),
-                n_time_steps=n_time_steps
-            )
-
-    @torch.inference_mode()
-    def decay(
-        self,
-        x,
-        n_time_steps=0,
-        return_decay_constants=False
-    ):
-
-        with torch.no_grad():
-            return self._decay_model(
-                self.counts(x, n_time_steps=n_time_steps),
-                return_decay_constants=return_decay_constants
-            )
-
-    @torch.inference_mode()
-    def transcription(
-        self,
-        x,
-        n_time_steps=0
-    ):
-
-        with torch.no_grad():
-            return self._transcription_model(
-                self.counts(x, n_time_steps=n_time_steps)
-            )
 
     @torch.inference_mode()
     def erv(
