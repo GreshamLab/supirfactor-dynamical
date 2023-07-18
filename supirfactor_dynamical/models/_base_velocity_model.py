@@ -44,32 +44,10 @@ class _VelocityMixin:
         elif velocity_scaling is not False:
             self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
 
-        _s1 = self._count_inverse_scaler is not None
-        _s2 = self._velocity_inverse_scaler is not None
-
-        if _s1 and _s2:
-            _scaler = torch.div(
-                self._count_inverse_scaler,
-                self._velocity_inverse_scaler
-            )
-
-            _scaler[self._velocity_inverse_scaler == 0] = 0
-
-            self.scaler, self.inv_scaler = self.make_scalers(
-                _scaler
-            )
-
-        elif _s1:
-            self.scaler, self.inv_scaler = self.make_scalers(
-                self._count_inverse_scaler
-            )
-        elif _s2:
-            self.scaler, self.inv_scaler = self.make_scalers(
-                self._velocity_inverse_scaler
-            )
-        else:
-            self.scaler = None
-            self.inv_scaler = None
+        self.scaler, self.inv_scaler = self.make_scalers(
+            self._count_inverse_scaler,
+            self._velocity_inverse_scaler
+        )
 
     def input_data(self, x, **kwargs):
 
@@ -87,7 +65,7 @@ class _VelocityMixin:
         count
     ):
         if self.inv_scaler is not None:
-            return torch.matmul(count, self.inv_scaler)
+            return torch.matmul(count, self.scaler)
         else:
             return count
 
@@ -96,7 +74,7 @@ class _VelocityMixin:
         velocity
     ):
         if self.scaler is not None:
-            return torch.matmul(velocity, self.scaler)
+            return torch.matmul(velocity, self.inv_scaler)
         else:
             return velocity
 
@@ -112,11 +90,32 @@ class _VelocityMixin:
         )
 
     @staticmethod
-    def make_scalers(vec):
+    def make_scalers(
+        vec1,
+        vec2
+    ):
 
-        scaler_1 = torch.diag(vec)
-        scaler_2 = 1 / vec
-        scaler_2[vec == 0] = 0
+        if vec1 is None and vec2 is None:
+            return None, None
+
+        elif vec1 is not None and vec2 is not None:
+            _scaler = torch.div(
+                vec1,
+                vec2
+            )
+
+            _scaler[vec2 == 0] = 1
+
+        elif vec1 is not None:
+            _scaler = vec1
+
+        elif vec2 is not None:
+            _scaler = 1 / vec2
+            _scaler[vec2 == 0] = 1
+
+        scaler_1 = torch.diag(_scaler)
+        scaler_2 = 1 / _scaler
+        scaler_2[_scaler == 0] = 0
         scaler_2 = torch.diag(scaler_2)
 
         return scaler_1, scaler_2

@@ -1,5 +1,6 @@
 import unittest
 
+import numpy as np
 import numpy.testing as npt
 
 import torch
@@ -148,4 +149,64 @@ class TestVelocity(unittest.TestCase):
             self.assertEqual(
                 velo_model.output_data(d).shape,
                 (25, n, 4)
+            )
+
+    def test_scaling(self):
+
+        v_scale = torch.Tensor([1, 1.5, 2, 2.5])
+        c_scale = torch.Tensor([2, 1, 0.5, 1])
+
+        c = torch.div(X_tensor, c_scale[None, :])
+        v = torch.div(V_tensor, v_scale[None, :])
+
+        model = get_model(self.model, velocity=True)(
+            A,
+            use_prior_weights=True
+        )
+
+        model.set_scaling(
+            count_scaling=c_scale
+        )
+
+        with torch.no_grad():
+
+            npt.assert_almost_equal(
+                np.diag(c_scale),
+                model.scaler.numpy()
+            )
+            npt.assert_almost_equal(
+                model.scale_count_to_velocity(c).numpy(),
+                X_tensor.numpy()
+            )
+
+        model.set_scaling(
+            count_scaling=None,
+            velocity_scaling=v_scale
+        )
+
+        with torch.no_grad():
+            npt.assert_almost_equal(
+                np.diag(v_scale),
+                model.inv_scaler.numpy()
+            )
+
+            npt.assert_almost_equal(
+                model.scale_velocity_to_count(v).numpy(),
+                V_tensor.numpy()
+            )
+
+        model.set_scaling(
+            count_scaling=c_scale,
+            velocity_scaling=v_scale
+        )
+
+        with torch.no_grad():
+            npt.assert_almost_equal(
+                np.diag(v_scale / c_scale),
+                model.inv_scaler.numpy()
+            )
+
+            npt.assert_almost_equal(
+                np.diag(c_scale / v_scale),
+                model.scaler.numpy()
             )
