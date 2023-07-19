@@ -88,7 +88,7 @@ class _TF_RNN_mixin(
 
     def input_data(self, x):
 
-        if self.output_t_plus_one:
+        if self._offset_data:
             input_offset, _ = self._get_data_offsets(x)
             return x[:, 0:input_offset, :]
 

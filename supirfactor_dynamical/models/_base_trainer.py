@@ -32,6 +32,14 @@ class _TrainingMixin:
     hidden_dropout_rate = 0.0
 
     @property
+    def _offset_data(self):
+        return (
+            self.output_t_plus_one or
+            (self.n_additional_predictions != 0) or
+            (self.loss_offset != 0)
+        )
+
+    @property
     def training_loss(self):
         if self._training_loss is None:
             self._training_loss = []
@@ -204,9 +212,6 @@ class _TrainingMixin:
         if output_t_plus_one is not None:
             self.output_t_plus_one = output_t_plus_one
 
-        if self.n_additional_predictions > 0:
-            self.output_t_plus_one = True
-
         return self
 
     @torch.inference_mode()
@@ -305,7 +310,7 @@ class _TrainingMixin:
         """
 
         # No need to do predictive offsets
-        if not self.output_t_plus_one:
+        if not self._offset_data:
             return x
 
         # Don't shift for prediction if offset_only
@@ -318,22 +323,29 @@ class _TrainingMixin:
         # Shift and truncate
         else:
 
+            _shift_by = 1 if self.output_t_plus_one else 0
+
             if not offset_only and not no_loss_offset:
                 _, loss_offset = self._get_data_offsets(x)
-                loss_offset += 1
+                loss_offset += _shift_by
+
             elif not offset_only and no_loss_offset:
-                loss_offset = 1
+                loss_offset = _shift_by
+
             elif offset_only and no_loss_offset:
                 loss_offset = 0
+
             else:
                 _, loss_offset = self._get_data_offsets(x, check=False)
 
             if truncate:
-                end_offset = self.n_additional_predictions + 2
-                return x[:, loss_offset:end_offset, :]
+                end_offset = self.n_additional_predictions + 1
+                end_offset += _shift_by
+
+                return x[:, loss_offset:end_offset, ...]
 
             else:
-                return x[:, loss_offset:, :]
+                return x[:, loss_offset:, ...]
 
     def input_data(self, x):
         """
@@ -346,17 +358,17 @@ class _TrainingMixin:
         :return: Input node values
         :rtype: torch.Tensor
         """
-        if self.output_t_plus_one:
+        if self._offset_data:
             return x[:, [0], ...]
         else:
             return x
 
     def _get_data_offsets(self, x, check=True):
 
-        if not self.output_t_plus_one:
+        if not self._offset_data:
             return None, None
 
-        if self.output_t_plus_one and x.ndim < 3:
+        if self._offset_data and x.ndim < 3:
             raise ValueError(
                 "3D data (N, L, H) must be provided when "
                 "predicting time-dependent data"
@@ -364,8 +376,12 @@ class _TrainingMixin:
 
         L = x.shape[1]
 
-        input_offset = L - self.n_additional_predictions - 1
-        output_offset = 1 + self.loss_offset
+        input_offset = L - self.n_additional_predictions
+        output_offset = self.loss_offset
+
+        if self.output_t_plus_one:
+            input_offset -= 1
+            output_offset += 1
 
         if check and ((input_offset < 1) or (output_offset >= L)):
             raise ValueError(

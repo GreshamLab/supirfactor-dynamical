@@ -125,8 +125,13 @@ def model_training(
             **scaling_params
         )
 
+    if prediction_length is not None and not model_obj._velocity_model:
+        offset_plus_one = True
+    else:
+        offset_plus_one = False
+
     model_obj.set_time_parameters(
-        output_t_plus_one=prediction_length is not None,
+        output_t_plus_one=offset_plus_one,
         n_additional_predictions=prediction_length,
         loss_offset=prediction_loss_offset
     )

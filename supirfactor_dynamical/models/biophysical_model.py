@@ -268,6 +268,41 @@ class SupirFactorBiophysical(
             return torch.add(x_positive, x_negative)
 
     @torch.inference_mode()
+    def counts(
+        self,
+        data,
+        n_additional_time_steps=0
+    ):
+
+        if n_additional_time_steps == 0:
+            return data
+
+        velocity = self(
+            data,
+            n_time_steps=n_additional_time_steps
+        )
+
+        L = data.shape[1]
+
+        counts = [
+            data[:, L-1, ...],
+            data[:, -1, ...]
+        ]   
+
+        for i in range(n_additional_time_steps):
+            counts.append(
+                self.next_count_from_velocity(
+                    counts[-1],
+                    velocity[:, L + i, ...]
+                )
+            )
+
+        return torch.cat(
+            counts,
+            dim=1
+        )
+
+    @torch.inference_mode()
     def erv(
         self,
         data_loader,

@@ -364,7 +364,8 @@ class TestTFAutoencoder(unittest.TestCase):
     def test_data_slice_offset_plusone(self):
 
         self.ae.set_time_parameters(
-            n_additional_predictions=1
+            n_additional_predictions=1,
+            output_t_plus_one=True
         )
 
         with self.assertRaises(ValueError):
@@ -394,7 +395,8 @@ class TestTFAutoencoder(unittest.TestCase):
 
         self.ae.set_time_parameters(
             n_additional_predictions=25,
-            loss_offset=20
+            loss_offset=20,
+            output_t_plus_one=True
         )
 
         with self.assertRaises(ValueError):

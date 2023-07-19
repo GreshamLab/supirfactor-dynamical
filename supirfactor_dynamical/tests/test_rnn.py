@@ -30,6 +30,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
     weight_stack = 1
     class_holder = TFRNNDecoder
 
+    t_plusone = True
+
     def setUp(self) -> None:
 
         torch.manual_seed(55)
@@ -132,7 +134,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
     def test_data_slice_offset_plusone(self):
 
         self.dyn_ae.set_time_parameters(
-            n_additional_predictions=1
+            n_additional_predictions=1,
+            output_t_plus_one=True
         )
 
         with self.assertRaises(ValueError):
@@ -155,7 +158,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.dyn_ae.set_time_parameters(
             n_additional_predictions=10,
-            loss_offset=10
+            loss_offset=10,
+            output_t_plus_one=True
         )
 
         self.assertEqual(
@@ -172,7 +176,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.dyn_ae.set_time_parameters(
             n_additional_predictions=25,
-            loss_offset=20
+            loss_offset=20,
+            output_t_plus_one=True
         )
 
         with self.assertRaises(ValueError):
@@ -213,7 +218,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.dyn_ae.set_time_parameters(
             n_additional_predictions=25,
-            loss_offset=20
+            loss_offset=20,
+            output_t_plus_one=True
         )
 
         self.dyn_ae.train_model(dl, epochs=10)
@@ -278,7 +284,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.dyn_ae.set_time_parameters(
             n_additional_predictions=1,
-            loss_offset=1
+            loss_offset=1,
+            output_t_plus_one=True
         )
 
         self.dyn_ae.train_model(
@@ -313,7 +320,8 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.dyn_ae.set_time_parameters(
             n_additional_predictions=2,
-            loss_offset=1
+            loss_offset=1,
+            output_t_plus_one=True
         )
 
         self.dyn_ae.train_model(
