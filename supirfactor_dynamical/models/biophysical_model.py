@@ -131,6 +131,8 @@ class SupirFactorBiophysical(
         if self._pretrained_decay:
             self._decay_model.eval()
 
+        return self
+
     @staticmethod
     def freeze(model):
 
