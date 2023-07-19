@@ -88,6 +88,8 @@ def read(
         k: kwargs.pop(k, False) for k in FREEZE_ARGS
     }
 
+    kwargs.pop('_decay_model', None)
+
     # Do special loading stuff for the big biophysical model
     if _state_model == 'biophysical':
 
