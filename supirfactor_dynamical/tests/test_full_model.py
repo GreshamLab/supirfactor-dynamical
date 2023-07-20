@@ -319,7 +319,7 @@ class TestDynamicalModel(unittest.TestCase):
             return_erv=True
         )
 
-    def test_erv(self):
+    def test_erv_passthrough(self):
 
         self.dynamical_model = SupirFactorBiophysical(
             A,
@@ -334,7 +334,57 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        _erv = self.dynamical_model.erv(self.velocity_data)
+        def _test_erv(x, output_data_loader):
+
+            for _x, _y in zip(x, output_data_loader):
+                assert _x.shape == _y.shape
+
+        self.dynamical_model._transcription_model.erv = _test_erv
+        _ = self.dynamical_model.erv(self.velocity_data)
+
+    def test_forward_counts(self):
+
+        data = torch.stack(
+            (
+                torch.Tensor(
+                    (1 + np.arange(0, 20) / 10).reshape(
+                        2, 10
+                    ).T.reshape(
+                        1, 10, 2
+                    )
+                ),
+                torch.full((1, 10, 2), 0.1)
+            ),
+            dim=-1
+        )
+
+        dynamical_model = SupirFactorBiophysical(
+            np.ones((2, 1), dtype=np.float32) / 10,
+            use_prior_weights=True,
+            transcription_model=get_model('static'),
+            input_dropout_rate=0.0,
+            decay_model=self.decay_model
+        )
+
+        dynamical_model._transcription_model.decoder[0].weight = torch.nn.Parameter(
+            torch.ones_like(dynamical_model._transcription_model.decoder[0].weight) / 6
+        )
+
+        with torch.no_grad():
+            npt.assert_almost_equal(
+                dynamical_model.input_data(data).numpy(),
+                dynamical_model.counts(
+                    dynamical_model.input_data(data)
+                ).numpy()
+            )
+
+        self.assertEqual(
+            dynamical_model.counts(
+                    dynamical_model.input_data(data[:, [0], ...]),
+                    n_time_steps=9
+            ).shape,
+            (1, 10, 2)
+        )
 
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):

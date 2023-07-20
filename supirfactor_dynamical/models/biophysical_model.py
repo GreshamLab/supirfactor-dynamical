@@ -143,17 +143,22 @@ class SupirFactorBiophysical(
         self,
         x,
         n_time_steps=0,
-        return_submodels=False
+        return_submodels=False,
+        return_counts=False
     ):
+
+        if return_counts and n_time_steps == 0:
+            return x
 
         v = self.forward_model(x, return_submodels=return_submodels)
 
         if n_time_steps > 0:
 
+            _output_velo = [v]
+            _output_count = [x]
+
             _x = x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
             _v = v[:, [-1], :] if x.ndim == 3 else v[[-1], :]
-
-            _output_data = [v]
 
             for _ in range(n_time_steps):
 
@@ -174,26 +179,29 @@ class SupirFactorBiophysical(
                     return_submodels=return_submodels
                 )
 
-                _output_data.append(_v)
+                _output_velo.append(_v)
+                _output_count.append(_x)
+
+            def _cat(_data):
+                return torch.cat(
+                    _data,
+                    dim=x.ndim - 2
+                )
+
+            if return_counts:
+                _output_data = _output_count
+            else:
+                _output_data = _output_velo
 
             if return_submodels:
 
                 v = (
-                    torch.cat(
-                        [d[0] for d in _output_data],
-                        dim=x.ndim - 2
-                    ),
-                    torch.cat(
-                        [d[1] for d in _output_data],
-                        dim=x.ndim - 2
-                    )
+                    _cat([d[0] for d in _output_data]),
+                    _cat([d[1] for d in _output_data])
                 )
 
             else:
-                v = torch.cat(
-                    _output_data,
-                    dim=x.ndim - 2
-                )
+                v = _cat(_output_data)
 
         return v
 
@@ -271,36 +279,15 @@ class SupirFactorBiophysical(
     def counts(
         self,
         data,
-        n_additional_time_steps=0
+        n_time_steps=0
     ):
 
-        if n_additional_time_steps == 0:
-            return data
-
-        velocity = self(
-            data,
-            n_time_steps=n_additional_time_steps
-        )
-
-        L = data.shape[1]
-
-        counts = [
-            data[:, L-1, ...],
-            data[:, -1, ...]
-        ]   
-
-        for i in range(n_additional_time_steps):
-            counts.append(
-                self.next_count_from_velocity(
-                    counts[-1],
-                    velocity[:, L + i, ...]
-                )
+        with torch.no_grad():
+            return self(
+                data,
+                n_time_steps=n_time_steps,
+                return_counts=True
             )
-
-        return torch.cat(
-            counts,
-            dim=1
-        )
 
     @torch.inference_mode()
     def erv(
@@ -309,41 +296,55 @@ class SupirFactorBiophysical(
         **kwargs
     ):
 
+        self.eval()
+
         def _erv_input_wrapper(dl):
 
             for data in dl:
 
-                if self._count_model is None:
-                    yield self.input_data(data)
+                yield self(
+                    self.input_data(data),
+                    n_time_steps=self.n_additional_predictions,
+                    return_counts=True
+                )
 
-                # If there's a count model included, run it as the input
-                # to the ERV model
-                else:
-                    yield self._count_model(
-                        self.input_data(data),
-                        n_time_steps=self._count_model.n_additional_predictions
-                    )
+        def _erv_output_wrapper(dl):
 
-        def _erv_output_wrapper(dl, input_wrapper):
+            for data in dl:
 
-            for data, input_data in zip(dl, input_wrapper):
+                _data = self.output_data(
+                    data,
+                    no_loss_offset=True
+                )
 
                 # If there's a decay model included, run it and subtract it
                 # from the output for the ERV model
                 if self._decay_model is None:
-                    yield self.output_data(data)
+                    yield _data
 
                 else:
+
+                    _decay = self._decay_model(
+                        self(
+                            self.input_data(data),
+                            n_time_steps=self.n_additional_predictions,
+                            return_counts=True
+                        )
+                    )
+
                     yield torch.subtract(
-                        self.output_data(data),
-                        self._decay_model(input_data)
+                        _data,
+                        self.output_data(
+                            _decay,
+                            no_loss_offset=True,
+                            keep_all_dims=True
+                        )
                     )
 
         return self._transcription_model.erv(
             _erv_input_wrapper(data_loader),
             output_data_loader=_erv_output_wrapper(
-                data_loader,
-                _erv_input_wrapper(data_loader)
+                data_loader
             ),
             **kwargs
         )
