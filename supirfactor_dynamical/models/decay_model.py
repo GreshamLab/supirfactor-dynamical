@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from ._base_trainer import _TrainingMixin
 
@@ -93,7 +94,7 @@ class DecayModule(
 
     def train_model(
         self,
-        data,
+        data_loader,
         epochs,
         validation_dataloader=None,
         optimizer=None
@@ -111,16 +112,22 @@ class DecayModule(
 
             self.train()
 
-            mse = loss_function(
-                self._slice_data_and_forward(data),
-                self.output_data(data)
-            )
+            _batch_loss = []
 
-            mse.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            for data in data_loader:
 
-            self.training_loss.append(mse.item())
+                mse = loss_function(
+                    self._slice_data_and_forward(data),
+                    self.output_data(data)
+                )
+
+                mse.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                _batch_loss.append(mse.item())
+
+            self.training_loss.append(np.mean(_batch_loss))
 
             if validation_dataloader is not None:
 
