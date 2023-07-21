@@ -92,52 +92,6 @@ class DecayModule(
         else:
             return torch.mul(x, _x[None, ...])
 
-    def train_model(
-        self,
-        data_loader,
-        epochs,
-        validation_dataloader=None,
-        optimizer=None
-    ):
-        """
-        Training stub for decay module.
-        In general this should be trained as a module of a larger
-        model.
-        """
-
-        optimizer = self.process_optimizer(optimizer)
-        loss_function = torch.nn.MSELoss()
-
-        for _ in range(epochs):
-
-            self.train()
-
-            _batch_loss = []
-
-            for data in data_loader:
-
-                mse = loss_function(
-                    self._slice_data_and_forward(data),
-                    self.output_data(data)
-                )
-
-                mse.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-
-                _batch_loss.append(mse.item())
-
-            self.training_loss.append(np.mean(_batch_loss))
-
-            if validation_dataloader is not None:
-
-                self.validation_loss.append(
-                    self._calculate_validation_loss(
-                        validation_dataloader,
-                        loss_function
-                    )
-                )
-
     def _slice_data_and_forward(self, x):
 
         return self(x[..., 0])
