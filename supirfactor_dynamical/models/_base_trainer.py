@@ -113,20 +113,11 @@ class _TrainingMixin:
             # if validation data was provided
             if validation_dataloader is not None:
 
-                _validation_batch_losses = []
-
-                with torch.no_grad():
-                    for val_x in validation_dataloader:
-
-                        _validation_batch_losses.append(
-                            loss_function(
-                                self._slice_data_and_forward(val_x),
-                                self.output_data(val_x)
-                            ).item()
-                        )
-
                 self.validation_loss.append(
-                    np.mean(_validation_batch_losses)
+                    self._calculate_validation_loss(
+                        validation_dataloader,
+                        loss_function
+                    )
                 )
 
             # Shuffle stratified time data
@@ -213,6 +204,29 @@ class _TrainingMixin:
             self.output_t_plus_one = output_t_plus_one
 
         return self
+
+    def _calculate_validation_loss(
+        self,
+        validation_dataloader,
+        loss_function
+    ):
+        # Get validation losses during training
+        # if validation data was provided
+        if validation_dataloader is not None:
+
+            _validation_batch_losses = []
+
+            with torch.no_grad():
+                for val_x in validation_dataloader:
+
+                    _validation_batch_losses.append(
+                        loss_function(
+                            self._slice_data_and_forward(val_x),
+                            self.output_data(val_x)
+                        ).item()
+                    )
+
+            return np.mean(_validation_batch_losses)
 
     @torch.inference_mode()
     def r2(

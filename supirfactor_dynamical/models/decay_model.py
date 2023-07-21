@@ -95,6 +95,7 @@ class DecayModule(
         self,
         data,
         epochs,
+        validation_dataloader=None,
         optimizer=None
     ):
         """
@@ -120,6 +121,15 @@ class DecayModule(
             optimizer.zero_grad()
 
             self.training_loss.append(mse.item())
+
+            if validation_dataloader is not None:
+
+                self.validation_loss.append(
+                    self._calculate_validation_loss(
+                        validation_dataloader,
+                        loss_function
+                    )
+                )
 
     def _slice_data_and_forward(self, x):
 
