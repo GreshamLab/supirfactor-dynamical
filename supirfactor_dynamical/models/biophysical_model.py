@@ -193,7 +193,7 @@ class SupirFactorBiophysical(
             else:
                 _output_data = _output_velo
 
-            if return_submodels:
+            if return_submodels and not return_counts:
 
                 v = (
                     _cat([d[0] for d in _output_data]),
