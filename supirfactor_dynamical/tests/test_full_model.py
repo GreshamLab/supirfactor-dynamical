@@ -337,7 +337,7 @@ class TestDynamicalModel(unittest.TestCase):
         def _test_erv(x, output_data_loader):
 
             for _x, _y in zip(x, output_data_loader):
-                assert _x.shape == _y.shape
+                self.assertEqual(_x.shape, _y.shape)
 
         self.dynamical_model._transcription_model.erv = _test_erv
         _ = self.dynamical_model.erv(self.velocity_data)

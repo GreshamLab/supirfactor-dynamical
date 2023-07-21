@@ -13,7 +13,7 @@ class DecayModule(
     def __init__(
         self,
         g,
-        k=50,
+        k=20,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
         time_dependent_decay=True
@@ -50,8 +50,7 @@ class DecayModule(
             torch.nn.Linear(
                 k,
                 g
-            ),
-            torch.nn.LeakyReLU(1e-4)
+            )
         )
 
         self.time_dependent_decay = time_dependent_decay
@@ -77,7 +76,9 @@ class DecayModule(
 
         _x = self._decoder(_x)
 
-        if not self.training:
+        if self.training:
+            _x = torch.nn.LeakyReLU(1e-4)(_x)
+        else:
             _x = torch.nn.ReLU()(_x)
 
         if base_decay is not None:
@@ -92,8 +93,7 @@ class DecayModule(
 
     def train_model(
         self,
-        input_data,
-        output_data,
+        data,
         epochs,
         optimizer=None
     ):
@@ -111,8 +111,8 @@ class DecayModule(
             self.train()
 
             mse = loss_function(
-                self._slice_data_and_forward(input_data),
-                self.output_data(output_data)
+                self._slice_data_and_forward(data),
+                self.output_data(data)
             )
 
             mse.backward()
@@ -123,4 +123,11 @@ class DecayModule(
 
     def _slice_data_and_forward(self, x):
 
-        return self(x)
+        return self(x[..., 0])
+
+    def output_data(self, x, **kwargs):
+
+        return torch.multiply(
+            torch.multiply(x[..., 1], x[..., 0]),
+            -1.0
+        )

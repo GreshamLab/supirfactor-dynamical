@@ -57,8 +57,12 @@ class TestDecayModule(unittest.TestCase):
         for d in self.velocity_data:
 
             decay.train_model(
-                d[..., 0],
-                torch.nn.ReLU()(d[..., 1] * -1) * -1,
+                torch.stack((
+                    d[..., 0],
+                    torch.nn.ReLU()(d[..., 1] * -1) * -1
+                    ),
+                    dim=-1
+                ),
                 10
             )
 
@@ -96,8 +100,12 @@ class TestDecayModule(unittest.TestCase):
         for d in self.velocity_data:
 
             decay.train_model(
-                d[..., 0],
-                torch.nn.ReLU()(d[..., 1] * -1) * -1,
+                torch.stack((
+                    d[..., 0],
+                    torch.nn.ReLU()(d[..., 1] * -1) * -1
+                    ),
+                    dim=-1
+                ),
                 10
             )
 
