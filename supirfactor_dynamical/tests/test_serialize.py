@@ -31,6 +31,9 @@ class _ModelStub:
     def set_time_parameters(self, **kwargs):
         self.time_kwargs = kwargs
 
+    def set_scaling(self, **kwargs):
+        self.scaler_kwargs = kwargs
+
 
 class _SetupMixin:
 
@@ -99,6 +102,14 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
                 'output_t_plus_one': False,
                 'n_additional_predictions': 0,
                 'loss_offset': 0
+            }
+        )
+
+        self.assertDictEqual(
+            stub.scaler_kwargs,
+            {
+                'count_scaling': None,
+                'velocity_scaling': None
             }
         )
 
@@ -224,6 +235,34 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
                 ae(X_tensor).numpy(),
                 loaded_ae(X_tensor).numpy()
             )
+
+    def test_serialize_scaling(self):
+
+        ae = get_model(
+            'rnn',
+            velocity=self.velocity
+        )(A, use_prior_weights=True)
+
+        ae.set_scaling(
+            torch.ones(4),
+            torch.ones(4)
+        )
+
+        ae.save(self.temp_file_name)
+        ae.eval()
+
+        loaded_ae = read(self.temp_file_name)
+        loaded_ae.eval()
+
+        torch.testing.assert_close(
+            ae.scaler,
+            loaded_ae.scaler
+        )   
+
+        torch.testing.assert_close(
+            torch.eye(4),
+            loaded_ae.scaler
+        )
 
     def test_serialize_dynamic(self):
 

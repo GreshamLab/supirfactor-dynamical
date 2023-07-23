@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 from ._base_trainer import _TrainingMixin
 

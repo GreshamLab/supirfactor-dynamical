@@ -59,6 +59,20 @@ class TestDynamicalModel(unittest.TestCase):
             batch_size=25
         )
 
+        self.ordered_data = torch.stack(
+            (
+                torch.Tensor(
+                    (1 + np.arange(0, 20) / 10).reshape(
+                        2, 10
+                    ).T.reshape(
+                        1, 10, 2
+                    )
+                ),
+                torch.full((1, 10, 2), 0.1)
+            ),
+            dim=-1
+        )
+
     def test_construction(self):
 
         self.count_model = get_model('rnn')(
@@ -344,20 +358,6 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_forward_counts(self):
 
-        data = torch.stack(
-            (
-                torch.Tensor(
-                    (1 + np.arange(0, 20) / 10).reshape(
-                        2, 10
-                    ).T.reshape(
-                        1, 10, 2
-                    )
-                ),
-                torch.full((1, 10, 2), 0.1)
-            ),
-            dim=-1
-        )
-
         dynamical_model = SupirFactorBiophysical(
             np.ones((2, 1), dtype=np.float32) / 10,
             use_prior_weights=True,
@@ -372,19 +372,57 @@ class TestDynamicalModel(unittest.TestCase):
 
         with torch.no_grad():
             npt.assert_almost_equal(
-                dynamical_model.input_data(data).numpy(),
+                dynamical_model.input_data(self.ordered_data).numpy(),
                 dynamical_model.counts(
-                    dynamical_model.input_data(data)
+                    dynamical_model.input_data(self.ordered_data)
                 ).numpy()
             )
 
         self.assertEqual(
             dynamical_model.counts(
-                    dynamical_model.input_data(data[:, [0], ...]),
+                    dynamical_model.input_data(self.ordered_data[:, [0], ...]),
                     n_time_steps=9
             ).shape,
             (1, 10, 2)
         )
+
+    def test_forward_steps(self):
+
+        class BioTestClass(SupirFactorBiophysical):
+
+            def forward_model(self, x, **kwargs):
+
+                return torch.full_like(x, 0.1)
+
+        dynamical_model = BioTestClass(
+            np.ones((2, 1), dtype=np.float32) / 10,
+            use_prior_weights=True,
+            transcription_model=get_model('static'),
+            input_dropout_rate=0.0,
+            decay_model=self.decay_model
+        )
+
+        with torch.no_grad():
+            v = dynamical_model(
+                self.ordered_data[..., 0]
+            )
+
+            npt.assert_almost_equal(
+                v.numpy(),
+                self.ordered_data[..., 1].numpy()
+            )
+
+            c = dynamical_model(
+                self.ordered_data[:, [0], :, 0],
+                return_counts=True,
+                n_time_steps=9
+            )
+
+            npt.assert_almost_equal(
+                c.numpy(),
+                self.ordered_data[..., 0].numpy(),
+                decimal=6
+            )
 
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):

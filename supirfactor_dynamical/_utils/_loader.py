@@ -22,6 +22,11 @@ FREEZE_ARGS = [
     '_pretrained_decay'
 ]
 
+SCALER_ARGS = [
+    ('_count_inverse_scaler', 'count_scaling'),
+    ('_velocity_inverse_scaler', 'velocity_scaling')
+]
+
 
 def read(
     file_name,
@@ -88,6 +93,10 @@ def read(
         k: kwargs.pop(k, False) for k in FREEZE_ARGS
     }
 
+    scaling_kwargs = {
+        k[1]: kwargs.pop(k[0], None) for k in SCALER_ARGS
+    }
+
     kwargs.pop('_decay_model', None)
 
     # Do special loading stuff for the big biophysical model
@@ -120,9 +129,15 @@ def read(
             **kwargs
         )
 
-    model.set_time_parameters(
-        **time_kwargs
-    )
+    if hasattr(model, 'set_time_parameters'):
+        model.set_time_parameters(
+            **time_kwargs
+        )
+
+    if hasattr(model, 'set_scaling'):
+        model.set_scaling(
+            **scaling_kwargs
+        )
 
     model.load_state_dict(
         _state_dict
