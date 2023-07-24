@@ -9,6 +9,8 @@ from .._utils import (
     _aggregate_r2
 )
 
+from ._writer import write
+
 
 DEFAULT_OPTIMIZER_PARAMS = {
     "lr": 1e-3,
@@ -405,6 +407,20 @@ class _TrainingMixin:
             )
 
         return input_offset, self.loss_offset
+    
+    def save(
+        self,
+        file_name,
+        **kwargs
+    ):
+        """
+        Save this model to a file
+
+        :param file_name: File name
+        :type file_name: str
+        """
+
+        write(self, file_name, **kwargs)
 
     @staticmethod
     def to_tensor(x):

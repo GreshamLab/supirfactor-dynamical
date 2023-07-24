@@ -105,9 +105,12 @@ class SupirFactorBiophysical(
 
         elif decay_model is not None:
 
+            if isinstance(decay_model, str):
+                from .._utils._loader import read
+                decay_model = read(decay_model)
+
             self._decay_model = decay_model
             self._pretrained_decay = True
-            self.freeze(self._decay_model)
 
         else:
 

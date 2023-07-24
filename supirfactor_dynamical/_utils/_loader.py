@@ -148,7 +148,6 @@ def read(
         model._pretrained_count = True
 
     if freeze_kwargs['_pretrained_decay']:
-        model.freeze(model._decay_model)
         model._pretrained_decay = True
 
     return model

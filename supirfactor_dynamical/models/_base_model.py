@@ -12,8 +12,6 @@ from .._utils import (
     _calculate_rss
 )
 
-from ._writer import write
-
 
 class _PriorMixin:
 
@@ -388,20 +386,6 @@ class _TFMixin(_PriorMixin):
                 tensor_list,
                 dim=tensor_list[0].ndim - 2
             )
-
-    def save(
-        self,
-        file_name,
-        **kwargs
-    ):
-        """
-        Save this model to a file
-
-        :param file_name: File name
-        :type file_name: str
-        """
-
-        write(self, file_name, **kwargs)
 
     def set_decoder(
         self,

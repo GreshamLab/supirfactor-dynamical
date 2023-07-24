@@ -257,7 +257,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         torch.testing.assert_close(
             ae.scaler,
             loaded_ae.scaler
-        )   
+        )
 
         torch.testing.assert_close(
             torch.eye(4),
