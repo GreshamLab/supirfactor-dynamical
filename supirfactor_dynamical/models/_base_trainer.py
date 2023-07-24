@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import tqdm
+import time
 
 from .._utils import (
     _calculate_rss,
@@ -19,6 +20,8 @@ DEFAULT_OPTIMIZER_PARAMS = {
 
 
 class _TrainingMixin:
+
+    training_time = None
 
     _training_loss = None
     _validation_loss = None
@@ -88,6 +91,8 @@ class _TrainingMixin:
         optimizer = self.process_optimizer(
             optimizer
         )
+
+        self.set_training_time()
 
         for _ in tqdm.trange(epochs):
 
@@ -407,7 +412,7 @@ class _TrainingMixin:
             )
 
         return input_offset, self.loss_offset
-    
+
     def save(
         self,
         file_name,
@@ -421,6 +426,13 @@ class _TrainingMixin:
         """
 
         write(self, file_name, **kwargs)
+
+    def set_training_time(
+        self,
+        reset=False
+    ):
+        if reset or self.training_time is None:
+            self.training_time = time.time()
 
     @staticmethod
     def to_tensor(x):

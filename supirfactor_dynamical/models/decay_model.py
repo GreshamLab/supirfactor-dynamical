@@ -8,7 +8,12 @@ class DecayModule(
     _TrainingMixin
 ):
 
+    type_name = 'decay'
+
     hidden_state = None
+
+    time_dependent_decay = True
+    g = None
 
     def __init__(
         self,
@@ -54,6 +59,7 @@ class DecayModule(
         )
 
         self.time_dependent_decay = time_dependent_decay
+        self.g = g
 
     def forward(
         self,

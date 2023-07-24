@@ -27,6 +27,19 @@ SCALER_ARGS = [
     ('_velocity_inverse_scaler', 'velocity_scaling')
 ]
 
+DEPRECATED_ARGS = [
+    '_decay_model',
+    'g'
+]
+
+INFO_KWARGS = [
+    'training_time',
+    '_training_loss',
+    '_validation_loss',
+    'training_r2',
+    'validation_r2'
+]
+
 
 def read(
     file_name,
@@ -75,11 +88,17 @@ def read(
             for k in _state_args
         }
 
-    with pd.HDFStore(file_name, mode='r') as f:
-        prior = pd.read_hdf(
-            f,
-            prefix + 'prior_network'
-        )
+    # Get the prior
+    try:
+        with pd.HDFStore(file_name, mode='r') as f:
+            prior = pd.read_hdf(
+                f,
+                prefix + 'prior_network'
+            )
+
+    # Or get g out of the kwargs for decay model
+    except KeyError:
+        prior = kwargs.pop('g', None)
 
     time_kwargs = {
         k: kwargs.pop(k, None) for k in TIME_KWARGS
@@ -97,7 +116,12 @@ def read(
         k[1]: kwargs.pop(k[0], None) for k in SCALER_ARGS
     }
 
-    kwargs.pop('_decay_model', None)
+    info_kwargs = {
+        k: kwargs.pop(k, None) for k in INFO_KWARGS
+    }
+
+    for dead_arg in DEPRECATED_ARGS:
+        kwargs.pop(dead_arg, None)
 
     # Do special loading stuff for the big biophysical model
     if _state_model == 'biophysical':
@@ -139,6 +163,7 @@ def read(
             **scaling_kwargs
         )
 
+    # Load all the tensors in
     model.load_state_dict(
         _state_dict
     )
@@ -149,6 +174,9 @@ def read(
 
     if freeze_kwargs['_pretrained_decay']:
         model._pretrained_decay = True
+
+    for k, v in info_kwargs.items():
+        setattr(model, k, v)
 
     return model
 

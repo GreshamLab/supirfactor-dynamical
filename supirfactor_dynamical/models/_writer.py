@@ -14,7 +14,13 @@ _SERIALIZE_ARGS = [
     '_pretrained_decay',
     'time_dependent_decay',
     '_velocity_inverse_scaler',
-    '_count_inverse_scaler'
+    '_count_inverse_scaler',
+    '_training_loss',
+    '_validation_loss',
+    'training_time',
+    'training_r2',
+    'validation_r2',
+    'g'
 ]
 
 
@@ -36,14 +42,15 @@ def write(
         if _write_count_submodel:
             _write_state(f, model_object._count_model, prefix + "count_")
 
-    _write_df(
-        file_name,
-        model_object._to_dataframe(
-            model_object.prior_network,
-            transpose=True
-        ),
-        'prior_network'
-    )
+    if hasattr(model_object, 'prior_network'):
+        _write_df(
+            file_name,
+            model_object._to_dataframe(
+                model_object.prior_network,
+                transpose=True
+            ),
+            'prior_network'
+        )
 
     if _write_count_submodel:
         _write_df(

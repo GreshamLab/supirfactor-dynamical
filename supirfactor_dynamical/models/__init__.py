@@ -10,11 +10,12 @@ from .recurrent_models import (
 )
 
 from .biophysical_model import SupirFactorBiophysical
+from .decay_model import DecayModule
 
+# Standard mixins
 from ._base_velocity_model import (
     _VelocityMixin
 )
-
 from ._base_model import _TFMixin
 from ._base_trainer import _TrainingMixin
 
@@ -25,8 +26,14 @@ _CLASS_DICT = {
     TFRNNDecoder.type_name: TFRNNDecoder,
     TFGRUDecoder.type_name: TFGRUDecoder,
     TFLSTMDecoder.type_name: TFLSTMDecoder,
-    SupirFactorBiophysical.type_name: SupirFactorBiophysical
+    SupirFactorBiophysical.type_name: SupirFactorBiophysical,
+    DecayModule.type_name: DecayModule
 }
+
+_not_velocity = [
+    SupirFactorBiophysical,
+    DecayModule
+]
 
 
 def get_model(
@@ -39,7 +46,7 @@ def get_model(
     except KeyError:
         pass
 
-    if velocity and (model is not SupirFactorBiophysical):
+    if velocity and (model not in _not_velocity):
         class TFVelocity(_VelocityMixin, model):
             pass
 
