@@ -469,6 +469,36 @@ class TestDynamicalModel(unittest.TestCase):
             testy[:, 5:, :, 1]
         )
 
+        dynamical_model.set_time_parameters(
+            loss_offset=0,
+            n_additional_predictions=5
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.input_data(testy),
+            testy[:, :5, :, 0]
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.output_data(testy),
+            testy[..., 1]
+        )
+
+        dynamical_model.set_time_parameters(
+            loss_offset=3,
+            n_additional_predictions=3
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.input_data(testy),
+            testy[:, :7, :, 0]
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.output_data(testy),
+            testy[:, 3:, :, 1]
+        )
+
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):
 

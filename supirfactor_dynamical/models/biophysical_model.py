@@ -148,7 +148,7 @@ class SupirFactorBiophysical(
         if output_t_plus_one is not None and output_t_plus_one:
             raise ValueError(
                 "Biophysical model does not support offset training; "
-                "this model predicts velocity for predictions"
+                "this model uses velocity for forward predictions"
             )
         return super().set_time_parameters(
             n_additional_predictions=n_additional_predictions,
