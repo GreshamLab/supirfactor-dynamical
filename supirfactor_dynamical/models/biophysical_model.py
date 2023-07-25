@@ -160,8 +160,15 @@ class SupirFactorBiophysical(
             _output_velo = [v]
             _output_count = [x]
 
-            _x = x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
-            _v = v[:, [-1], :] if x.ndim == 3 else v[[-1], :]
+            _x = self.get_last_step(x)
+
+            if return_submodels:
+                _v = (
+                    self.get_last_step(v[0]),
+                    self.get_last_step(v[1])
+                )
+            else:
+                _v = self.get_last_step(v)
 
             for _ in range(n_time_steps):
 
@@ -327,13 +334,11 @@ class SupirFactorBiophysical(
 
                 else:
 
-                    _decay = self._decay_model(
-                        self(
-                            self.input_data(data),
-                            n_time_steps=self.n_additional_predictions,
-                            return_counts=True
-                        )
-                    )
+                    _decay = self(
+                        self.input_data(data),
+                        n_time_steps=self.n_additional_predictions,
+                        return_submodels=True
+                    )[1]
 
                     yield torch.subtract(
                         _data,
@@ -354,3 +359,7 @@ class SupirFactorBiophysical(
 
     def output_weights(self, *args, **kwargs):
         return self._transcription_model.output_weights(*args, **kwargs)
+
+    @staticmethod
+    def get_last_step(x):
+        return x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
