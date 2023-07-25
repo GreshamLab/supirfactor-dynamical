@@ -4,12 +4,14 @@ from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
 from ._base_trainer import _TrainingMixin
 from ._base_velocity_model import _VelocityMixin
+from ._base_recurrent_model import _TimeOffsetMixin
 from .decay_model import DecayModule
 
 
 class SupirFactorBiophysical(
     torch.nn.Module,
     _VelocityMixin,
+    _TimeOffsetMixin,
     _TFMixin,
     _TrainingMixin
 ):
@@ -135,6 +137,23 @@ class SupirFactorBiophysical(
             self._decay_model.eval()
 
         return self
+
+    def set_time_parameters(
+            self,
+            output_t_plus_one=None,
+            n_additional_predictions=None,
+            loss_offset=None
+    ):
+
+        if output_t_plus_one is not None and output_t_plus_one:
+            raise ValueError(
+                "Biophysical model does not support offset training; "
+                "this model predicts velocity for predictions"
+            )
+        return super().set_time_parameters(
+            n_additional_predictions=n_additional_predictions,
+            loss_offset=loss_offset
+        )
 
     @staticmethod
     def freeze(model):

@@ -121,10 +121,6 @@ class TestDynamicalModel(unittest.TestCase):
             decay_model=self.decay_model
         )
 
-        self.dynamical_model.set_time_parameters(
-            output_t_plus_one=True
-        )
-
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
@@ -423,6 +419,55 @@ class TestDynamicalModel(unittest.TestCase):
                 self.ordered_data[..., 0].numpy(),
                 decimal=6
             )
+
+    def test_input_output(self):
+
+        dynamical_model = SupirFactorBiophysical(
+            A,
+            decay_model=self.decay_model
+        )
+
+        testy = torch.Tensor(
+            np.stack((
+                np.arange(100).reshape(5, 10, 2),
+                np.arange(100).reshape(5, 10, 2) * -1,
+                ),
+                -1
+            )
+        )
+
+        self.assertFalse(dynamical_model._offset_data)
+
+        torch.testing.assert_close(
+            dynamical_model.input_data(testy),
+            testy[..., 0]
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.output_data(testy),
+            testy[..., 1]
+        )
+
+        dynamical_model.set_time_parameters(
+            loss_offset=5
+        )
+
+        self.assertEqual(
+            dynamical_model._get_data_offsets(
+                dynamical_model.input_data(testy)
+            ),
+            (10, 5)
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.input_data(testy),
+            testy[..., 0]
+        )
+
+        torch.testing.assert_close(
+            dynamical_model.output_data(testy),
+            testy[:, 5:, :, 1]
+        )
 
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):
