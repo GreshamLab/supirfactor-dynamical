@@ -255,13 +255,43 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         loaded_ae.eval()
 
         torch.testing.assert_close(
-            ae.scaler,
-            loaded_ae.scaler
+            ae.count_scaler,
+            loaded_ae.count_scaler
         )
 
         torch.testing.assert_close(
             torch.eye(4),
-            loaded_ae.scaler
+            loaded_ae.count_scaler
+        )
+
+        torch.testing.assert_close(
+            ae.velocity_scaler,
+            loaded_ae.velocity_scaler
+        )
+
+        torch.testing.assert_close(
+            torch.eye(4),
+            loaded_ae.velocity_scaler
+        )
+
+        torch.testing.assert_close(
+            ae.count_to_velocity_scaler,
+            loaded_ae.count_to_velocity_scaler
+        )
+
+        torch.testing.assert_close(
+            torch.eye(4),
+            loaded_ae.count_to_velocity_scaler
+        )
+
+        torch.testing.assert_close(
+            ae.velocity_to_count_scaler,
+            loaded_ae.velocity_to_count_scaler
+        )
+
+        torch.testing.assert_close(
+            torch.eye(4),
+            loaded_ae.velocity_to_count_scaler
         )
 
     def test_serialize_dynamic(self):

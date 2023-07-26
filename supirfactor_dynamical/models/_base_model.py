@@ -185,11 +185,54 @@ class _TFMixin(_PriorMixin):
 
     _velocity_model = False
 
-    _velocity_inverse_scaler = None
     _count_inverse_scaler = None
+    _velocity_inverse_scaler = None
+    _velo_count_inverse_scaler = None
+    _count_velo_inverse_scaler = None
 
-    scaler = None
-    inv_scaler = None
+    @property
+    def encoder_weights(self):
+        return self.encoder[0].weight
+
+    @property
+    def intermediate_weights(self):
+        return None
+
+    @property
+    def recurrent_weights(self):
+        return None
+
+    @property
+    def decoder_weights(self):
+        return self.decoder[0].weight
+
+    @property
+    def count_scaler(self):
+        if self._count_inverse_scaler is not None:
+            return torch.diag(self._count_inverse_scaler)
+        else:
+            return None
+
+    @property
+    def velocity_scaler(self):
+        if self._velocity_inverse_scaler is not None:
+            return torch.diag(self._velocity_inverse_scaler)
+        else:
+            return None
+
+    @property
+    def count_to_velocity_scaler(self):
+        if self._count_velo_inverse_scaler is not None:
+            return torch.diag(self._count_velo_inverse_scaler)
+        else:
+            return None
+
+    @property
+    def velocity_to_count_scaler(self):
+        if self._velo_count_inverse_scaler is not None:
+            return torch.diag(self._velo_count_inverse_scaler)
+        else:
+            return None
 
     def set_scaling(
         self,
@@ -224,28 +267,45 @@ class _TFMixin(_PriorMixin):
         elif velocity_scaling is not False:
             self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
 
-        self.scaler, self.inv_scaler = self.make_scalers(
+        scalers = self.make_scalers(
             self._count_inverse_scaler,
             self._velocity_inverse_scaler
         )
 
+        self._count_velo_inverse_scaler = scalers[0]
+        self._velo_count_inverse_scaler = scalers[1]
+
         return self
 
-    @property
-    def encoder_weights(self):
-        return self.encoder[0].weight
+    def unscale_counts(self, x):
+        if self.count_scaler is not None:
+            return torch.matmul(x, self.count_scaler)
+        else:
+            return x
 
-    @property
-    def intermediate_weights(self):
-        return None
+    def unscale_velocity(self, x):
+        if self.velocity_scaler is not None:
+            return torch.matmul(x, self.velocity_scaler)
+        else:
+            return x
 
-    @property
-    def recurrent_weights(self):
-        return None
+    def scale_count_to_velocity(
+        self,
+        count
+    ):
+        if self.count_to_velocity_scaler is not None:
+            return torch.matmul(count, self.count_to_velocity_scaler)
+        else:
+            return count
 
-    @property
-    def decoder_weights(self):
-        return self.decoder[0].weight
+    def scale_velocity_to_count(
+        self,
+        velocity
+    ):
+        if self.velocity_to_count_scaler is not None:
+            return torch.matmul(velocity, self.velocity_to_count_scaler)
+        else:
+            return velocity
 
     def _forward(
         self,
@@ -742,11 +802,17 @@ class _TFMixin(_PriorMixin):
         count_vec,
         velo_vec=None
     ):
+        """
+        Make scaling matrices to scale & unscale
+        count and velocity matrix
+        """
 
         if count_vec is None and velo_vec is None:
-            return None, None
+            return None, None, None, None
 
-        elif count_vec is not None and velo_vec is not None:
+        # Build scaler matrix to go from count to velocity
+        # and back
+        if count_vec is not None and velo_vec is not None:
             _scaler = torch.div(
                 count_vec,
                 velo_vec
@@ -761,9 +827,10 @@ class _TFMixin(_PriorMixin):
             _scaler = 1 / velo_vec
             _scaler[velo_vec == 0] = 1
 
-        scaler_1 = torch.diag(_scaler)
-        scaler_2 = 1 / _scaler
-        scaler_2[_scaler == 0] = 0
-        scaler_2 = torch.diag(scaler_2)
+        velocity_count_scaler = 1 / _scaler
+        velocity_count_scaler[_scaler == 0] = 0
 
-        return scaler_1, scaler_2
+        return (
+            _scaler,
+            velocity_count_scaler
+        )

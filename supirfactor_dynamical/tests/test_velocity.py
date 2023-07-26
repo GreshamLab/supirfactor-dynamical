@@ -172,7 +172,7 @@ class TestVelocity(unittest.TestCase):
 
             npt.assert_almost_equal(
                 np.diag(c_scale),
-                model.scaler.numpy()
+                model.count_scaler.numpy()
             )
             npt.assert_almost_equal(
                 model.scale_count_to_velocity(c).numpy(),
@@ -187,7 +187,7 @@ class TestVelocity(unittest.TestCase):
         with torch.no_grad():
             npt.assert_almost_equal(
                 np.diag(v_scale),
-                model.inv_scaler.numpy()
+                model.velocity_to_count_scaler.numpy()
             )
 
             npt.assert_almost_equal(
@@ -203,10 +203,10 @@ class TestVelocity(unittest.TestCase):
         with torch.no_grad():
             npt.assert_almost_equal(
                 np.diag(v_scale / c_scale),
-                model.inv_scaler.numpy()
+                model.velocity_to_count_scaler.numpy()
             )
 
             npt.assert_almost_equal(
                 np.diag(c_scale / v_scale),
-                model.scaler.numpy()
+                model.count_to_velocity_scaler.numpy()
             )
