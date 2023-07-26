@@ -187,8 +187,9 @@ class _TFMixin(_PriorMixin):
 
     _count_inverse_scaler = None
     _velocity_inverse_scaler = None
-    _velo_count_inverse_scaler = None
-    _count_velo_inverse_scaler = None
+
+    count_to_velocity_scaler = None
+    velocity_to_count_scaler = None
 
     @property
     def encoder_weights(self):
@@ -217,20 +218,6 @@ class _TFMixin(_PriorMixin):
     def velocity_scaler(self):
         if self._velocity_inverse_scaler is not None:
             return torch.diag(self._velocity_inverse_scaler)
-        else:
-            return None
-
-    @property
-    def count_to_velocity_scaler(self):
-        if self._count_velo_inverse_scaler is not None:
-            return torch.diag(self._count_velo_inverse_scaler)
-        else:
-            return None
-
-    @property
-    def velocity_to_count_scaler(self):
-        if self._velo_count_inverse_scaler is not None:
-            return torch.diag(self._velo_count_inverse_scaler)
         else:
             return None
 
@@ -272,8 +259,15 @@ class _TFMixin(_PriorMixin):
             self._velocity_inverse_scaler
         )
 
-        self._count_velo_inverse_scaler = scalers[0]
-        self._velo_count_inverse_scaler = scalers[1]
+        if scalers[0] is not None:
+            self.count_to_velocity_scaler = torch.diag(
+                scalers[0]
+            )
+
+        if scalers[0] is not None:
+            self.velocity_to_count_scaler = torch.diag(
+                scalers[1]
+            )
 
         return self
 
