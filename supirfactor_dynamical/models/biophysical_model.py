@@ -28,6 +28,7 @@ class SupirFactorBiophysical(
         prior_network,
         trained_count_model=None,
         decay_model=None,
+        freeze_decay_model=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -113,6 +114,9 @@ class SupirFactorBiophysical(
 
             self._decay_model = decay_model
             self._pretrained_decay = True
+
+            if freeze_decay_model:
+                self.freeze(self._decay_model)
 
         else:
 
