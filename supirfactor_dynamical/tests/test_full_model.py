@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+import os
 
 import pandas as pd
 import numpy as np
@@ -16,8 +18,9 @@ from supirfactor_dynamical.train import (
     model_training
 )
 
-from supirfactor_dynamical.models.biophysical_model import (
-    SupirFactorBiophysical
+from supirfactor_dynamical.models import (
+    SupirFactorBiophysical,
+    DecayModule
 )
 
 from ._stubs import (
@@ -27,10 +30,39 @@ from ._stubs import (
     XTV_tensor
 )
 
+temp = tempfile.TemporaryDirectory(prefix='pytest')
+temp_name = temp.name
+temp_file_name = os.path.join(temp.name, "static.h5")
+
+decay = DecayModule(4, 2)
+
+for d in DataLoader(
+    TimeDataset(
+        XV_tensor,
+        T,
+        0,
+        4,
+        1,
+        sequence_length=3
+    ),
+    batch_size=25
+):
+
+    decay.train_model(
+        [torch.stack((
+            d[..., 0],
+            torch.nn.ReLU()(d[..., 1] * -1) * -1
+            ),
+            dim=-1
+        )],
+        10
+    )
+
 
 class TestDynamicalModel(unittest.TestCase):
 
     decay_model = None
+    freeze_model = False
 
     def setUp(self) -> None:
         super().setUp()
@@ -84,7 +116,8 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             A,
             trained_count_model=self.count_model,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.train_model(self.velocity_data, 50)
@@ -99,7 +132,14 @@ class TestDynamicalModel(unittest.TestCase):
                     return_submodels=True
                 )
 
-                if self.decay_model is None:
+                if self.decay_model is False:
+                    self.assertIsNone(predict_neg)
+                    npt.assert_almost_equal(
+                        predict_pos.numpy(),
+                        predicts.numpy()
+                    )
+                else:
+
                     self.assertGreaterEqual(predict_pos.min(), 0)
                     self.assertGreaterEqual(0, predict_neg.max())
 
@@ -107,18 +147,13 @@ class TestDynamicalModel(unittest.TestCase):
                         (predict_pos + predict_neg).numpy(),
                         predicts.numpy()
                     )
-                else:
-                    self.assertIsNone(predict_neg)
-                    npt.assert_almost_equal(
-                        predict_pos.numpy(),
-                        predicts.numpy()
-                    )
 
     def test_training_offset(self):
 
         self.dynamical_model = SupirFactorBiophysical(
             A,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.train_model(self.velocity_data, 50)
@@ -133,7 +168,14 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
-        if self.decay_model is None:
+        if self.decay_model is False:
+            self.assertIsNone(xn)
+            npt.assert_almost_equal(
+                xp.detach().numpy(),
+                x.detach().numpy()
+            )
+
+        else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
             self.assertTrue(np.all(xn.detach().numpy() <= 0))
@@ -142,18 +184,13 @@ class TestDynamicalModel(unittest.TestCase):
                 xn.detach().numpy() + xp.detach().numpy(),
                 x.detach().numpy()
             )
-        else:
-            self.assertIsNone(xn)
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
-            )
 
     def test_training_predict(self):
 
         self.dynamical_model = SupirFactorBiophysical(
             A,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.set_time_parameters(
@@ -174,7 +211,14 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
-        if self.decay_model is None:
+        if self.decay_model is False:
+            self.assertIsNone(xn)
+            npt.assert_almost_equal(
+                xp.detach().numpy(),
+                x.detach().numpy()
+            )
+
+        else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
             self.assertTrue(np.all(xn.detach().numpy() <= 0))
@@ -183,18 +227,13 @@ class TestDynamicalModel(unittest.TestCase):
                 xn.detach().numpy() + xp.detach().numpy(),
                 x.detach().numpy()
             )
-        else:
-            self.assertIsNone(xn)
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
-            )
 
     def test_training_scale(self):
 
         self.dynamical_model = SupirFactorBiophysical(
             A,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.set_scaling(
@@ -215,19 +254,20 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
-        if self.decay_model is None:
+        if self.decay_model is False:
+            self.assertIsNone(xn)
+            npt.assert_almost_equal(
+                xp.detach().numpy(),
+                x.detach().numpy()
+            )
+
+        else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
             self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
             npt.assert_almost_equal(
                 xn.detach().numpy() + xp.detach().numpy(),
-                x.detach().numpy()
-            )
-        else:
-            self.assertIsNone(xn)
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
                 x.detach().numpy()
             )
 
@@ -236,7 +276,8 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             A,
             decay_model=self.decay_model,
-            time_dependent_decay=False
+            time_dependent_decay=False,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.set_time_parameters(
@@ -257,7 +298,14 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
-        if self.decay_model is None:
+        if self.decay_model is False:
+            self.assertIsNone(xn)
+            npt.assert_almost_equal(
+                xp.detach().numpy(),
+                x.detach().numpy()
+            )
+
+        else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
             self.assertTrue(np.all(xn.detach().numpy() <= 0))
@@ -266,19 +314,14 @@ class TestDynamicalModel(unittest.TestCase):
                 xn.detach().numpy() + xp.detach().numpy(),
                 x.detach().numpy()
             )
-        else:
-            self.assertIsNone(xn)
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
-            )
 
     def test_training_constant_decay(self):
 
         self.dynamical_model = SupirFactorBiophysical(
             A,
             decay_model=self.decay_model,
-            time_dependent_decay=False
+            time_dependent_decay=False,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.set_scaling(
@@ -299,19 +342,20 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
-        if self.decay_model is None:
+        if self.decay_model is False:
+            self.assertIsNone(xn)
+            npt.assert_almost_equal(
+                xp.detach().numpy(),
+                x.detach().numpy()
+            )
+
+        else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
             self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
             npt.assert_almost_equal(
                 xn.detach().numpy() + xp.detach().numpy(),
-                x.detach().numpy()
-            )
-        else:
-            self.assertIsNone(xn)
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
                 x.detach().numpy()
             )
 
@@ -326,14 +370,16 @@ class TestDynamicalModel(unittest.TestCase):
             prediction_length=1,
             prediction_loss_offset=1,
             model_type='biophysical',
-            return_erv=True
+            return_erv=True,
+            freeze_decay_model=self.freeze_model
         )
 
     def test_erv_passthrough(self):
 
         self.dynamical_model = SupirFactorBiophysical(
             A,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         self.dynamical_model.set_time_parameters(
@@ -359,11 +405,8 @@ class TestDynamicalModel(unittest.TestCase):
             use_prior_weights=True,
             transcription_model=get_model('static'),
             input_dropout_rate=0.0,
-            decay_model=self.decay_model
-        )
-
-        dynamical_model._transcription_model.decoder[0].weight = torch.nn.Parameter(
-            torch.ones_like(dynamical_model._transcription_model.decoder[0].weight) / 6
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         with torch.no_grad():
@@ -376,8 +419,8 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             dynamical_model.counts(
-                    dynamical_model.input_data(self.ordered_data[:, [0], ...]),
-                    n_time_steps=9
+                dynamical_model.input_data(self.ordered_data[:, [0], ...]),
+                n_time_steps=9
             ).shape,
             (1, 10, 2)
         )
@@ -395,7 +438,8 @@ class TestDynamicalModel(unittest.TestCase):
             use_prior_weights=True,
             transcription_model=get_model('static'),
             input_dropout_rate=0.0,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         with torch.no_grad():
@@ -424,7 +468,8 @@ class TestDynamicalModel(unittest.TestCase):
 
         dynamical_model = SupirFactorBiophysical(
             A,
-            decay_model=self.decay_model
+            decay_model=self.decay_model,
+            freeze_decay_model=self.freeze_model
         )
 
         testy = torch.Tensor(
@@ -503,3 +548,17 @@ class TestDynamicalModel(unittest.TestCase):
 class TestDynamicalModelNoDecay(TestDynamicalModel):
 
     decay_model = False
+
+
+class TestDynamicalModelTuneDecay(TestDynamicalModel):
+
+    decay_model = decay
+
+    @unittest.skip
+    def test_forward_counts():
+        pass
+
+
+class TestDynamicalModelFreezeDecay(TestDynamicalModelTuneDecay):
+
+    freeze_model = True

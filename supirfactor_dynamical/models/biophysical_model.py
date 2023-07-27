@@ -22,6 +22,7 @@ class SupirFactorBiophysical(
     _pretrained_count = False
 
     time_dependent_decay = True
+    freeze_decay_model = False
 
     def __init__(
         self,
@@ -117,6 +118,7 @@ class SupirFactorBiophysical(
 
             if freeze_decay_model:
                 self.freeze(self._decay_model)
+                self.freeze_decay_model = freeze_decay_model
 
         else:
 
@@ -283,21 +285,18 @@ class SupirFactorBiophysical(
         )
 
         # Run the decay model
-        if self._decay_model is not None:
-            if hidden_state:
-                _hidden = self._decay_model.hidden_state
-            else:
-                _hidden = None
+        if self.freeze_decay_model:
+            with torch.no_grad():
+                x_negative = self.forward_decay_model(
+                    x,
+                    hidden_state
+                )
 
-            x_negative = self._decay_model(
-                x,
-                hidden_state=_hidden
-            )
-
-            # Rescale because decay is \lambda * x
-            x_negative = self.scale_count_to_velocity(x_negative)
         else:
-            x_negative = None
+            x_negative = self.forward_decay_model(
+                x,
+                hidden_state
+            )
 
         if return_submodels:
             return x_positive, x_negative
@@ -307,6 +306,26 @@ class SupirFactorBiophysical(
 
         else:
             return torch.add(x_positive, x_negative)
+
+    def forward_decay_model(
+        self,
+        x,
+        hidden_state=False
+    ):
+
+        if self._decay_model is None:
+            return None
+
+        elif hidden_state:
+            x_negative = self._decay_model(
+                x,
+                hidden_state=self._decay_model.hidden_state
+            )
+
+        else:
+            x_negative = self._decay_model(x)
+
+        return self.scale_count_to_velocity(x_negative)
 
     @torch.inference_mode()
     def counts(

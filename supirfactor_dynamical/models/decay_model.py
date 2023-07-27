@@ -65,8 +65,7 @@ class DecayModule(
         self,
         x,
         hidden_state=None,
-        return_decay_constants=False,
-        base_decay=None
+        return_decay_constants=False
     ):
 
         # Encode into latent layer
@@ -86,9 +85,6 @@ class DecayModule(
             _x = torch.nn.LeakyReLU(1e-4)(_x)
         else:
             _x = torch.nn.ReLU()(_x)
-
-        if base_decay is not None:
-            _x = torch.add(_x, base_decay)
 
         _x = torch.mul(_x, -1.0)
 
