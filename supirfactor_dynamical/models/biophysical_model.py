@@ -1,4 +1,5 @@
 import torch
+import contextlib
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
@@ -274,29 +275,15 @@ class SupirFactorBiophysical(
             )
 
         # Run the transcriptional model
-        if hidden_state:
-            _hidden = self._transcription_model.hidden_final
-        else:
-            _hidden = None
-
-        x_positive = self._transcription_model(
+        x_positive = self.forward_transcription_model(
             x,
-            hidden_state=_hidden
+            hidden_state
         )
 
-        # Run the decay model
-        if self.freeze_decay_model:
-            with torch.no_grad():
-                x_negative = self.forward_decay_model(
-                    x,
-                    hidden_state
-                )
-
-        else:
-            x_negative = self.forward_decay_model(
-                x,
-                hidden_state
-            )
+        x_negative = self.forward_decay_model(
+            x,
+            hidden_state
+        )
 
         if return_submodels:
             return x_positive, x_negative
@@ -307,23 +294,45 @@ class SupirFactorBiophysical(
         else:
             return torch.add(x_positive, x_negative)
 
+    def forward_transcription_model(
+        self,
+        x,
+        hidden_state=False
+    ):
+
+        if hidden_state:
+            _hidden = self._transcription_model.hidden_final
+        else:
+            _hidden = None
+
+        return self._transcription_model(
+            x,
+            hidden_state=_hidden
+        )
+
     def forward_decay_model(
         self,
         x,
         hidden_state=False
     ):
 
-        if self._decay_model is None:
-            return None
-
-        elif hidden_state:
-            x_negative = self._decay_model(
-                x,
-                hidden_state=self._decay_model.hidden_state
-            )
-
+        if self.freeze_decay_model:
+            _grad = torch.no_grad
         else:
-            x_negative = self._decay_model(x)
+            _grad = contextlib.nullcontext
+
+        with _grad():
+            if self._decay_model is None:
+                return None
+
+            elif hidden_state:
+                x_negative = self._decay_model(
+                    x,
+                    hidden_state=self._decay_model.hidden_state
+                )
+
+            else:
+                x_negative = self._decay_model(x)
 
         return self.scale_count_to_velocity(x_negative)
 

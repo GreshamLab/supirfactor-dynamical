@@ -101,14 +101,11 @@ class _TrainingMixin:
             _batch_losses = []
             for train_x in training_dataloader:
 
-                mse = loss_function(
-                    self._slice_data_and_forward(train_x),
-                    self.output_data(train_x)
+                mse = self._training_step(
+                    train_x,
+                    optimizer,
+                    loss_function
                 )
-
-                mse.backward()
-                optimizer.step()
-                optimizer.zero_grad()
 
                 _batch_losses.append(mse.item())
 
@@ -139,6 +136,56 @@ class _TrainingMixin:
         )
 
         return self
+
+    def _training_step(
+        self,
+        train_x,
+        optimizer,
+        loss_function
+    ):
+        mse = self._calculate_loss(
+            train_x,
+            loss_function
+        )
+
+        mse.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        return mse
+
+    def _calculate_loss(
+        self,
+        x,
+        loss_function
+    ):
+        return loss_function(
+            self._slice_data_and_forward(x),
+            self.output_data(x)
+        )
+
+    def _calculate_validation_loss(
+        self,
+        validation_dataloader,
+        loss_function
+    ):
+        # Get validation losses during training
+        # if validation data was provided
+        if validation_dataloader is not None:
+
+            _validation_batch_losses = []
+
+            with torch.no_grad():
+                for val_x in validation_dataloader:
+
+                    _validation_batch_losses.append(
+                        self._calculate_loss(
+                            val_x,
+                            loss_function
+                        ).item()
+                    )
+
+            return np.mean(_validation_batch_losses)
 
     def set_dropouts(
         self,
@@ -211,29 +258,6 @@ class _TrainingMixin:
             self.output_t_plus_one = output_t_plus_one
 
         return self
-
-    def _calculate_validation_loss(
-        self,
-        validation_dataloader,
-        loss_function
-    ):
-        # Get validation losses during training
-        # if validation data was provided
-        if validation_dataloader is not None:
-
-            _validation_batch_losses = []
-
-            with torch.no_grad():
-                for val_x in validation_dataloader:
-
-                    _validation_batch_losses.append(
-                        loss_function(
-                            self._slice_data_and_forward(val_x),
-                            self.output_data(val_x)
-                        ).item()
-                    )
-
-            return np.mean(_validation_batch_losses)
 
     @torch.inference_mode()
     def r2(

@@ -100,6 +100,33 @@ class DecayModule(
     def output_data(self, x, **kwargs):
 
         return torch.multiply(
-            torch.multiply(x[..., 1], x[..., 0]),
+            torch.multiply(x[..., -1], x[..., 0]),
             -1.0
         )
+
+    def _calculate_loss(
+        self,
+        x,
+        loss_function
+    ):
+        """
+        Calculate MSE for nonzero values only.
+        Otherwise loss is dominated by zero-zero-zeros
+
+        :param x: _description_
+        :type x: _type_
+        :param loss_function: _description_
+        :type loss_function: _type_
+        :return: _description_
+        :rtype: _type_
+        """
+
+        _comparison_data = self.output_data(x)
+
+        _scale = torch.numel(_comparison_data)
+        _scale /= torch.count_nonzero(_comparison_data)
+
+        return loss_function(
+            self._slice_data_and_forward(x),
+            _comparison_data
+        ) * _scale
