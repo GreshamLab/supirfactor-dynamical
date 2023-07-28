@@ -24,14 +24,15 @@ class SupirFactorBiophysical(
     time_dependent_decay = True
 
     optimize_decay_model = False
-    optimize_decay_model_loss_scaler = 1
+    decay_model_loss_scaler = 1.0
 
     def __init__(
         self,
         prior_network,
         trained_count_model=None,
         decay_model=None,
-        optimize_decay_model=False,
+        joint_optimize_decay_model=False,
+        decay_model_loss_scaler=1.0,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -129,7 +130,8 @@ class SupirFactorBiophysical(
 
             self.time_dependent_decay = time_dependent_decay
 
-        self.optimize_decay_model = optimize_decay_model
+        self.joint_optimize_decay_model = joint_optimize_decay_model
+        self.decay_model_loss_scaler = decay_model_loss_scaler
         self.output_relu = output_relu
 
     def train(self, *args, **kwargs):
@@ -351,11 +353,11 @@ class SupirFactorBiophysical(
             self.output_data(x)
         )
 
-        if self.optimize_decay_model and self._decay_model is not None:
+        if self.joint_optimize_decay_model and self._decay_model is not None:
             loss_decay = self._decay_model._calculate_loss(
                 x,
                 loss_function
-            ) * self.optimize_decay_model_loss_scaler
+            ) * self.decay_model_loss_scaler
 
             loss_full = loss_full + loss_decay
 
