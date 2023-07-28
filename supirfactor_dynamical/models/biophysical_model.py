@@ -1,5 +1,4 @@
 import torch
-import contextlib
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
@@ -23,14 +22,16 @@ class SupirFactorBiophysical(
     _pretrained_count = False
 
     time_dependent_decay = True
-    freeze_decay_model = False
+
+    optimize_decay_model = False
+    optimize_decay_model_loss_scaler = 1
 
     def __init__(
         self,
         prior_network,
         trained_count_model=None,
         decay_model=None,
-        freeze_decay_model=None,
+        optimize_decay_model=False,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -117,10 +118,6 @@ class SupirFactorBiophysical(
             self._decay_model = decay_model
             self._pretrained_decay = True
 
-            if freeze_decay_model:
-                self.freeze(self._decay_model)
-                self.freeze_decay_model = freeze_decay_model
-
         else:
 
             self._decay_model = DecayModule(
@@ -132,6 +129,7 @@ class SupirFactorBiophysical(
 
             self.time_dependent_decay = time_dependent_decay
 
+        self.optimize_decay_model = optimize_decay_model
         self.output_relu = output_relu
 
     def train(self, *args, **kwargs):
@@ -262,17 +260,10 @@ class SupirFactorBiophysical(
         """
 
         # Run the pretrained count model if provided
-        if self._count_model is not None:
-
-            if hidden_state:
-                _hidden = self._count_model.hidden_final
-            else:
-                _hidden = None
-
-            x = self._count_model(
-                x,
-                hidden_state=_hidden
-            )
+        x = self.forward_count_model(
+            x,
+            hidden_state
+        )
 
         # Run the transcriptional model
         x_positive = self.forward_transcription_model(
@@ -316,25 +307,59 @@ class SupirFactorBiophysical(
         hidden_state=False
     ):
 
-        if self.freeze_decay_model:
-            _grad = torch.no_grad
+        if self._decay_model is None:
+            return None
+
+        elif hidden_state:
+            x_negative = self._decay_model(
+                x,
+                hidden_state=self._decay_model.hidden_state
+            )
+
         else:
-            _grad = contextlib.nullcontext
-
-        with _grad():
-            if self._decay_model is None:
-                return None
-
-            elif hidden_state:
-                x_negative = self._decay_model(
-                    x,
-                    hidden_state=self._decay_model.hidden_state
-                )
-
-            else:
-                x_negative = self._decay_model(x)
+            x_negative = self._decay_model(x)
 
         return self.scale_count_to_velocity(x_negative)
+
+    def forward_count_model(
+        self,
+        x,
+        hidden_state=False
+    ):
+        if self._count_model is not None:
+
+            if hidden_state:
+                _hidden = self._count_model.hidden_final
+            else:
+                _hidden = None
+
+            x = self._count_model(
+                x,
+                hidden_state=_hidden
+            )
+
+        return x
+
+    def _calculate_loss(
+        self,
+        x,
+        loss_function
+    ):
+
+        loss_full = loss_function(
+            self._slice_data_and_forward(x),
+            self.output_data(x)
+        )
+
+        if self.optimize_decay_model and self._decay_model is not None:
+            loss_decay = self._decay_model._calculate_loss(
+                x,
+                loss_function
+            ) * self.optimize_decay_model_loss_scaler
+
+            loss_full = loss_full + loss_decay
+
+        return loss_full
 
     @torch.inference_mode()
     def counts(

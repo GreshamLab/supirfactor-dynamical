@@ -27,42 +27,19 @@ from ._stubs import (
     A,
     T,
     XV_tensor,
-    XTV_tensor
+    XTV_tensor,
+    XTVD_tensor
 )
 
 temp = tempfile.TemporaryDirectory(prefix='pytest')
 temp_name = temp.name
 temp_file_name = os.path.join(temp.name, "static.h5")
 
-decay = DecayModule(4, 2)
-
-for d in DataLoader(
-    TimeDataset(
-        XV_tensor,
-        T,
-        0,
-        4,
-        1,
-        sequence_length=3
-    ),
-    batch_size=25
-):
-
-    decay.train_model(
-        [torch.stack((
-            d[..., 0],
-            torch.nn.ReLU()(d[..., 1] * -1) * -1
-            ),
-            dim=-1
-        )],
-        10
-    )
-
 
 class TestDynamicalModel(unittest.TestCase):
 
     decay_model = None
-    freeze_model = False
+    optimize_decay_too = False
 
     def setUp(self) -> None:
         super().setUp()
@@ -105,6 +82,12 @@ class TestDynamicalModel(unittest.TestCase):
             dim=-1
         )
 
+        self.dynamical_model = SupirFactorBiophysical(
+            A,
+            decay_model=self.decay_model,
+            optimize_decay_model=self.optimize_decay_too
+        )
+
     def test_construction(self):
 
         self.count_model = get_model('rnn')(
@@ -116,8 +99,7 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             A,
             trained_count_model=self.count_model,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
+            decay_model=self.decay_model
         )
 
         self.dynamical_model.train_model(self.velocity_data, 50)
@@ -150,12 +132,6 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_training_offset(self):
 
-        self.dynamical_model = SupirFactorBiophysical(
-            A,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
-        )
-
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
@@ -186,12 +162,6 @@ class TestDynamicalModel(unittest.TestCase):
             )
 
     def test_training_predict(self):
-
-        self.dynamical_model = SupirFactorBiophysical(
-            A,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
-        )
 
         self.dynamical_model.set_time_parameters(
             n_additional_predictions=1,
@@ -229,12 +199,6 @@ class TestDynamicalModel(unittest.TestCase):
             )
 
     def test_training_scale(self):
-
-        self.dynamical_model = SupirFactorBiophysical(
-            A,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
-        )
 
         self.dynamical_model.set_scaling(
             velocity_scaling=np.ones(4),
@@ -276,8 +240,7 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             A,
             decay_model=self.decay_model,
-            time_dependent_decay=False,
-            freeze_decay_model=self.freeze_model
+            time_dependent_decay=False
         )
 
         self.dynamical_model.set_time_parameters(
@@ -320,8 +283,7 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             A,
             decay_model=self.decay_model,
-            time_dependent_decay=False,
-            freeze_decay_model=self.freeze_model
+            time_dependent_decay=False
         )
 
         self.dynamical_model.set_scaling(
@@ -370,17 +332,10 @@ class TestDynamicalModel(unittest.TestCase):
             prediction_length=1,
             prediction_loss_offset=1,
             model_type='biophysical',
-            return_erv=True,
-            freeze_decay_model=self.freeze_model
+            return_erv=True
         )
 
     def test_erv_passthrough(self):
-
-        self.dynamical_model = SupirFactorBiophysical(
-            A,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
-        )
 
         self.dynamical_model.set_time_parameters(
             n_additional_predictions=1,
@@ -405,8 +360,7 @@ class TestDynamicalModel(unittest.TestCase):
             use_prior_weights=True,
             transcription_model=get_model('static'),
             input_dropout_rate=0.0,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
+            decay_model=self.decay_model
         )
 
         with torch.no_grad():
@@ -438,8 +392,7 @@ class TestDynamicalModel(unittest.TestCase):
             use_prior_weights=True,
             transcription_model=get_model('static'),
             input_dropout_rate=0.0,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
+            decay_model=self.decay_model
         )
 
         with torch.no_grad():
@@ -466,12 +419,6 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_input_output(self):
 
-        dynamical_model = SupirFactorBiophysical(
-            A,
-            decay_model=self.decay_model,
-            freeze_decay_model=self.freeze_model
-        )
-
         testy = torch.Tensor(
             np.stack((
                 np.arange(100).reshape(5, 10, 2),
@@ -481,66 +428,66 @@ class TestDynamicalModel(unittest.TestCase):
             )
         )
 
-        self.assertFalse(dynamical_model._offset_data)
+        self.assertFalse(self.dynamical_model._offset_data)
 
         torch.testing.assert_close(
-            dynamical_model.input_data(testy),
+            self.dynamical_model.input_data(testy),
             testy[..., 0]
         )
 
         torch.testing.assert_close(
-            dynamical_model.output_data(testy),
+            self.dynamical_model.output_data(testy),
             testy[..., 1]
         )
 
-        dynamical_model.set_time_parameters(
+        self.dynamical_model.set_time_parameters(
             loss_offset=5
         )
 
         self.assertEqual(
-            dynamical_model._get_data_offsets(
-                dynamical_model.input_data(testy)
+            self.dynamical_model._get_data_offsets(
+                self.dynamical_model.input_data(testy)
             ),
             (10, 5)
         )
 
         torch.testing.assert_close(
-            dynamical_model.input_data(testy),
+            self.dynamical_model.input_data(testy),
             testy[..., 0]
         )
 
         torch.testing.assert_close(
-            dynamical_model.output_data(testy),
+            self.dynamical_model.output_data(testy),
             testy[:, 5:, :, 1]
         )
 
-        dynamical_model.set_time_parameters(
+        self.dynamical_model.set_time_parameters(
             loss_offset=0,
             n_additional_predictions=5
         )
 
         torch.testing.assert_close(
-            dynamical_model.input_data(testy),
+            self.dynamical_model.input_data(testy),
             testy[:, :5, :, 0]
         )
 
         torch.testing.assert_close(
-            dynamical_model.output_data(testy),
+            self.dynamical_model.output_data(testy),
             testy[..., 1]
         )
 
-        dynamical_model.set_time_parameters(
+        self.dynamical_model.set_time_parameters(
             loss_offset=3,
             n_additional_predictions=3
         )
 
         torch.testing.assert_close(
-            dynamical_model.input_data(testy),
+            self.dynamical_model.input_data(testy),
             testy[:, :7, :, 0]
         )
 
         torch.testing.assert_close(
-            dynamical_model.output_data(testy),
+            self.dynamical_model.output_data(testy),
             testy[:, 3:, :, 1]
         )
 
@@ -552,13 +499,31 @@ class TestDynamicalModelNoDecay(TestDynamicalModel):
 
 class TestDynamicalModelTuneDecay(TestDynamicalModel):
 
-    decay_model = decay
+    def setUp(self) -> None:
+        # Pretrain a decay module a bit for tuned testing later
+        self.decay_model = DecayModule(4, 2)
+
+        self.decay_model.train_model(
+            [XTVD_tensor],
+            10
+        )
+
+        return super().setUp()
 
     @unittest.skip
     def test_forward_counts():
         pass
 
 
-class TestDynamicalModelFreezeDecay(TestDynamicalModelTuneDecay):
+class TestDynamicalModelJointDecay(TestDynamicalModel):
 
-    freeze_model = True
+    optimize_decay_too = True
+
+
+class TestDynamicalModelJointDecayScaled(TestDynamicalModel):
+
+    optimize_decay_too = True
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.dynamical_model.optimize_decay_model_loss_scaler = 200

@@ -47,4 +47,21 @@ XV_tensor = torch.stack(
     dim=-1
 )
 
+XVD_tensor = torch.stack(
+    (
+        torch.tensor(
+            TruncRobustScaler(with_centering=False).fit_transform(X)
+        ),
+        torch.tensor(
+            TruncRobustScaler(with_centering=False).fit_transform(V)
+        ),
+        torch.full_like(
+            X_tensor,
+            0.02
+        )
+    ),
+    dim=-1
+)
+
 XTV_tensor = torch.clone(XV_tensor).reshape(25, 4, 4, 2)
+XTVD_tensor = torch.clone(XVD_tensor).reshape(25, 4, 4, 3)
