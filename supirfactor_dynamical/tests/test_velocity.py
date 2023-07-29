@@ -159,6 +159,10 @@ class TestVelocity(unittest.TestCase):
         c = torch.div(X_tensor, c_scale[None, :])
         v = torch.div(V_tensor, v_scale[None, :])
 
+        r = torch.rand(10, 4)
+        rc = torch.div(r, c_scale[None, :])
+        rv = torch.div(r, v_scale[None, :])
+
         model = get_model(self.model, velocity=True)(
             A,
             use_prior_weights=True
@@ -209,4 +213,14 @@ class TestVelocity(unittest.TestCase):
             npt.assert_almost_equal(
                 np.diag(c_scale / v_scale),
                 model.count_to_velocity_scaler.numpy()
+            )
+
+            torch.testing.assert_close(
+                model.scale_velocity_to_count(rv),
+                rc
+            )
+
+            torch.testing.assert_close(
+                model.scale_count_to_velocity(rc),
+                rv
             )

@@ -493,6 +493,47 @@ class TestDynamicalModel(unittest.TestCase):
             testy[:, 3:, :, 1]
         )
 
+    def test_joint_loss(self):
+
+        self.dynamical_model.eval()
+        x = self.dynamical_model.output_data(XTVD_tensor)
+        x_bar = self.dynamical_model(
+            self.dynamical_model.input_data(XTVD_tensor)
+        )
+        loss = self.dynamical_model._calculate_loss(
+            XTVD_tensor,
+            torch.nn.MSELoss(),
+            return_separate_losses=True
+        )
+
+        npt.assert_almost_equal(
+            loss[0].item(),
+            torch.nn.MSELoss()(
+                x,
+                x_bar
+            ).item()
+        )
+
+        if not self.dynamical_model.joint_optimize_decay_model:
+            self.assertIsNone(loss[1])
+
+        else:
+            d = torch.multiply(
+                XTVD_tensor[..., 0],
+                XTVD_tensor[..., -1]
+            ) * -1
+            d_bar = self.dynamical_model._decay_model(
+                XTVD_tensor[..., 0]
+            )
+
+            npt.assert_almost_equal(
+                loss[1].item(),
+                torch.nn.MSELoss()(
+                    d,
+                    d_bar
+                ).item() * self.decay_scaler
+            )
+
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):
 

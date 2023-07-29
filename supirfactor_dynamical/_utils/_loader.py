@@ -29,6 +29,7 @@ SCALER_ARGS = [
 
 DEPRECATED_ARGS = [
     '_decay_model',
+    '_pretrained_decay',
     'g'
 ]
 

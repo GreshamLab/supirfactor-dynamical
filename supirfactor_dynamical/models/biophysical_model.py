@@ -18,7 +18,6 @@ class SupirFactorBiophysical(
 
     type_name = 'biophysical'
 
-    _pretrained_decay = False
     _pretrained_count = False
 
     time_dependent_decay = True
@@ -117,7 +116,6 @@ class SupirFactorBiophysical(
                 decay_model = read(decay_model)
 
             self._decay_model = decay_model
-            self._pretrained_decay = True
 
         else:
 
@@ -139,9 +137,6 @@ class SupirFactorBiophysical(
 
         if self._count_model is not None:
             self._count_model.eval()
-
-        if self._pretrained_decay:
-            self._decay_model.eval()
 
         return self
 
@@ -345,7 +340,8 @@ class SupirFactorBiophysical(
     def _calculate_loss(
         self,
         x,
-        loss_function
+        loss_function,
+        return_separate_losses=False
     ):
 
         loss_full = loss_function(
@@ -359,9 +355,17 @@ class SupirFactorBiophysical(
                 loss_function
             ) * self.decay_model_loss_scaler
 
-            loss_full = loss_full + loss_decay
+        else:
+            loss_decay = None
 
-        return loss_full
+        if return_separate_losses:
+            return loss_full, loss_decay
+
+        elif loss_decay is None:
+            return loss_full
+
+        else:
+            return loss_full + loss_decay
 
     @torch.inference_mode()
     def counts(

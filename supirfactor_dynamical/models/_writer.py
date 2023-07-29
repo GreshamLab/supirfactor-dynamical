@@ -11,7 +11,6 @@ _SERIALIZE_ARGS = [
     'loss_offset',
     '_velocity_model',
     '_pretrained_count',
-    '_pretrained_decay',
     'time_dependent_decay',
     '_velocity_inverse_scaler',
     '_count_inverse_scaler',
