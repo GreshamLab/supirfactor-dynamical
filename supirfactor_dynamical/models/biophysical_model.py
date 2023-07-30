@@ -158,12 +158,6 @@ class SupirFactorBiophysical(
             loss_offset=loss_offset
         )
 
-    def set_scaling(self, *args, **kwargs):
-        if self._decay_model is not None:
-            self._decay_model.set_scaling(*args, **kwargs)
-
-        return super().set_scaling(*args, **kwargs)
-
     @staticmethod
     def freeze(model):
 
@@ -321,7 +315,9 @@ class SupirFactorBiophysical(
             )
 
         else:
-            x_negative = self._decay_model(x)
+            x_negative = self.scale_count_to_velocity(
+                self._decay_model(x)
+            )
 
         return x_negative
 
