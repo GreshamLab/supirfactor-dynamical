@@ -152,10 +152,17 @@ class SupirFactorBiophysical(
                 "Biophysical model does not support offset training; "
                 "this model uses velocity for forward predictions"
             )
+
         return super().set_time_parameters(
             n_additional_predictions=n_additional_predictions,
             loss_offset=loss_offset
         )
+
+    def set_scaling(self, *args, **kwargs):
+        if self._decay_model is not None:
+            self._decay_model.set_scaling(*args, **kwargs)
+
+        return super().set_scaling(*args, **kwargs)
 
     @staticmethod
     def freeze(model):
@@ -316,7 +323,7 @@ class SupirFactorBiophysical(
         else:
             x_negative = self._decay_model(x)
 
-        return self.scale_count_to_velocity(x_negative)
+        return x_negative
 
     def forward_count_model(
         self,
