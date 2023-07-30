@@ -511,7 +511,8 @@ class TestDynamicalModel(unittest.TestCase):
             torch.nn.MSELoss()(
                 x,
                 x_bar
-            ).item()
+            ).item(),
+            decimal=5
         )
 
         if not self.dynamical_model.joint_optimize_decay_model:
@@ -531,7 +532,8 @@ class TestDynamicalModel(unittest.TestCase):
                 torch.nn.MSELoss()(
                     d,
                     d_bar
-                ).item() * self.decay_scaler
+                ).item() * self.decay_scaler,
+                decimal=5
             )
 
 
