@@ -6,6 +6,7 @@ import sys
 import anndata as ad
 import numpy as np
 import pandas as pd
+import scanpy as sc
 
 from sklearn.model_selection import train_test_split
 
@@ -16,7 +17,7 @@ from supirfactor_dynamical import (
     TruncRobustScaler
 )
 
-from supirfactor_dynamical import model_training
+from supirfactor_dynamical import pretrain_and_tune_dynamic_model
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -27,6 +28,11 @@ DEFAULT_DATA = os.path.join(
     DEFAULT_PATH,
     "2021_INFERELATOR_DATA.h5ad"
 )
+TRAINED_DECAY = os.path.join(
+    "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
+    "RAPA_FULL_DECAY_MODEL.h5"
+)
+
 
 print("Supirfactor-rnn Full Training")
 print(" ".join(sys.argv))
@@ -76,9 +82,9 @@ ap.add_argument(
 )
 
 ap.add_argument(
-    "--dropout",
-    dest="dropouts",
-    help="Search Dropout Rates",
+    "--freeze",
+    dest="freeze",
+    help="Freeze Decay",
     action='store_const',
     const=True,
     default=False
@@ -90,29 +96,32 @@ data_file = args.datafile
 prior_file = args.priorfile
 gs_file = args.gsfile
 
-dynamic_outfile = args.outfile + "_{decay}_MODEL.h5"
-dynamic_result_dir = args.outfile + "_{decay}"
+dynamic_outfile = args.outfile + "_BIOPHYSICAL_MODEL.h5"
+dynamic_result_dir = args.outfile
 
 n_epochs = args.epochs
 
-if args.dropouts:
-    hidden_dropout = (0.0, 0.5)
-else:
-    hidden_dropout = (0.0, 0.5)
+hidden_dropout = (0.0, 0.5)
 
 validation_size = 0.25
 random_seed = 1800
 
+count_scaling = TruncRobustScaler(with_centering=False)
+velo_scaling = TruncRobustScaler(with_centering=False)
+
 print(f"Loading and processing data from {data_file}")
 adata = ad.read(data_file)
 
+adata.X = adata.X.astype(np.float32)
+sc.pp.normalize_per_cell(adata, min_counts=0)
 data = np.stack(
     (
-        TruncRobustScaler(with_centering=False).fit_transform(
+        count_scaling.fit_transform(
             adata.X
         ).A,
-        TruncRobustScaler(with_centering=False).fit_transform(
-            adata.layers['rapamycin_velocity']
+        velo_scaling.fit_transform(
+            adata.layers['rapamycin_velocity'] +
+            adata.layers['cell_cycle_velocity']
         )
     ),
     axis=-1
@@ -153,6 +162,36 @@ _test = data[test_idx, ...]
 
 print(f"Training on {_train.shape} and validating on {_test.shape}")
 
+pre_tdl = DataLoader(
+    TimeDataset(
+        _train,
+        time_vector[train_idx],
+        -10,
+        60,
+        1,
+        sequence_length=11,
+        random_seed=random_seed + 200,
+        shuffle_time_vector=[-10, 0]
+    ),
+    batch_size=20,
+    drop_last=True
+)
+
+pre_vdl = DataLoader(
+    TimeDataset(
+        _test,
+        time_vector[test_idx],
+        -10,
+        60,
+        1,
+        sequence_length=11,
+        random_seed=random_seed + 300,
+        shuffle_time_vector=[-10, 0]
+    ),
+    batch_size=20,
+    drop_last=True
+)
+
 dyn_tdl = DataLoader(
     TimeDataset(
         _train,
@@ -160,7 +199,7 @@ dyn_tdl = DataLoader(
         -10,
         60,
         1,
-        sequence_length=70,
+        sequence_length=20,
         random_seed=random_seed + 200,
         shuffle_time_vector=[-10, 0]
     ),
@@ -175,7 +214,7 @@ dyn_vdl = DataLoader(
         -10,
         60,
         1,
-        sequence_length=70,
+        sequence_length=20,
         random_seed=random_seed + 300,
         shuffle_time_vector=[-10, 0]
     ),
@@ -183,27 +222,30 @@ dyn_vdl = DataLoader(
     drop_last=True
 )
 
-for d in ['NO_DECAY', 'CONSTANT_DECAY', 'DYNAMIC_DECAY']:
+bio_model, bio_result, _ = pretrain_and_tune_dynamic_model(
+    pre_tdl,
+    dyn_tdl,
+    prior,
+    n_epochs,
+    pretraining_validation_dataloader=pre_vdl,
+    prediction_tuning_validation_dataloader=dyn_vdl,
+    optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
+    gold_standard=gs,
+    input_dropout_rate=0.5,
+    hidden_dropout_rate=hidden_dropout,
+    prediction_length=10,
+    prediction_loss_offset=10,
+    count_scaling=count_scaling.scale_,
+    velocity_scaling=velo_scaling.scale_,
+    model_type='biophysical',
+    decay_model=TRAINED_DECAY,
+    freeze_decay_model=args.freeze
+)
 
-    bio_model, bio_result, _ = model_training(
-        dyn_tdl,
-        prior,
-        n_epochs,
-        None,
-        validation_dataloader=dyn_vdl,
-        optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
-        gold_standard=gs,
-        hidden_dropout_rate=0.5,
-        prediction_length=10,
-        prediction_loss_offset=0,
-        decay_model=False if d == "NO_DECAY" else None,
-        time_dependent_decay=True if d != 'CONSTANT_DECAY' else False,
-        model_type='biophysical'
-    )
+bio_model.save(dynamic_outfile)
 
-    bio_model.save(dynamic_outfile.format(decay=d))
+os.makedirs(dynamic_result_dir, exist_ok=True)
 
-    os.makedirs(dynamic_result_dir.format(decay=d), exist_ok=True)
-    bio_result.write_result_files(
-        dynamic_result_dir.format(decay=d)
-    )
+bio_result.write_result_files(
+    dynamic_result_dir
+)

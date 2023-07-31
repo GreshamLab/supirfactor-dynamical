@@ -142,6 +142,24 @@ ap.add_argument(
     default=False
 )
 
+ap.add_argument(
+    "--shuffle_data",
+    dest="shuffle_data",
+    help="Shuffle counts to noise data",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
+    "--shuffle_times",
+    dest="shuffle_time",
+    help="Shuffle time labels on cells",
+    action='store_const',
+    const=True,
+    default=False
+)
+
 args = ap.parse_args()
 
 data_file = args.datafile
@@ -151,7 +169,11 @@ _outfile = args.outfile
 
 n_epochs = args.epochs
 layer = args.layer
-shuffle = args.shuffle
+
+if args.shuffle:
+    shuffle = 'Prior'
+else:
+    shuffle = 'False'
 
 static_meta = True
 
@@ -217,6 +239,32 @@ validation_size = 0.25
 print(f"Loading and processing data from {data_file}")
 adata = ad.read(data_file)
 
+if args.shuffle_data:
+    from inferelator.preprocessing.simulate_data import _sim_ints
+
+    def _sim_data(x):
+
+        try:
+            umi = x.sum(axis=1)
+            umi = umi.A1
+        except AttributeError:
+            pass
+
+        try:
+            pvec = x.sum(axis=0)
+            pvec = pvec.A1
+        except AttributeError:
+            pass
+
+        return _sim_ints(
+            pvec / pvec.sum(),
+            umi,
+            sparse=hasattr(x, 'A')
+        )
+
+    adata.X = _sim_data(adata.layers['counts'])
+    shuffle = 'Data'
+
 if layer == "X":
     adata.X = adata.X.astype(np.float32)
     sc.pp.normalize_per_cell(adata, min_counts=0)
@@ -226,12 +274,25 @@ else:
         adata.layers[layer]
     ).astype(np.float32)
 
+if args.shuffle_time:
+    _shuffle_times = ([-10, 60], [0, 88])
+    shuffle = 'Times'
+else:
+    _shuffle_times = ([-10, 0], None)
+
 time_lookup = {
-    'rapa': (adata.obs['program_rapa_time'].values, -10, 60, [-10, 0]),
-    'cc': (adata.obs['program_cc_time'].values, 0, 88, None)
+    'rapa': (
+        adata.obs['program_rapa_time'].values,
+        -10, 60, _shuffle_times[0]
+    ),
+    'cc': (
+        adata.obs['program_cc_time'].values,
+        0, 88, _shuffle_times[1]
+    )
 }
 
 print(f"Loading and processing priors from {prior_file}")
+
 prior = pd.read_csv(
     prior_file,
     sep="\t",
@@ -546,7 +607,7 @@ def _train_cv(
         n_epochs
     ]
 
-    if shuffle:
+    if shuffle == 'Prior':
         prior_cv = ManagePriors.shuffle_priors(
             prior_cv,
             -1,

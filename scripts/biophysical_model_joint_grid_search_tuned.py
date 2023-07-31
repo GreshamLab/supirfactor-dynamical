@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    model_training,
+    pretrain_and_tune_dynamic_model,
     TruncRobustScaler
 )
 
@@ -103,9 +103,18 @@ ap.add_argument(
 )
 
 ap.add_argument(
-    "--predict_offsets",
-    dest="offsets",
-    help="Search Predictive Offset Values",
+    "--pretrain_decay",
+    dest="pretrained_decay",
+    help="Use pretrained decay",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
+    "--decay_scales",
+    dest="decay_scales",
+    help="Search Decay Loss Scales",
     action='store_const',
     const=True,
     default=False
@@ -128,6 +137,19 @@ gs_file = args.gsfile
 _outfile = args.outfile
 
 n_epochs = args.epochs
+
+if args.decay_scales:
+    decay_loss_scales = [
+        1,
+        10,
+        50,
+        100,
+        200
+    ]
+else:
+    decay_loss_scales = [
+        200
+    ]
 
 static_meta = True
 
@@ -190,7 +212,8 @@ data = np.stack(
         velo_scaling.fit_transform(
             adata.layers['rapamycin_velocity'] +
             adata.layers['cell_cycle_velocity']
-        )
+        ),
+        adata.layers['decay_constants']
     ),
     axis=-1
 )
@@ -234,6 +257,7 @@ train_idx, test_idx = train_test_split(
 
 both_cols = [
     "Decay_Model",
+    "Decay_Loss_Scaler",
     "Learning_Rate",
     "Weight_Decay",
     "Seed",
@@ -251,38 +275,34 @@ both_cols = [
 df_cols = both_cols + MetricHandler.get_metric('combined').all_names() + [
     "R2_training", "R2_validation"
 ]
-loss_cols = both_cols + ["Loss_Type"] + list(range(1, n_epochs + 1))
+loss_cols = both_cols + ["Loss_Type"]
 
 
-def prep_loaders(
-    random_seed,
-    time_type='rapa'
-):
+def prep_loaders(random_seed, time_type):
 
     time_vector, tmin, tmax, shuffle_times = time_lookup[time_type]
 
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
-    seq_len = 20
-    batch_size = 25
+    slen = 20
 
-    dyn_tdl = DataLoader(
+    dynamic_pretrain = DataLoader(
         TimeDataset(
             _train,
             time_vector[train_idx],
             tmin,
             tmax,
             1,
-            sequence_length=seq_len,
+            sequence_length=11,
             shuffle_time_vector=shuffle_times,
             random_seed=random_seed + 200
         ),
-        batch_size=batch_size,
+        batch_size=25,
         drop_last=True
     )
 
-    dyn_vdl = DataLoader(
+    dynamic_preval = DataLoader(
         TimeDataset(
             _test,
             time_vector[test_idx],
@@ -290,14 +310,44 @@ def prep_loaders(
             tmax,
             1,
             shuffle_time_vector=shuffle_times,
-            sequence_length=seq_len,
+            sequence_length=11,
             random_seed=random_seed + 300
         ),
-        batch_size=batch_size,
+        batch_size=25,
         drop_last=True
     )
 
-    return dyn_tdl, dyn_vdl
+    dynamic_tdl = DataLoader(
+        TimeDataset(
+            _train,
+            time_vector[train_idx],
+            tmin,
+            tmax,
+            1,
+            sequence_length=slen,
+            shuffle_time_vector=shuffle_times,
+            random_seed=random_seed + 200
+        ),
+        batch_size=25,
+        drop_last=True
+    )
+
+    dynamic_vdl = DataLoader(
+        TimeDataset(
+            _test,
+            time_vector[test_idx],
+            tmin,
+            tmax,
+            1,
+            shuffle_time_vector=shuffle_times,
+            sequence_length=slen,
+            random_seed=random_seed + 300
+        ),
+        batch_size=25,
+        drop_last=True
+    )
+
+    return dynamic_pretrain, dynamic_preval, dynamic_tdl, dynamic_vdl
 
 
 def _results(
@@ -412,7 +462,7 @@ def _process_combined(
 
 def _train_cv(
     lr, wd, sb, db, in_drop, hl_drop,
-    seed, prior_cv, gs_cv, slen
+    seed, prior_cv, gs_cv, slen, loss_scaler
 ):
 
     print(
@@ -423,7 +473,8 @@ def _train_cv(
     )
 
     result_leader = [
-        True,
+        "Joint_Pretrained" if args.pretrained_decay else "Joint",
+        loss_scaler,
         lr,
         wd,
         seed,
@@ -440,72 +491,58 @@ def _train_cv(
     loss_lines = []
     time_loss_lines = []
 
-    inf_results = {k: {} for k in ['None', 'Constant', 'Dynamic', 'Tuned']}
+    inf_results = {}
 
     for tt in ['rapa', 'cc']:
 
-        dyn_tdl, dyn_vdl = prep_loaders(
-            seed,
-            time_type=tt
+        pre_tdl, pre_vdl, tdl, vdl = prep_loaders(seed, tt)
+
+        torch.manual_seed(seed)
+
+        dyn_obj, pre_res, dynamic_results, _erv = pretrain_and_tune_dynamic_model(
+            pre_tdl,
+            tdl,
+            prior,
+            n_epochs,
+            pretraining_validation_dataloader=pre_vdl,
+            prediction_tuning_validation_dataloader=vdl,
+            optimizer_params={'lr': lr, 'weight_decay': wd},
+            gold_standard=gs_cv,
+            input_dropout_rate=in_drop,
+            hidden_dropout_rate=hl_drop,
+            prediction_length=False,
+            decay_model=TRAINED_DECAY if args.pretrained_decay else None,
+            model_type='biophysical',
+            return_erv=True,
+            count_scaling=count_scaling.scale_,
+            velocity_scaling=velo_scaling.scale_,
+            joint_optimize_decay_model=True,
+            decay_model_loss_scaler=loss_scaler
         )
 
-        for d in ['None', 'Constant', 'Dynamic', 'Tuned']:
-
-            result_leader[0] = d
-
-            torch.manual_seed(seed)
-
-            if d == 'None':
-                _dmodel = False
-            elif d == 'Tuned':
-                _dmodel = TRAINED_DECAY
-            else:
-                _dmodel = None
-
-            dyn_obj, dynamic_results, _erv = model_training(
-                dyn_tdl,
-                prior_cv,
-                n_epochs,
-                validation_dataloader=dyn_vdl,
-                optimizer_params={'lr': lr, 'weight_decay': wd},
-                gold_standard=gs_cv,
-                input_dropout_rate=in_drop,
-                hidden_dropout_rate=hl_drop,
-                prediction_length=False,
-                model_type='biophysical',
-                return_erv=True,
-                decay_model=_dmodel,
-                time_dependent_decay=True if d != 'Constant' else False,
-                count_scaling=count_scaling.scale_,
-                velocity_scaling=velo_scaling.scale_
-            )
-
-            r, ll, time_loss = _results(
-                result_leader,
-                dynamic_results,
-                dyn_obj,
-                'decay',
-                tt
-            )
-
-            inf_results[d][tt] = (dynamic_results, _erv)
-
-            time_loss_lines.append(time_loss)
-            results.extend(r)
-            loss_lines.extend(ll)
-
-    for d in ['None', 'Constant', 'Dynamic', 'Tuned']:
-        result_leader[0] = d
-
-        results.extend(
-            _process_combined(
-                result_leader,
-                inf_results[d],
-                gs_cv,
-                prior_cv,
-                'decay'
-            )
+        r, ll, time_loss = _results(
+            result_leader,
+            dynamic_results,
+            dyn_obj,
+            'decay',
+            tt
         )
+
+        inf_results[tt] = (dynamic_results, _erv)
+
+        time_loss_lines.append(time_loss)
+        results.extend(r)
+        loss_lines.extend(ll)
+
+    results.extend(
+        _process_combined(
+            result_leader,
+            inf_results,
+            gs_cv,
+            prior_cv,
+            'decay'
+        )
+    )
 
     results = pd.DataFrame(
         results,
@@ -514,7 +551,7 @@ def _train_cv(
 
     losses = pd.DataFrame(
         loss_lines,
-        columns=loss_cols
+        columns=loss_cols + list(range(1, len(dyn_obj.training_loss) + 1))
     )
 
     try:
@@ -552,7 +589,8 @@ for j, params in enumerate(
         batch_sizes,
         dropouts,
         seqlens,
-        seeds
+        seeds,
+        decay_loss_scales
     )
 ):
 
@@ -561,7 +599,7 @@ for j, params in enumerate(
         if _j != SLURM_ID:
             continue
 
-    wd, lr, (s_batch, d_batch), (in_drop, hl_drop), slen, i = params
+    wd, lr, (s_batch, d_batch), (in_drop, hl_drop), slen, i, ls = params
 
     prior_cv, gs_cv = ManagePriors.cross_validate_gold_standard(
         prior,
@@ -588,7 +626,8 @@ for j, params in enumerate(
         i,
         prior_cv,
         gs_cv,
-        slen
+        slen,
+        ls
     )
 
     _write(results, outfile_results, _header)

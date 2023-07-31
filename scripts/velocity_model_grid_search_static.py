@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
+    get_model,
     model_training,
     TruncRobustScaler
 )
@@ -37,10 +38,6 @@ DEFAULT_GS = os.path.join(
 DEFAULT_DATA = os.path.join(
     DEFAULT_PATH,
     "2021_INFERELATOR_DATA.h5ad"
-)
-TRAINED_DECAY = os.path.join(
-    "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
-    "RAPA_FULL_DECAY_MODEL.h5"
 )
 
 SLURM_ID = os.environ.get('SLURM_ARRAY_TASK_ID', None)
@@ -103,15 +100,6 @@ ap.add_argument(
 )
 
 ap.add_argument(
-    "--predict_offsets",
-    dest="offsets",
-    help="Search Predictive Offset Values",
-    action='store_const',
-    const=True,
-    default=False
-)
-
-ap.add_argument(
     "--epochs",
     dest="epochs",
     help="NUM Epochs",
@@ -167,7 +155,7 @@ dropouts = [
 ]
 
 seqlens = [
-    20
+    None
 ]
 
 seeds = list(range(111, 121))
@@ -264,21 +252,15 @@ def prep_loaders(
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
-    seq_len = 20
-    batch_size = 25
-
     dyn_tdl = DataLoader(
         TimeDataset(
             _train,
             time_vector[train_idx],
             tmin,
             tmax,
-            1,
-            sequence_length=seq_len,
-            shuffle_time_vector=shuffle_times,
             random_seed=random_seed + 200
         ),
-        batch_size=batch_size,
+        batch_size=batch_sizes[0][0],
         drop_last=True
     )
 
@@ -288,12 +270,9 @@ def prep_loaders(
             time_vector[test_idx],
             tmin,
             tmax,
-            1,
-            shuffle_time_vector=shuffle_times,
-            sequence_length=seq_len,
             random_seed=random_seed + 300
         ),
-        batch_size=batch_size,
+        batch_size=batch_sizes[0][0],
         drop_last=True
     )
 
@@ -342,21 +321,24 @@ def _results(
 
     results = [result_leader + result_line]
 
-    if obj is not None and hasattr(obj, "training_r2_over_time"):
+    try:
+        if obj is not None and hasattr(obj, "training_r2_over_time"):
 
-        _n = len(obj.training_r2_over_time)
-        _cols = both_cols + ["Loss_Type"] + list(range(0, _n))
+            _n = len(obj.training_r2_over_time)
+            _cols = both_cols + ["Loss_Type"] + list(range(0, _n))
 
-        time_dependent_loss = pd.DataFrame(
-            [
-                result_leader + _t_lead + obj.training_r2_over_time,
-                result_leader + _v_lead + obj.validation_r2_over_time
-            ],
-            columns=_cols
-        )
+            time_dependent_loss = pd.DataFrame(
+                [
+                    result_leader + _t_lead + obj.training_r2_over_time,
+                    result_leader + _v_lead + obj.validation_r2_over_time
+                ],
+                columns=_cols
+            )
 
-    else:
+        else:
+            time_dependent_loss = None
 
+    except TypeError:
         time_dependent_loss = None
 
     return results, loss_lines, time_dependent_loss
@@ -423,7 +405,7 @@ def _train_cv(
     )
 
     result_leader = [
-        True,
+        False,
         lr,
         wd,
         seed,
@@ -440,72 +422,41 @@ def _train_cv(
     loss_lines = []
     time_loss_lines = []
 
-    inf_results = {k: {} for k in ['None', 'Constant', 'Dynamic', 'Tuned']}
-
     for tt in ['rapa', 'cc']:
 
-        dyn_tdl, dyn_vdl = prep_loaders(
+        static_dl, static_vdl = prep_loaders(
             seed,
             time_type=tt
         )
 
-        for d in ['None', 'Constant', 'Dynamic', 'Tuned']:
+        torch.manual_seed(seed)
 
-            result_leader[0] = d
-
-            torch.manual_seed(seed)
-
-            if d == 'None':
-                _dmodel = False
-            elif d == 'Tuned':
-                _dmodel = TRAINED_DECAY
-            else:
-                _dmodel = None
-
-            dyn_obj, dynamic_results, _erv = model_training(
-                dyn_tdl,
-                prior_cv,
-                n_epochs,
-                validation_dataloader=dyn_vdl,
-                optimizer_params={'lr': lr, 'weight_decay': wd},
-                gold_standard=gs_cv,
-                input_dropout_rate=in_drop,
-                hidden_dropout_rate=hl_drop,
-                prediction_length=False,
-                model_type='biophysical',
-                return_erv=True,
-                decay_model=_dmodel,
-                time_dependent_decay=True if d != 'Constant' else False,
-                count_scaling=count_scaling.scale_,
-                velocity_scaling=velo_scaling.scale_
-            )
-
-            r, ll, time_loss = _results(
-                result_leader,
-                dynamic_results,
-                dyn_obj,
-                'decay',
-                tt
-            )
-
-            inf_results[d][tt] = (dynamic_results, _erv)
-
-            time_loss_lines.append(time_loss)
-            results.extend(r)
-            loss_lines.extend(ll)
-
-    for d in ['None', 'Constant', 'Dynamic', 'Tuned']:
-        result_leader[0] = d
-
-        results.extend(
-            _process_combined(
-                result_leader,
-                inf_results[d],
-                gs_cv,
-                prior_cv,
-                'decay'
-            )
+        dyn_obj, dynamic_results, _erv = model_training(
+            static_dl,
+            prior_cv,
+            n_epochs,
+            validation_dataloader=static_vdl,
+            optimizer_params={'lr': lr, 'weight_decay': wd},
+            gold_standard=gs_cv,
+            input_dropout_rate=in_drop,
+            hidden_dropout_rate=hl_drop,
+            prediction_length=False,
+            model_type=get_model('static_meta', velocity=True),
+            return_erv=True,
+            output_relu=False
         )
+
+        r, ll, time_loss = _results(
+            result_leader,
+            dynamic_results,
+            dyn_obj,
+            'static_meta',
+            tt
+        )
+
+        time_loss_lines.append(time_loss)
+        results.extend(r)
+        loss_lines.extend(ll)
 
     results = pd.DataFrame(
         results,

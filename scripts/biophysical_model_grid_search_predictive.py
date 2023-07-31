@@ -12,12 +12,13 @@ import scanpy as sc
 from pandas.api.types import is_float_dtype
 from sklearn.model_selection import train_test_split
 
+import torch
 from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    TruncRobustScaler,
-    model_training
+    model_training,
+    TruncRobustScaler
 )
 
 from inferelator.preprocessing import ManagePriors
@@ -37,11 +38,15 @@ DEFAULT_DATA = os.path.join(
     DEFAULT_PATH,
     "2021_INFERELATOR_DATA.h5ad"
 )
+TRAINED_DECAY = os.path.join(
+    "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
+    "RAPA_FULL_DECAY_MODEL.h5"
+)
 
 SLURM_ID = os.environ.get('SLURM_ARRAY_TASK_ID', None)
 SLURM_N = os.environ.get('SLURM_ARRAY_TASK_COUNT', None)
 
-print("Predictive Supirfactor-rnn Grid Search")
+print("Supirfactor-rnn Grid Search")
 print(" ".join(sys.argv))
 
 ap = argparse.ArgumentParser(description="SUPIRFACTOR-RNN Parameter Search")
@@ -115,14 +120,6 @@ ap.add_argument(
     default=200
 )
 
-ap.add_argument(
-    "--layer",
-    dest="layer",
-    help="Data AnnData file",
-    metavar="FILE",
-    default="X"
-)
-
 args = ap.parse_args()
 
 data_file = args.datafile
@@ -131,7 +128,8 @@ gs_file = args.gsfile
 _outfile = args.outfile
 
 n_epochs = args.epochs
-layer = args.layer
+
+static_meta = True
 
 if SLURM_ID is None:
     outfile_loss = _outfile + "_LOSSES.tsv"
@@ -160,15 +158,17 @@ else:
         1e-7
     ]
 
-if args.offsets:
-    offsets = [
-        10
-    ]
-else:
-    offsets = [
-        0
-    ]
+batch_sizes = [
+    (250, 20)
+]
 
+dropouts = [
+    (0.5, 0.0)
+]
+
+seqlens = [
+    20
+]
 
 seeds = list(range(111, 121))
 
@@ -233,11 +233,15 @@ train_idx, test_idx = train_test_split(
 )
 
 both_cols = [
-    "Pretrained_Model",
     "Decay_Model",
     "Learning_Rate",
     "Weight_Decay",
     "Seed",
+    "Static_Batch_Size",
+    "Dynamic_Batch_Size",
+    "Sequence_Length",
+    "Input_Dropout",
+    "Hidden_Layer_Dropout",
     "Output_Layer_Time_Offset",
     "Epochs",
     "Model_Type",
@@ -247,100 +251,53 @@ both_cols = [
 df_cols = both_cols + MetricHandler.get_metric('combined').all_names() + [
     "R2_training", "R2_validation"
 ]
-
-loss_cols = both_cols + ["Loss_Type"]
+loss_cols = both_cols + ["Loss_Type"] + list(range(1, n_epochs + 1))
 
 
 def prep_loaders(
     random_seed,
-    time_type,
-    pretrain=False,
-    tune=False,
-    biophysical=False
+    time_type='rapa'
 ):
 
     time_vector, tmin, tmax, shuffle_times = time_lookup[time_type]
 
-    if biophysical:
-        _train = data[train_idx, :]
-        _test = data[test_idx, :]
-    else:
-        _train = data[train_idx, :, 0]
-        _test = data[test_idx, :, 0]
+    _train = data[train_idx, ...]
+    _test = data[test_idx, ...]
 
-    try:
-        _train = _train.A
-        _test = _test.A
-    except AttributeError:
-        pass
+    seq_len = 20
+    batch_size = 25
 
-    if pretrain:
-        dynamic_pretrain = DataLoader(
-            TimeDataset(
-                _train,
-                time_vector[train_idx],
-                tmin,
-                tmax,
-                1,
-                sequence_length=11,
-                shuffle_time_vector=shuffle_times,
-                random_seed=random_seed + 200
-            ),
-            batch_size=25,
-            drop_last=True
-        )
+    dyn_tdl = DataLoader(
+        TimeDataset(
+            _train,
+            time_vector[train_idx],
+            tmin,
+            tmax,
+            1,
+            sequence_length=seq_len,
+            shuffle_time_vector=shuffle_times,
+            random_seed=random_seed + 200
+        ),
+        batch_size=batch_size,
+        drop_last=True
+    )
 
-        dynamic_preval = DataLoader(
-            TimeDataset(
-                _test,
-                time_vector[test_idx],
-                tmin,
-                tmax,
-                1,
-                shuffle_time_vector=shuffle_times,
-                sequence_length=11,
-                random_seed=random_seed + 300
-            ),
-            batch_size=25,
-            drop_last=True
-        )
-    else:
-        dynamic_pretrain, dynamic_preval = None, None
+    dyn_vdl = DataLoader(
+        TimeDataset(
+            _test,
+            time_vector[test_idx],
+            tmin,
+            tmax,
+            1,
+            shuffle_time_vector=shuffle_times,
+            sequence_length=seq_len,
+            random_seed=random_seed + 300
+        ),
+        batch_size=batch_size,
+        drop_last=True
+    )
 
-    if tune:
-        dynamic_tdl = DataLoader(
-            TimeDataset(
-                _train,
-                time_vector[train_idx],
-                tmin,
-                tmax,
-                1,
-                sequence_length=20,
-                shuffle_time_vector=shuffle_times,
-                random_seed=random_seed + 200
-            ),
-            batch_size=25,
-            drop_last=True
-        )
-
-        dynamic_vdl = DataLoader(
-            TimeDataset(
-                _test,
-                time_vector[test_idx],
-                tmin,
-                tmax,
-                1,
-                shuffle_time_vector=shuffle_times,
-                sequence_length=20,
-                random_seed=random_seed + 300
-            ),
-            batch_size=25,
-            drop_last=True
-        )
-    else:
-        dynamic_tdl, dynamic_vdl = None, None
-
-    return dynamic_pretrain, dynamic_preval, dynamic_tdl, dynamic_vdl
+    return dyn_tdl, dyn_vdl
 
 
 def _results(
@@ -454,67 +411,83 @@ def _process_combined(
 
 
 def _train_cv(
-    lr, wd, offset, seed, prior_cv, gs_cv
+    lr, wd, sb, db, in_drop, hl_drop,
+    seed, prior_cv, gs_cv, slen
 ):
 
     print(
-        f"Training Biophysical model (epochs: {n_epochs}, lr: {lr}, "
-        f"seed: {seed}, weight_decay: {wd}, "
-        f"prediction_offset: {offset})"
+        f"Training Velocity model (epochs: {n_epochs}, lr: {lr}, "
+        f"seed: {seed}, weight_decay: {wd}, input_dropout: {in_drop}, "
+        f"hidden_dropout: {hl_drop}, static_batch_size: {s_batch}, "
+        f"dynamic_batch_size: {d_batch}, sequence length {slen})"
     )
 
-    result_leader = [False, "None", lr, wd, seed, offset, n_epochs]
+    result_leader = [
+        "Frozen",
+        lr,
+        wd,
+        seed,
+        sb,
+        db,
+        slen,
+        in_drop,
+        hl_drop,
+        0,
+        n_epochs
+    ]
 
     results = []
     loss_lines = []
     time_loss_lines = []
 
-    for tt in ['rapa', 'cc']:
+    tt = 'rapa'
 
-        _, _, tdl, vdl = prep_loaders(seed, tt, False, True, True)
+    dyn_tdl, dyn_vdl = prep_loaders(
+        seed,
+        time_type=tt
+    )
 
-        for d in ['None', 'Constant', 'Dynamic']:
+    torch.manual_seed(seed)
 
-            result_leader[1] = d
+    dyn_obj, dynamic_results, _erv = model_training(
+        dyn_tdl,
+        prior_cv,
+        n_epochs,
+        validation_dataloader=dyn_vdl,
+        optimizer_params={'lr': lr, 'weight_decay': wd},
+        gold_standard=gs_cv,
+        input_dropout_rate=in_drop,
+        hidden_dropout_rate=hl_drop,
+        model_type='biophysical',
+        return_erv=True,
+        decay_model=TRAINED_DECAY,
+        freeze_decay_model=True,
+        prediction_length=10,
+        prediction_loss_offset=10,
+        count_scaling=count_scaling.scale_,
+        velocity_scaling=velo_scaling.scale_
+    )
 
-            bio_model, bio_result, _ = model_training(
-                tdl,
-                prior_cv,
-                500,
-                None,
-                validation_dataloader=vdl,
-                optimizer_params={'lr': lr, 'weight_decay': wd},
-                gold_standard=gs_cv,
-                prediction_length=10,
-                prediction_loss_offset=0,
-                decay_model=False if d == "None" else None,
-                time_dependent_decay=True if d != 'Constant' else False,
-                count_scaling=count_scaling.scale_,
-                velocity_scaling=velo_scaling.scale_
-            )
+    r, ll, time_loss = _results(
+        result_leader,
+        dynamic_results,
+        dyn_obj,
+        'decay',
+        tt
+    )
 
-            r, ll, time_loss = _results(
-                result_leader,
-                bio_result,
-                bio_model,
-                "biophysical",
-                tt
-            )
-
-            results.extend(r)
-            loss_lines.extend(ll)
-            time_loss_lines.append(None)
+    time_loss_lines.append(time_loss)
+    results.extend(r)
+    loss_lines.extend(ll)
 
     results = pd.DataFrame(
         results,
         columns=df_cols
     )
 
-    _n = max(map(len, loss_lines)) - len(loss_cols)
-
     losses = pd.DataFrame(
         loss_lines,
-        columns=loss_cols + list(range(1, _n + 1))
+        columns=loss_cols
     )
 
     try:
@@ -545,11 +518,13 @@ def _write(df, filename, _header):
 
 _header = True
 
-for j, (offset, wd, lr, i) in enumerate(
+for j, params in enumerate(
     itertools.product(
-        offsets,
         weight_decays,
         learning_rates,
+        batch_sizes,
+        dropouts,
+        seqlens,
         seeds
     )
 ):
@@ -558,6 +533,8 @@ for j, (offset, wd, lr, i) in enumerate(
         _j = j % SLURM_N
         if _j != SLURM_ID:
             continue
+
+    wd, lr, (s_batch, d_batch), (in_drop, hl_drop), slen, i = params
 
     prior_cv, gs_cv = ManagePriors.cross_validate_gold_standard(
         prior,
@@ -577,10 +554,14 @@ for j, (offset, wd, lr, i) in enumerate(
     results, losses, time_loss = _train_cv(
         lr,
         wd,
-        offset,
+        s_batch,
+        d_batch,
+        in_drop,
+        hl_drop,
         i,
         prior_cv,
-        gs_cv
+        gs_cv,
+        slen
     )
 
     _write(results, outfile_results, _header)

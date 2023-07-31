@@ -104,6 +104,15 @@ ap.add_argument(
     default=200
 )
 
+ap.add_argument(
+    "--full_length",
+    dest="full_len",
+    help="Train on full-length trajectories",
+    action='store_const',
+    const=True,
+    default=False
+)
+
 args = ap.parse_args()
 
 data_file = args.datafile
@@ -111,6 +120,8 @@ prior_file = args.priorfile
 gs_file = args.gsfile
 
 n_epochs = args.epochs
+
+full_length = args.full_len
 
 outfile_loss = args.outfile + "_LOSSES.tsv"
 outfile_results = args.outfile + "_RESULTS.tsv"
@@ -205,6 +216,7 @@ both_cols = [
     "Learning_Rate",
     "Weight_Decay",
     "Seed",
+    "Sequence_Length",
     "Output_Layer_Time_Offset",
     "Epochs",
     "Model_Type",
@@ -224,8 +236,12 @@ def prep_loaders(random_seed, time_type):
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
-    seq_len = 20
     batch_size = 25
+
+    if full_length:
+        slen = tmax - tmin
+    else:
+        slen = 20
 
     dynamic_tdl = DataLoader(
         TimeDataset(
@@ -234,7 +250,7 @@ def prep_loaders(random_seed, time_type):
             tmin,
             tmax,
             1,
-            sequence_length=seq_len,
+            sequence_length=slen,
             shuffle_time_vector=shuffle_times,
             random_seed=random_seed + 200
         ),
@@ -250,14 +266,14 @@ def prep_loaders(random_seed, time_type):
             tmax,
             1,
             shuffle_time_vector=shuffle_times,
-            sequence_length=seq_len,
+            sequence_length=slen,
             random_seed=random_seed + 300
         ),
         batch_size=batch_size,
         drop_last=True
     )
 
-    return dynamic_tdl, dynamic_vdl
+    return dynamic_tdl, dynamic_vdl, slen
 
 
 def _results(
@@ -383,7 +399,7 @@ def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
 
     torch.manual_seed(seed)
 
-    result_leader = [False, lr, wd, seed, offset, n_epochs]
+    result_leader = [False, lr, wd, seed, None, offset, n_epochs]
 
     results = []
     loss_lines = []
@@ -392,7 +408,10 @@ def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
     inf_results = {}
 
     for tt in ['rapa', 'cc']:
-        tdl, vdl = prep_loaders(seed, tt)
+        tdl, vdl, _tlen = prep_loaders(seed, tt)
+
+        if tt == 'rapa':
+            result_leader[4] = _tlen
 
         dyn_obj, dynamic_results, _erv = model_training(
             tdl,
@@ -401,7 +420,7 @@ def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
             validation_dataloader=vdl,
             optimizer_params={'lr': lr, 'weight_decay': wd},
             gold_standard=gs_cv,
-            prediction_length=10,
+            prediction_length=_tlen - offset,
             prediction_loss_offset=offset,
             model_type='biophysical',
             decay_model=False,

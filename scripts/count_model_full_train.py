@@ -259,7 +259,7 @@ static_obj, static_results = model_training(
     static_tdl,
     prior,
     n_epochs,
-    static_validation_dataloader=static_vdl,
+    validation_dataloader=static_vdl,
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,

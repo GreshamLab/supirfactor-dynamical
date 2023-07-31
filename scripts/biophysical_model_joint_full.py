@@ -14,12 +14,13 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    TruncRobustScaler,
-    model_training,
-    get_model
+    TruncRobustScaler
 )
 
-from supirfactor_dynamical.train import pretrain_and_tune_dynamic_model
+from supirfactor_dynamical import (
+    pretrain_and_tune_dynamic_model,
+    model_training
+)
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -30,6 +31,11 @@ DEFAULT_DATA = os.path.join(
     DEFAULT_PATH,
     "2021_INFERELATOR_DATA.h5ad"
 )
+TRAINED_DECAY = os.path.join(
+    "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
+    "RAPA_FULL_DECAY_MODEL.h5"
+)
+
 
 print("Supirfactor-rnn Full Training")
 print(" ".join(sys.argv))
@@ -78,17 +84,23 @@ ap.add_argument(
     default=2000
 )
 
+ap.add_argument(
+    "--pretrain_decay",
+    dest="pretrained_decay",
+    help="Use pretrained decay",
+    action='store_const',
+    const=True,
+    default=False
+)
+
 args = ap.parse_args()
 
 data_file = args.datafile
 prior_file = args.priorfile
 gs_file = args.gsfile
 
-static_outfile = args.outfile + "_STATIC_MODEL.h5"
-dynamic_outfile = args.outfile + "_RNN_MODEL.h5"
-
-static_result_dir = args.outfile + "_STATIC"
-dynamic_result_dir = args.outfile + "_RNN"
+dynamic_outfile = args.outfile + "_BIOPHYSICAL_MODEL.h5"
+dynamic_result_dir = args.outfile
 
 n_epochs = args.epochs
 
@@ -113,7 +125,8 @@ data = np.stack(
         velo_scaling.fit_transform(
             adata.layers['rapamycin_velocity'] +
             adata.layers['cell_cycle_velocity']
-        )
+        ),
+        adata.layers['decay_constants']
     ),
     axis=-1
 )
@@ -152,30 +165,6 @@ _train = data[train_idx, ...]
 _test = data[test_idx, ...]
 
 print(f"Training on {_train.shape} and validating on {_test.shape}")
-
-static_tdl = DataLoader(
-    TimeDataset(
-        _train,
-        time_vector[train_idx],
-        -10,
-        60,
-        random_seed=random_seed
-    ),
-    batch_size=200,
-    drop_last=True
-)
-
-static_vdl = DataLoader(
-    TimeDataset(
-        _test,
-        time_vector[test_idx],
-        -10,
-        60,
-        random_seed=random_seed + 100
-    ),
-    batch_size=200,
-    drop_last=True
-)
 
 pre_tdl = DataLoader(
     TimeDataset(
@@ -237,7 +226,8 @@ dyn_vdl = DataLoader(
     drop_last=True
 )
 
-dyn_obj, pre_res, post_results = pretrain_and_tune_dynamic_model(
+
+bio_model, bio_result, _ = pretrain_and_tune_dynamic_model(
     pre_tdl,
     dyn_tdl,
     prior,
@@ -247,42 +237,36 @@ dyn_obj, pre_res, post_results = pretrain_and_tune_dynamic_model(
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,
+    decay_model=TRAINED_DECAY if args.pretrained_decay else None,
     hidden_dropout_rate=hidden_dropout,
     prediction_length=10,
     prediction_loss_offset=10,
     count_scaling=count_scaling.scale_,
     velocity_scaling=velo_scaling.scale_,
     model_type='biophysical',
-    decay_model=False
+    joint_optimize_decay_model=True,
+    decay_model_loss_scaler=100
 )
-
-dyn_obj.save(dynamic_outfile)
-
-os.makedirs(dynamic_result_dir, exist_ok=True)
-
-post_results.write_result_files(
-    dynamic_result_dir
-)
-
-static_obj, static_results = model_training(
-    static_tdl,
+"""
+bio_model, bio_result = model_training(
+    dyn_tdl,
     prior,
     n_epochs,
-    validation_dataloader=static_vdl,
+    validation_dataloader=dyn_vdl,
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,
-    hidden_dropout_rate=hidden_dropout[0],
-    model_type=get_model(
-        'static_meta',
-        velocity=True
-    ),
-    output_relu=False
+    hidden_dropout_rate=0.5,
+    count_scaling=count_scaling.scale_,
+    velocity_scaling=velo_scaling.scale_,
+    model_type='biophysical',
+    joint_optimize_decay_model=True
 )
+"""
+bio_model.save(dynamic_outfile)
 
-static_obj.save(static_outfile)
+os.makedirs(dynamic_result_dir, exist_ok=True)
 
-os.makedirs(static_result_dir, exist_ok=True)
-static_results.write_result_files(
-    static_result_dir
+bio_result.write_result_files(
+    dynamic_result_dir
 )
