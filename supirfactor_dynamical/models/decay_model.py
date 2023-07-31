@@ -97,9 +97,9 @@ class DecayModule(
 
         return self(x[..., 0])
 
-    def output_data(self, x, **kwargs):
+    def output_data(self, x, keep_all_dims=False, **kwargs):
 
-        return torch.multiply(
-            torch.multiply(x[..., -1], x[..., 0]),
-            -1.0
-        )
+        if keep_all_dims:
+            return x
+        else:
+            return x[..., -1]
