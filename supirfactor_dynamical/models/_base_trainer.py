@@ -107,10 +107,10 @@ class _TrainingMixin:
                     loss_function
                 )
 
-                _batch_losses.append(mse.item())
+                _batch_losses.append(mse)
 
             self.training_loss.append(
-                np.mean(_batch_losses)
+                np.mean(np.array(_batch_losses), axis=0)
             )
 
             # Get validation losses during training
@@ -152,7 +152,7 @@ class _TrainingMixin:
         optimizer.step()
         optimizer.zero_grad()
 
-        return mse
+        return mse.item()
 
     def _calculate_loss(
         self,

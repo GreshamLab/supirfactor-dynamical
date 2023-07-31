@@ -23,7 +23,6 @@ class SupirFactorBiophysical(
     time_dependent_decay = True
 
     optimize_decay_model = False
-    decay_model_loss_scaler = 1.0
 
     def __init__(
         self,
@@ -31,7 +30,6 @@ class SupirFactorBiophysical(
         trained_count_model=None,
         decay_model=None,
         joint_optimize_decay_model=False,
-        decay_model_loss_scaler=1.0,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -129,7 +127,6 @@ class SupirFactorBiophysical(
             self.time_dependent_decay = time_dependent_decay
 
         self.joint_optimize_decay_model = joint_optimize_decay_model
-        self.decay_model_loss_scaler = decay_model_loss_scaler
         self.output_relu = output_relu
 
     def train(self, *args, **kwargs):
@@ -340,35 +337,51 @@ class SupirFactorBiophysical(
 
         return x
 
-    def _calculate_loss(
+    def train_model(
         self,
-        x,
-        loss_function,
-        return_separate_losses=False
+        training_dataloader,
+        epochs,
+        validation_dataloader=None,
+        loss_function=torch.nn.MSELoss(),
+        optimizer=None
     ):
 
-        loss_full = loss_function(
-            self._slice_data_and_forward(x),
-            self.output_data(x)
+        if self._decay_model is not None:
+            self._decay_model.optimizer = self._decay_model.process_optimizer(
+                optimizer
+            )
+
+        super().train_model(
+            training_dataloader,
+            epochs,
+            validation_dataloader,
+            loss_function,
+            optimizer
         )
 
-        if self.joint_optimize_decay_model and self._decay_model is not None:
-            loss_decay = self._decay_model._calculate_loss(
-                x,
+    def _training_step(
+        self,
+        train_x,
+        optimizer,
+        loss_function
+    ):
+
+        full_mse = super()._training_step(
+            train_x,
+            optimizer,
+            loss_function
+        )
+
+        if self._decay_model is not None and self.joint_optimize_decay_model:
+            decay_mse = self._decay_model._training_step(
+                train_x,
+                self._decay_model.optimizer,
                 loss_function
-            ) * self.decay_model_loss_scaler
+            )
+            return (full_mse + decay_mse, full_mse, decay_mse)
 
         else:
-            loss_decay = None
-
-        if return_separate_losses:
-            return loss_full, loss_decay
-
-        elif loss_decay is None:
-            return loss_full
-
-        else:
-            return loss_full + loss_decay
+            return (full_mse, )
 
     @torch.inference_mode()
     def counts(
