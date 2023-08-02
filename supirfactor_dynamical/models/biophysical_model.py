@@ -24,6 +24,7 @@ class SupirFactorBiophysical(
     time_dependent_decay = True
 
     optimize_decay_model = False
+    decay_loss = None
 
     def __init__(
         self,
@@ -31,6 +32,7 @@ class SupirFactorBiophysical(
         trained_count_model=None,
         decay_model=None,
         joint_optimize_decay_model=False,
+        decay_loss=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -313,11 +315,9 @@ class SupirFactorBiophysical(
             )
 
         else:
-            x_negative = self.scale_count_to_velocity(
-                self._decay_model(x)
-            )
+            x_negative = self._decay_model(x)
 
-        return x_negative
+        return self.scale_count_to_velocity(x_negative)
 
     def forward_count_model(
         self,
@@ -374,11 +374,18 @@ class SupirFactorBiophysical(
         )
 
         if self._decay_model and self.joint_optimize_decay_model:
+
+            if self.decay_loss:
+                _decay_loss = self.decay_loss
+            else:
+                _decay_loss = loss_function
+
             decay_mse = self._decay_model._training_step(
                 train_x,
                 self._decay_model.optimizer,
-                loss_function
+                _decay_loss
             )
+
             return (full_mse + decay_mse, full_mse, decay_mse)
 
         else:

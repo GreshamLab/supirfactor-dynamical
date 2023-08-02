@@ -226,15 +226,8 @@ class _ScalingMixin:
             self._velocity_inverse_scaler
         )
 
-        if scalers[0] is not None:
-            self.count_to_velocity_scaler = torch.diag(
-                scalers[0]
-            )
-
-        if scalers[0] is not None:
-            self.velocity_to_count_scaler = torch.diag(
-                scalers[1]
-            )
+        self.count_to_velocity_scaler = scalers[0]
+        self.velocity_to_count_scaler = scalers[1]
 
         return self
 
@@ -320,4 +313,4 @@ class _ScalingMixin:
             _z = torch.div(x, y)
             _z[y == 0] = 1
 
-        return _z
+        return torch.diag(_z)
