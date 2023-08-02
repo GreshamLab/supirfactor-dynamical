@@ -49,14 +49,14 @@ class _TrainingMixin:
         if self._training_loss is None:
             self._training_loss = []
 
-        return self._training_loss
+        return np.array(self._training_loss)
 
     @property
     def validation_loss(self):
         if self._validation_loss is None:
             self._validation_loss = []
 
-        return self._validation_loss
+        return np.array(self._validation_loss)
 
     def train_model(
         self,
@@ -92,7 +92,12 @@ class _TrainingMixin:
             optimizer
         )
 
+        # Set training time and create loss lists
         self.set_training_time()
+        self.training_loss
+
+        if validation_dataloader is not None:
+            self.validation_loss
 
         for _ in tqdm.trange(epochs):
 
@@ -109,7 +114,7 @@ class _TrainingMixin:
 
                 _batch_losses.append(mse)
 
-            self.training_loss.append(
+            self._training_loss.append(
                 np.mean(np.array(_batch_losses), axis=0)
             )
 
@@ -117,7 +122,7 @@ class _TrainingMixin:
             # if validation data was provided
             if validation_dataloader is not None:
 
-                self.validation_loss.append(
+                self._validation_loss.append(
                     self._calculate_validation_loss(
                         validation_dataloader,
                         loss_function

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
@@ -372,7 +373,7 @@ class SupirFactorBiophysical(
             loss_function
         )
 
-        if self._decay_model is not None and self.joint_optimize_decay_model:
+        if self._decay_model and self.joint_optimize_decay_model:
             decay_mse = self._decay_model._training_step(
                 train_x,
                 self._decay_model.optimizer,
@@ -382,6 +383,45 @@ class SupirFactorBiophysical(
 
         else:
             return (full_mse, )
+
+    def _calculate_validation_loss(
+        self,
+        validation_dataloader,
+        loss_function
+    ):
+        # Get validation losses during training
+        # if validation data was provided
+        if validation_dataloader is not None:
+
+            _validation_batch_losses = []
+
+            with torch.no_grad():
+                for val_x in validation_dataloader:
+
+                    full_mse = self._calculate_loss(
+                        val_x,
+                        loss_function
+                    ).item()
+
+                    if self._decay_model and self.joint_optimize_decay_model:
+                        decay_mse = self._decay_model._calculate_loss(
+                            val_x,
+                            loss_function
+                        ).item()
+
+                        _validation_batch_losses.append(
+                            (full_mse + decay_mse, full_mse, decay_mse)
+                        )
+
+                    else:
+                        _validation_batch_losses.append(
+                            full_mse
+                        )
+
+            return np.mean(
+                np.array(_validation_batch_losses),
+                axis=0
+            )
 
     @torch.inference_mode()
     def counts(
