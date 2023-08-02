@@ -18,6 +18,11 @@ class SupirFactorBiophysical(
 ):
 
     type_name = 'biophysical'
+    _loss_type_names = [
+        'biophysical',
+        'transcription',
+        'decay'
+    ]
 
     _pretrained_count = False
 
@@ -130,6 +135,7 @@ class SupirFactorBiophysical(
             self.time_dependent_decay = time_dependent_decay
 
         self.joint_optimize_decay_model = joint_optimize_decay_model
+        self.decay_loss = decay_loss
         self.output_relu = output_relu
 
     def train(self, *args, **kwargs):

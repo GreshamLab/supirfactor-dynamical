@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import pandas as pd
 import tqdm
 import time
 
@@ -25,6 +26,7 @@ class _TrainingMixin:
 
     _training_loss = None
     _validation_loss = None
+    _loss_type_names = None
 
     training_r2 = None
     validation_r2 = None
@@ -57,6 +59,14 @@ class _TrainingMixin:
             self._validation_loss = []
 
         return np.array(self._validation_loss)
+
+    @property
+    def training_loss_df(self):
+        return self._loss_df(self.training_loss)
+
+    @property
+    def validation_loss_df(self):
+        return self._loss_df(self.validation_loss)
 
     def train_model(
         self,
@@ -462,6 +472,23 @@ class _TrainingMixin:
     ):
         if reset or self.training_time is None:
             self.training_time = time.time()
+
+    def _loss_df(self, loss_array):
+
+        print(loss_array.shape)
+
+        if loss_array.ndim == 1:
+            loss_array = loss_array.reshape(-1, 1)
+
+        _loss = pd.DataFrame(loss_array.T)
+
+        if _loss.shape[0] == 1:
+            _loss.insert(0, 'loss_model', self.type_name)
+
+        elif self._loss_type_names is not None:
+            _loss.insert(0, 'loss_model', self._loss_type_names)
+
+        return _loss
 
     @staticmethod
     def to_tensor(x):

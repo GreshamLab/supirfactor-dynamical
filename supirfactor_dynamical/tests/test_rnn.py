@@ -678,6 +678,23 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             0.75
         )
 
+    def test_loss_df(self):
+
+        self.dyn_ae.train_model(
+            self.time_dataloader,
+            10
+        )
+
+        self.assertEqual(
+            self.dyn_ae.training_loss_df.shape,
+            (1, 11)
+        )
+
+        self.assertEqual(
+            self.dyn_ae.training_loss_df.iloc[0, 0],
+            self.dyn_ae.type_name
+        )
+
 
 class TestTFRecurrentDecoderShuffler(TestTFRecurrentDecoder):
 

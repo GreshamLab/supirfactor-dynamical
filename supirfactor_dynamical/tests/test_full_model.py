@@ -385,19 +385,18 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_forward_steps(self):
 
-        class BioTestClass(SupirFactorBiophysical):
-
-            def forward_model(self, x, **kwargs):
-
-                return torch.full_like(x, 0.1)
-
-        dynamical_model = BioTestClass(
+        dynamical_model = SupirFactorBiophysical(
             np.ones((2, 1), dtype=np.float32) / 10,
             use_prior_weights=True,
             transcription_model=get_model('static'),
             input_dropout_rate=0.0,
             decay_model=self.decay_model
         )
+
+        def forward_model(x, **kwargs):
+            return torch.full_like(x, 0.1)
+
+        dynamical_model.forward_model = forward_model
 
         with torch.no_grad():
             v = dynamical_model(
@@ -406,6 +405,48 @@ class TestDynamicalModel(unittest.TestCase):
 
             npt.assert_almost_equal(
                 v.numpy(),
+                self.ordered_data[..., 1].numpy()
+            )
+
+            c = dynamical_model(
+                self.ordered_data[:, [0], :, 0],
+                return_counts=True,
+                n_time_steps=9
+            )
+
+            npt.assert_almost_equal(
+                c.numpy(),
+                self.ordered_data[..., 0].numpy(),
+                decimal=6
+            )
+
+    def test_forward_steps_scaled(self):
+
+        dynamical_model = SupirFactorBiophysical(
+            np.ones((2, 1), dtype=np.float32) / 10,
+            use_prior_weights=True,
+            transcription_model=get_model('static'),
+            input_dropout_rate=0.0,
+            decay_model=self.decay_model
+        )
+
+        dynamical_model.set_scaling(
+            count_scaling=[1, 1],
+            velocity_scaling=[0.1, 0.1]
+        )
+
+        def forward_model(x, **kwargs):
+            return torch.full_like(x, 1)
+
+        dynamical_model.forward_model = forward_model
+
+        with torch.no_grad():
+            v = dynamical_model(
+                self.ordered_data[..., 0]
+            )
+
+            npt.assert_almost_equal(
+                v.numpy() * 0.1,
                 self.ordered_data[..., 1].numpy()
             )
 
@@ -533,6 +574,33 @@ class TestDynamicalModel(unittest.TestCase):
             x_mse,
             decimal=5
         )
+
+    def test_loss_df(self):
+
+        self.dynamical_model.joint_optimize_decay_model = True
+        self.dynamical_model.train_model(self.velocity_data, 10)
+
+        if self.dynamical_model._decay_model is None:
+            self.assertEqual(
+                self.dynamical_model.training_loss_df.shape,
+                (1, 11)
+            )
+
+            self.assertEqual(
+                self.dynamical_model.training_loss_df.iloc[0, 0],
+                self.dynamical_model.type_name
+            )
+
+        else:
+            self.assertEqual(
+                self.dynamical_model.training_loss_df.shape,
+                (3, 11)
+            )
+
+            self.assertEqual(
+                self.dynamical_model.training_loss_df.iloc[:, 0].tolist(),
+                self.dynamical_model._loss_type_names
+            )
 
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):

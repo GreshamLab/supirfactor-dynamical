@@ -74,14 +74,10 @@ class TestMathUtils(unittest.TestCase):
             X_tensor @ A @ a_inv
         )
 
-        print(rss)
-
         tss = _calculate_tss(
             X_tensor,
             ybar=True
         )
-
-        print(tss)
 
         r2 = _calculate_r2(rss, tss)
 
@@ -108,13 +104,9 @@ class TestMathUtils(unittest.TestCase):
             X_tensor @ A @ a_inv
         )
 
-        print(rss)
-
         tss = _calculate_tss(
             X_tensor
         )
-
-        print(tss)
 
         r2 = _calculate_r2(rss, tss)
 
