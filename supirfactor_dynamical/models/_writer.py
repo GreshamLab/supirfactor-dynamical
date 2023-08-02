@@ -98,7 +98,7 @@ def _write_state(
         if getattr(model_object, s_arg) is not None:
             f.create_dataset(
                 prefix + s_arg,
-                data=getattr(model_object, s_arg)
+                data=np.array(getattr(model_object, s_arg))
             )
 
     f.create_dataset(

@@ -475,8 +475,6 @@ class _TrainingMixin:
 
     def _loss_df(self, loss_array):
 
-        print(loss_array.shape)
-
         if loss_array.ndim == 1:
             loss_array = loss_array.reshape(-1, 1)
 

@@ -214,6 +214,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
+        ae._training_loss = [1., 1., 1.]
+        ae._validation_loss = [2., 2., 2.]
+
         ae.save(self.temp_file_name)
         ae.eval()
 
@@ -228,6 +231,16 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         self._compare_module(
             ae.decoder,
             loaded_ae.decoder
+        )
+
+        npt.assert_almost_equal(
+            loaded_ae._training_loss,
+            ae._training_loss
+        )
+
+        npt.assert_almost_equal(
+            loaded_ae._validation_loss,
+            ae._validation_loss
         )
 
         with torch.no_grad():
@@ -385,6 +398,9 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             A,
         )
 
+        biophysical._training_loss = [(1., 1., 1.), (1., 1., 1.)]
+        biophysical._validation_loss = [(2., 2., 2.), (2., 2., 2.)]
+
         biophysical.save(self.temp_file_name)
         biophysical.eval()
 
@@ -402,6 +418,16 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         self._compare_module(
             biophysical._decay_model,
             loaded_biophysical._decay_model
+        )
+
+        npt.assert_almost_equal(
+            loaded_biophysical._training_loss,
+            biophysical._training_loss
+        )
+
+        npt.assert_almost_equal(
+            loaded_biophysical._validation_loss,
+            biophysical._validation_loss
         )
 
         with torch.no_grad():
