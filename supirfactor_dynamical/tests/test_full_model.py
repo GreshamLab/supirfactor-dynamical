@@ -603,6 +603,30 @@ class TestDynamicalModel(unittest.TestCase):
                 self.dynamical_model._loss_type_names
             )
 
+    def test_optimizer(self):
+
+        if self.optimize_decay_too:
+            _correct_n = 4
+        elif self.dynamical_model._decay_model is not None:
+            _correct_n = 9
+        else:
+            _correct_n = 4
+
+        def _optimizer_correct(
+            train_x,
+            optimizer,
+            loss_function
+        ):
+            self.assertEqual(
+                len(optimizer.param_groups[0]['params']),
+                _correct_n
+            )
+
+            return (1, 1, 1)
+
+        self.dynamical_model._training_step = _optimizer_correct
+        self.dynamical_model.train_model(self.velocity_data, 10)
+
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):
 
@@ -630,4 +654,23 @@ class TestDynamicalModelTuneDecay(TestDynamicalModel):
 class TestDynamicalModelJointDecay(TestDynamicalModel):
 
     optimize_decay_too = True
+
+    def test_optimizer(self):
+
+        def _optimizer_correct(
+            train_x,
+            optimizer,
+            loss_function
+        ):
+            print(optimizer.param_groups[0]['params'])
+            self.assertEqual(len(optimizer.param_groups[0]['params']), 4)
+
+            return (1, 1, 1)
+
+        self.dynamical_model._training_step = _optimizer_correct
+        self.dynamical_model.train_model(self.velocity_data, 10)
+
+
+class TestDynamicalModelJointDecayScale(TestDynamicalModelJointDecay):
+
     decay_weight = 10
