@@ -372,10 +372,20 @@ class SupirFactorBiophysical(
         optimizer=None
     ):
 
-        if self._decay_model is not None:
+        # Create separate optimizers for the decay and transcription
+        # models if joint_optimize is set
+        if self._decay_model is not None and self.joint_optimize_decay_model:
             self._decay_model.optimizer = self._decay_model.process_optimizer(
                 optimizer
             )
+
+            optimizer = self._transcription_model.process_optimizer(
+                optimizer
+            )
+
+        # Otherwise use one optimizer for everything
+        else:
+            optimizer = self.process_optimizer(optimizer)
 
         super().train_model(
             training_dataloader,
@@ -392,7 +402,7 @@ class SupirFactorBiophysical(
         loss_function
     ):
 
-        full_mse = super()._training_step(
+        biophysics_mse = super()._training_step(
             train_x,
             optimizer,
             loss_function
@@ -400,24 +410,21 @@ class SupirFactorBiophysical(
 
         if self._decay_model and self.joint_optimize_decay_model:
 
-            if self.decay_loss:
-                _decay_loss = self.decay_loss
-            else:
-                _decay_loss = loss_function
-
             decay_mse = self._decay_model._training_step(
                 train_x,
                 self._decay_model.optimizer,
-                _decay_loss
+                self.decay_loss if self.decay_loss else loss_function,
+                loss_weight=self.decay_loss_weight
             )
 
-            if self.decay_loss_weight is not None:
-                decay_mse = decay_mse * self.decay_loss_weight
-
-            return (full_mse + decay_mse, full_mse, decay_mse)
+            return (
+                biophysics_mse + decay_mse,
+                biophysics_mse,
+                decay_mse
+            )
 
         else:
-            return (full_mse, )
+            return (biophysics_mse,)
 
     def _calculate_validation_loss(
         self,

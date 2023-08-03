@@ -156,12 +156,16 @@ class _TrainingMixin:
         self,
         train_x,
         optimizer,
-        loss_function
+        loss_function,
+        loss_weight=None
     ):
         mse = self._calculate_loss(
             train_x,
             loss_function
         )
+
+        if loss_weight is not None:
+            mse = mse * loss_weight
 
         mse.backward()
         optimizer.step()
