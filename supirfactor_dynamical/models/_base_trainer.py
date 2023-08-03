@@ -219,6 +219,8 @@ class _TrainingMixin:
         self.input_dropout_rate = input_dropout_rate
         self.hidden_dropout_rate = hidden_dropout_rate
 
+        return self
+
     def process_optimizer(
         self,
         optimizer

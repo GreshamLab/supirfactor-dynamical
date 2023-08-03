@@ -106,11 +106,6 @@ class SupirFactorBiophysical(
             output_relu=decay_model is not False
         )
 
-        self.set_dropouts(
-            input_dropout_rate,
-            hidden_dropout_rate
-        )
-
         if decay_model is False:
 
             self._decay_model = None
@@ -134,6 +129,11 @@ class SupirFactorBiophysical(
 
             self.time_dependent_decay = time_dependent_decay
 
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
+
         self.joint_optimize_decay_model = joint_optimize_decay_model
         self.decay_loss = decay_loss
         self.output_relu = output_relu
@@ -145,6 +145,22 @@ class SupirFactorBiophysical(
             self._count_model.eval()
 
         return self
+
+    def set_dropouts(
+        self,
+        input_dropout_rate,
+        hidden_dropout_rate
+    ):
+
+        self._transcription_model.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
+
+        return super().set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
 
     def set_time_parameters(
             self,
