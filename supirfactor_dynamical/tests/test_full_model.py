@@ -40,7 +40,7 @@ class TestDynamicalModel(unittest.TestCase):
 
     decay_model = None
     optimize_decay_too = False
-    decay_scaler = 1.0
+    decay_weight=None
 
     def setUp(self) -> None:
         super().setUp()
@@ -86,7 +86,8 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             A,
             decay_model=self.decay_model,
-            joint_optimize_decay_model=self.optimize_decay_too
+            joint_optimize_decay_model=self.optimize_decay_too,
+            decay_loss_weight=self.decay_weight
         )
 
         if self.dynamical_model._decay_model is not None:
@@ -629,3 +630,4 @@ class TestDynamicalModelTuneDecay(TestDynamicalModel):
 class TestDynamicalModelJointDecay(TestDynamicalModel):
 
     optimize_decay_too = True
+    decay_weight = 10

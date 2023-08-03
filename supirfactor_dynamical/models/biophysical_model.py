@@ -30,6 +30,7 @@ class SupirFactorBiophysical(
 
     optimize_decay_model = False
     decay_loss = None
+    decay_loss_weight = None
 
     def __init__(
         self,
@@ -38,6 +39,7 @@ class SupirFactorBiophysical(
         decay_model=None,
         joint_optimize_decay_model=False,
         decay_loss=None,
+        decay_loss_weight=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -136,6 +138,7 @@ class SupirFactorBiophysical(
 
         self.joint_optimize_decay_model = joint_optimize_decay_model
         self.decay_loss = decay_loss
+        self.decay_loss_weight = decay_loss_weight
         self.output_relu = output_relu
 
     def train(self, *args, **kwargs):
@@ -407,6 +410,9 @@ class SupirFactorBiophysical(
                 self._decay_model.optimizer,
                 _decay_loss
             )
+
+            if self.decay_loss_weight is not None:
+                decay_mse = decay_mse * self.decay_loss_weight
 
             return (full_mse + decay_mse, full_mse, decay_mse)
 
