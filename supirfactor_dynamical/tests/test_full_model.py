@@ -580,6 +580,65 @@ class TestDynamicalModel(unittest.TestCase):
             decimal=5
         )
 
+    def test_joint_loss_offsets(self):
+
+        opt = self.dynamical_model.process_optimizer(None)
+
+        self.dynamical_model.set_time_parameters(
+            n_additional_predictions=1,
+            loss_offset=1
+        )
+
+        self.dynamical_model.eval()
+
+        x = self.dynamical_model.output_data(XTVD_tensor, counts=True)
+        x_bar = self.dynamical_model.output_data(
+            self.dynamical_model(
+                self.dynamical_model.input_data(XTVD_tensor),
+                return_counts=True,
+                n_time_steps=1
+            ),
+            keep_all_dims=True,
+            offset_only=True
+        )
+
+        x_mse = torch.nn.MSELoss()(
+            x,
+            x_bar
+        ).item()
+
+        v = self.dynamical_model.output_data(XTVD_tensor)
+        v_bar = self.dynamical_model.output_data(
+            self.dynamical_model(
+                self.dynamical_model.input_data(XTVD_tensor),
+                n_time_steps=1
+            ),
+            keep_all_dims=True,
+            offset_only=True
+        )
+        v_mse = torch.nn.MSELoss()(
+            v,
+            v_bar
+        ).item()
+
+        loss = self.dynamical_model._training_step(
+            XTVD_tensor,
+            opt,
+            torch.nn.MSELoss()
+        )
+
+        npt.assert_almost_equal(
+            loss[0],
+            v_mse,
+            decimal=5
+        )
+
+        # npt.assert_almost_equal(
+        #    loss[1],
+        #    x_mse,
+        #    decimal=0
+        # )
+
     def test_loss_df(self):
 
         self.dynamical_model.joint_optimize_decay_model = True
@@ -677,6 +736,10 @@ class TestDynamicalModelTuneDecay(TestDynamicalModel):
 
     @unittest.skip
     def test_forward_counts():
+        pass
+
+    @unittest.skip
+    def test_joint_loss_offsets():
         pass
 
 
