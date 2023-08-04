@@ -18,10 +18,11 @@ class SupirFactorBiophysical(
 ):
 
     type_name = 'biophysical'
+
     _loss_type_names = [
-        'biophysical',
-        'transcription',
-        'decay'
+        'biophysical_velocity',
+        'biophysical_count',
+        'biophysical_decay'
     ]
 
     _pretrained_count = False
@@ -193,6 +194,7 @@ class SupirFactorBiophysical(
         self,
         x,
         n_time_steps=0,
+        x_decay=None,
         return_submodels=False,
         return_counts=False
     ):
@@ -200,7 +202,21 @@ class SupirFactorBiophysical(
         if return_counts and n_time_steps == 0:
             return x
 
-        v = self.forward_model(x, return_submodels=return_submodels)
+        _x_times = self._ntime(x)
+
+        if x_decay is not None:
+            _n_model = _x_times + n_time_steps
+            if _n_model != self._ntime(x_decay):
+                raise ValueError(
+                    f"Cannot use decay input {x_decay.shape} "
+                    f"to model {_n_model} total timepoints"
+                )
+
+        v = self.forward_model(
+            x,
+            x_decay=self._x_decay(x_decay, _x_times),
+            return_submodels=return_submodels
+        )
 
         if n_time_steps > 0:
 
@@ -217,7 +233,7 @@ class SupirFactorBiophysical(
             else:
                 _v = self.get_last_step(v)
 
-            for _ in range(n_time_steps):
+            for i in range(n_time_steps):
 
                 if return_submodels:
                     _x = self.next_count_from_velocity(
@@ -232,18 +248,13 @@ class SupirFactorBiophysical(
 
                 _v = self.forward_model(
                     _x,
+                    x_decay=self._x_decay(x_decay, 1, _x_times + i),
                     hidden_state=True,
                     return_submodels=return_submodels
                 )
 
                 _output_velo.append(_v)
                 _output_count.append(_x)
-
-            def _cat(_data):
-                return torch.cat(
-                    _data,
-                    dim=x.ndim - 2
-                )
 
             if return_counts:
                 _output_data = _output_count
@@ -253,18 +264,19 @@ class SupirFactorBiophysical(
             if return_submodels and not return_counts:
 
                 v = (
-                    _cat([d[0] for d in _output_data]),
-                    _cat([d[1] for d in _output_data])
+                    _cat([d[0] for d in _output_data], x),
+                    _cat([d[1] for d in _output_data], x)
                 )
 
             else:
-                v = _cat(_output_data)
+                v = _cat(_output_data, x)
 
         return v
 
     def forward_model(
         self,
         x,
+        x_decay=None,
         return_submodels=False,
         hidden_state=False
     ):
@@ -294,10 +306,24 @@ class SupirFactorBiophysical(
             hidden_state
         )
 
-        x_negative = self.forward_decay_model(
-            x,
-            hidden_state
-        )
+        # Run the decay model
+        if x_decay is None:
+            x_negative = self.forward_decay_model(
+                x,
+                hidden_state
+            )
+
+        # If x_decay is provided, use it to get the decay
+        # constants for the model instead of x
+        else:
+            x_negative = torch.multiply(
+                self.forward_decay_model(
+                    x_decay,
+                    hidden_state,
+                    return_decay_constants=True
+                )[None, ...],
+                x
+            )
 
         if return_submodels:
             return x_positive, x_negative
@@ -327,7 +353,8 @@ class SupirFactorBiophysical(
     def forward_decay_model(
         self,
         x,
-        hidden_state=False
+        hidden_state=False,
+        return_decay_constants=False
     ):
 
         if self._decay_model is None:
@@ -336,13 +363,20 @@ class SupirFactorBiophysical(
         elif hidden_state:
             x_negative = self._decay_model(
                 x,
-                hidden_state=self._decay_model.hidden_state
+                hidden_state=self._decay_model.hidden_state,
+                return_decay_constants=return_decay_constants
             )
 
         else:
-            x_negative = self._decay_model(x)
+            x_negative = self._decay_model(
+                x,
+                return_decay_constants=return_decay_constants
+            )
 
-        return self.scale_count_to_velocity(x_negative)
+        if return_decay_constants:
+            return x_negative
+        else:
+            return self.scale_count_to_velocity(x_negative)
 
     def forward_count_model(
         self,
@@ -402,11 +436,21 @@ class SupirFactorBiophysical(
         loss_function
     ):
 
-        biophysics_mse = super()._training_step(
+        velocity_mse = super()._training_step(
             train_x,
             optimizer,
             loss_function
         )
+
+        if self._offset_data:
+            count_mse = super()._training_step(
+                train_x,
+                optimizer,
+                loss_function,
+                output_kwargs={'counts': True}
+            )
+        else:
+            count_mse = 0
 
         if self._decay_model and self.joint_optimize_decay_model:
 
@@ -418,13 +462,17 @@ class SupirFactorBiophysical(
             )
 
             return (
-                biophysics_mse + decay_mse,
-                biophysics_mse,
+                velocity_mse,
+                count_mse,
                 decay_mse
             )
 
         else:
-            return (biophysics_mse,)
+            return (
+                velocity_mse,
+                count_mse,
+                0
+            )
 
     def _calculate_validation_loss(
         self,
@@ -543,3 +591,57 @@ class SupirFactorBiophysical(
     @staticmethod
     def get_last_step(x):
         return x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
+
+    def predict_perturbation(
+        self,
+        x,
+        n_time_steps,
+        perturbation,
+        return_submodels=False,
+        return_counts=False
+    ):
+
+        # Get results from the full model
+        self._transcription_model.set_drop_tfs(None)
+
+        if self._decay_model is not None:
+            _x_bar = self(
+                x,
+                return_counts=True,
+                n_time_steps=n_time_steps
+            )
+        else:
+            _x_bar = None
+
+        # Set the transcription model for perturbation
+        self._transcription_model.set_drop_tfs(perturbation)
+
+        _perturb_estimate = self(
+            x,
+            n_time_steps=n_time_steps,
+            x_decay=_x_bar,
+            return_submodels=return_submodels,
+            return_counts=return_counts
+        )
+
+        self._transcription_model.set_drop_tfs(None)
+
+        return _perturb_estimate
+
+    @staticmethod
+    def _x_decay(x_decay, len, start=0):
+        if x_decay is None:
+            return None
+
+        return x_decay[:, start:start + len, ...]
+
+    @staticmethod
+    def _ntime(x):
+        return x.shape[1]
+
+
+def _cat(_data, x):
+    return torch.cat(
+        _data,
+        dim=x.ndim - 2
+    )

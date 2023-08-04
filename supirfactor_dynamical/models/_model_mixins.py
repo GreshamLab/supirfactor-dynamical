@@ -90,6 +90,8 @@ class _PriorMixin:
             layer_name='weight'
         )
 
+        return self
+
     def set_drop_tfs(
         self,
         drop_tfs
@@ -132,6 +134,8 @@ class _PriorMixin:
                 f"model labels: {list(_no_match)}",
                 RuntimeWarning
             )
+
+        return self
 
     @torch.inference_mode()
     def _to_dataframe(

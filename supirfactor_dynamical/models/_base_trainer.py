@@ -157,11 +157,13 @@ class _TrainingMixin:
         train_x,
         optimizer,
         loss_function,
-        loss_weight=None
+        loss_weight=None,
+        **kwargs
     ):
         mse = self._calculate_loss(
             train_x,
-            loss_function
+            loss_function,
+            **kwargs
         )
 
         if loss_weight is not None:
@@ -176,11 +178,13 @@ class _TrainingMixin:
     def _calculate_loss(
         self,
         x,
-        loss_function
+        loss_function,
+        output_kwargs={},
+        **kwargs
     ):
         return loss_function(
-            self._slice_data_and_forward(x),
-            self.output_data(x)
+            self._slice_data_and_forward(x, **kwargs),
+            self.output_data(x, **output_kwargs)
         )
 
     def _calculate_validation_loss(
