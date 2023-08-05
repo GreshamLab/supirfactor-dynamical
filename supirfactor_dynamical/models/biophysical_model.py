@@ -307,23 +307,11 @@ class SupirFactorBiophysical(
         )
 
         # Run the decay model
-        if x_decay is None:
-            x_negative = self.forward_decay_model(
-                x,
-                hidden_state
-            )
-
-        # If x_decay is provided, use it to get the decay
-        # constants for the model instead of x
-        else:
-            x_negative = torch.multiply(
-                self.forward_decay_model(
-                    x_decay,
-                    hidden_state,
-                    return_decay_constants=True
-                )[None, ...],
-                x
-            )
+        x_negative = self.forward_decay_model(
+            x,
+            x_decay=x_decay,
+            hidden_state=hidden_state
+        )
 
         if return_submodels:
             return x_positive, x_negative
@@ -353,23 +341,42 @@ class SupirFactorBiophysical(
     def forward_decay_model(
         self,
         x,
+        x_decay=None,
         hidden_state=False,
         return_decay_constants=False
     ):
 
         if self._decay_model is None:
-            return None
+            return torch.zeros_like(x)
 
-        elif hidden_state:
+        # Get the hidden state of the model if
+        # hidden_state is true
+        if hidden_state:
+            hidden_state = self._decay_model.hidden_state
+        else:
+            hidden_state = None
+
+        # Use x_decay instead of x for the decay model
+        if x_decay is not None:
+
+            # Always get decay constants
+            # and then multiply by x if needed
             x_negative = self._decay_model(
-                x,
-                hidden_state=self._decay_model.hidden_state,
-                return_decay_constants=return_decay_constants
+                x_decay,
+                hidden_state=hidden_state,
+                return_decay_constants=True
             )
+
+            if not return_decay_constants:
+                x_negative = torch.multiply(
+                    x_negative[None, ...],
+                    x
+                )
 
         else:
             x_negative = self._decay_model(
                 x,
+                hidden_state=hidden_state,
                 return_decay_constants=return_decay_constants
             )
 
