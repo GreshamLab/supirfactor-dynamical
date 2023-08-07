@@ -606,22 +606,6 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.dynamical_model.eval()
 
-        x = self.dynamical_model.output_data(XTVD_tensor, counts=True)
-        x_bar = self.dynamical_model.output_data(
-            self.dynamical_model(
-                self.dynamical_model.input_data(XTVD_tensor),
-                return_counts=True,
-                n_time_steps=1
-            ),
-            keep_all_dims=True,
-            offset_only=True
-        )
-
-        x_mse = torch.nn.MSELoss()(
-            x,
-            x_bar
-        ).item()
-
         v = self.dynamical_model.output_data(XTVD_tensor)
         v_bar = self.dynamical_model.output_data(
             self.dynamical_model(
@@ -648,12 +632,6 @@ class TestDynamicalModel(unittest.TestCase):
             v_mse,
             decimal=5
         )
-
-        # npt.assert_almost_equal(
-        #    loss[1],
-        #    x_mse,
-        #    decimal=0
-        # )
 
     def test_loss_df(self):
 

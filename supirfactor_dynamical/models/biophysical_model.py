@@ -475,7 +475,14 @@ class SupirFactorBiophysical(
         optimizer.step()
         optimizer.zero_grad()
 
-        if self._decay_model and self.joint_optimize_decay_model:
+        # Check to see if the decay model should be separately optimized
+        _optimize_decay = self._decay_model is not None
+        _optimize_decay &= self.joint_optimize_decay_model
+
+        if self._pretrained_decay_epoch_delay is not None:
+            _optimize_decay &= n_epochs > self._pretrained_decay_epoch_delay
+
+        if _optimize_decay:
 
             decay_mse = self._decay_model._training_step(
                 n_epochs,
