@@ -109,7 +109,7 @@ class _TrainingMixin:
         if validation_dataloader is not None:
             self.validation_loss
 
-        for _ in tqdm.trange(epochs):
+        for epoch_num in tqdm.trange(epochs):
 
             self.train()
 
@@ -117,6 +117,7 @@ class _TrainingMixin:
             for train_x in training_dataloader:
 
                 mse = self._training_step(
+                    epoch_num,
                     train_x,
                     optimizer,
                     loss_function
@@ -154,6 +155,7 @@ class _TrainingMixin:
 
     def _training_step(
         self,
+        epoch_num,
         train_x,
         optimizer,
         loss_function,
@@ -347,75 +349,100 @@ class _TrainingMixin:
 
         return _calculate_r2(_rss, _ss)
 
-    def _slice_data_and_forward(self, train_x):
+    def _slice_data_and_forward(
+        self,
+        train_x,
+        **kwargs
+    ):
 
         forward = self(
             self.input_data(train_x),
-            n_time_steps=self.n_additional_predictions
+            n_time_steps=self.n_additional_predictions,
+            **kwargs
         )
 
-        return self.output_data(
-            forward,
-            offset_only=True,
-            keep_all_dims=True
+        return self.output_model(
+            forward
         )
 
     def output_data(
         self,
         x,
-        offset_only=False,
-        truncate=True,
+        output_t_plus_one=None,
+        loss_offset_only=False,
         no_loss_offset=False,
-        keep_all_dims=False
+        **kwargs
     ):
         """
         Process data from DataLoader for output nodes in training.
-        If output_t_plus_one is not None or zero, return the offset data in the
-        sequence length axis.
 
-        :param x: Data
+        This function trims data in the time axis:
+
+        output_t_plus_one means that t will be offset by one
+        so that the model will minimze MSE for output of t+1 from intputs
+        at time t
+
+        loss_offset means that early times t will be sliced out of outputs
+        the data from these earlier times will be provided as input but the
+        model will not minimize MSE for them
+
+        :param x: Training data X with ndim >= 3
         :type x: torch.Tensor
-        :return: Output node values
+        :param output_t_plus_one: _description_, defaults to None
+        :type output_t_plus_one: _type_, optional
+        :param loss_offset_only: Only process loss_offset,
+            defaults to False
+        :type loss_offset_only: bool, optional
+        :param no_loss_offset: _description_, defaults to False
+        :type no_loss_offset: bool, optional
+        :return: _description_
+        :rtype: _type_
+        """
+
+        if loss_offset_only:
+            _t_plus_one = False
+        elif output_t_plus_one is None:
+            _t_plus_one = self.output_t_plus_one
+        else:
+            _t_plus_one = output_t_plus_one
+
+        if no_loss_offset:
+            loss_offset = 0
+        else:
+            loss_offset = self.loss_offset
+
+        _, output_offset = self._check_data_offsets(
+            x.shape[1],
+            _t_plus_one,
+            self.n_additional_predictions,
+            loss_offset
+        )
+
+        # No need to do predictive offsets
+        if output_offset == 0:
+            return x
+
+        return x[:, output_offset:, ...]
+
+    def output_model(
+        self,
+        x
+    ):
+        """
+        Process model results so they align with the output_data
+        result correctly
+
+        :param x: Model output
+        :type x: torch.Tensor
+        :return: Output node values for loss function
         :rtype: torch.Tensor
         """
 
-        # No need to do predictive offsets
-        if not self._offset_data:
-            return x
-
-        # Don't shift for prediction if offset_only
-        elif offset_only and self.loss_offset == 0:
-            return x
-
-        elif no_loss_offset and offset_only and not truncate:
-            return x
-
-        # Shift and truncate
-        else:
-
-            _shift_by = 1 if self.output_t_plus_one else 0
-
-            if not offset_only and not no_loss_offset:
-                _, loss_offset = self._get_data_offsets(x)
-                loss_offset += _shift_by
-
-            elif not offset_only and no_loss_offset:
-                loss_offset = _shift_by
-
-            elif offset_only and no_loss_offset:
-                loss_offset = 0
-
-            else:
-                _, loss_offset = self._get_data_offsets(x, check=False)
-
-            if truncate:
-                end_offset = self.n_additional_predictions + 1
-                end_offset += _shift_by
-
-                return x[:, loss_offset:end_offset, ...]
-
-            else:
-                return x[:, loss_offset:, ...]
+        return self.output_data(
+            x,
+            output_t_plus_one=False,
+            keep_all_dims=True
+        )
 
     def input_data(self, x):
         """
@@ -428,39 +455,59 @@ class _TrainingMixin:
         :return: Input node values
         :rtype: torch.Tensor
         """
-        if self._offset_data:
-            return x[:, [0], ...]
-        else:
-            return x
 
-    def _get_data_offsets(self, x, check=True):
+        return x
 
-        if not self._offset_data:
-            return None, None
+    @staticmethod
+    def _get_data_offsets(
+        L,
+        output_t_plus_one=False,
+        n_additional_predictions=0,
+        loss_offset=0
+    ):
+        """
+        Returns slice indices for input (O:input_offset) and
+        for output (output_offset:L) based on slice parameters
+        """
 
-        if self._offset_data and x.ndim < 3:
-            raise ValueError(
-                "3D data (N, L, H) must be provided when "
-                "predicting time-dependent data"
-            )
+        if loss_offset is None:
+            loss_offset = 0
 
-        L = x.shape[1]
+        if n_additional_predictions is None:
+            n_additional_predictions = 0
 
-        input_offset = L - self.n_additional_predictions
-        output_offset = self.loss_offset
+        input_offset = L - n_additional_predictions
+        output_offset = loss_offset
 
-        if self.output_t_plus_one:
+        if output_t_plus_one:
             input_offset -= 1
             output_offset += 1
 
-        if check and ((input_offset < 1) or (output_offset >= L)):
+        return input_offset, output_offset
+
+    @staticmethod
+    def _check_data_offsets(
+        L,
+        output_t_plus_one=False,
+        n_additional_predictions=0,
+        loss_offset=0
+    ):
+
+        in_offset, out_offset = _TrainingMixin._get_data_offsets(
+            L,
+            output_t_plus_one,
+            n_additional_predictions,
+            loss_offset
+        )
+
+        if in_offset < 1 or out_offset >= L:
             raise ValueError(
                 f"Cannot train on {L} sequence length with "
-                f"{self.n_additional_predictions} additional predictions and "
-                f"{self.loss_offset} values excluded from loss"
+                f"{n_additional_predictions} additional predictions and "
+                f"{loss_offset} values excluded from loss"
             )
 
-        return input_offset, self.loss_offset
+        return in_offset, out_offset
 
     def save(
         self,
@@ -512,3 +559,69 @@ def _shuffle_time_data(dl):
         dl.dataset.shuffle()
     except AttributeError:
         pass
+
+
+class _TimeOffsetMixinRecurrent:
+
+    def input_data(self, x):
+
+        if self._offset_data:
+            input_offset, _ = _TrainingMixin._check_data_offsets(
+                x.shape[1],
+                output_t_plus_one=self.output_t_plus_one,
+                loss_offset=self.loss_offset,
+                n_additional_predictions=self.n_additional_predictions
+            )
+            return x[:, 0:input_offset, :]
+
+        else:
+            return x
+
+
+class _TimeOffsetMixinStatic:
+
+    def input_data(self, x):
+
+        if self._offset_data:
+            return x[:, [0], ...]
+        else:
+            return x
+
+    def output_data(
+        self,
+        x,
+        output_t_plus_one=None,
+        **kwargs
+    ):
+
+        if not self._offset_data:
+            return x
+
+        L = x.shape[1]
+        max_L = 1
+
+        if output_t_plus_one is None:
+            output_t_plus_one = self.output_t_plus_one
+
+        if output_t_plus_one:
+            max_L += 1
+
+        if self.n_additional_predictions is not None:
+            max_L += self.n_additional_predictions
+
+        if max_L == L:
+            return super().output_data(
+                x,
+                output_t_plus_one=output_t_plus_one,
+                **kwargs
+            )
+        elif max_L > L:
+            raise ValueError(
+                f"Cannot train on {L} sequence length with "
+                f"{self.n_additional_predictions} additional predictions and "
+                f"{self.loss_offset} values excluded from loss"
+            )
+        else:
+            return super().output_data(
+                x[:, 0:max_L, ...]
+            )

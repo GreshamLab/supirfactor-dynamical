@@ -1,11 +1,15 @@
 import torch
 
 from ._base_model import _TFMixin
-from ._base_trainer import _TrainingMixin
+from ._base_trainer import (
+    _TrainingMixin,
+    _TimeOffsetMixinStatic
+)
 
 
 class TFAutoencoder(
     torch.nn.Module,
+    _TimeOffsetMixinStatic,
     _TFMixin,
     _TrainingMixin
 ):
@@ -79,6 +83,7 @@ class TFAutoencoder(
 
 class TFMetaAutoencoder(
     torch.nn.Module,
+    _TimeOffsetMixinStatic,
     _TFMixin,
     _TrainingMixin
 ):

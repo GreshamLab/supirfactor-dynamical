@@ -3,16 +3,18 @@ import numpy as np
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
-from ._base_trainer import _TrainingMixin
+from ._base_trainer import (
+    _TrainingMixin,
+    _TimeOffsetMixinRecurrent
+)
 from ._base_velocity_model import _VelocityMixin
-from ._base_recurrent_model import _TimeOffsetMixin
 from .decay_model import DecayModule
 
 
 class SupirFactorBiophysical(
     torch.nn.Module,
     _VelocityMixin,
-    _TimeOffsetMixin,
+    _TimeOffsetMixinRecurrent,
     _TFMixin,
     _TrainingMixin
 ):
@@ -26,10 +28,13 @@ class SupirFactorBiophysical(
     ]
 
     _pretrained_count = False
+    _pretrained_decay = False
+    _pretrained_decay_epoch_delay = 0
 
     time_dependent_decay = True
 
-    optimize_decay_model = False
+    joint_optimize_decay_model = False
+    joint_optimize_count_model = False
     decay_loss = None
     decay_loss_weight = None
 
@@ -39,6 +44,7 @@ class SupirFactorBiophysical(
         trained_count_model=None,
         decay_model=None,
         joint_optimize_decay_model=False,
+        joint_optimize_count_model=False,
         decay_loss=None,
         decay_loss_weight=None,
         use_prior_weights=False,
@@ -120,6 +126,7 @@ class SupirFactorBiophysical(
                 decay_model = read(decay_model)
 
             self._decay_model = decay_model
+            self._pretrained_decay = True
 
         else:
 
@@ -138,6 +145,8 @@ class SupirFactorBiophysical(
         )
 
         self.joint_optimize_decay_model = joint_optimize_decay_model
+        self.joint_optimize_count_model = joint_optimize_count_model
+
         self.decay_loss = decay_loss
         self.decay_loss_weight = decay_loss_weight
         self.output_relu = output_relu
@@ -199,9 +208,6 @@ class SupirFactorBiophysical(
         return_counts=False
     ):
 
-        if return_counts and n_time_steps == 0:
-            return x
-
         _x_times = self._ntime(x)
 
         if x_decay is not None:
@@ -218,13 +224,20 @@ class SupirFactorBiophysical(
             return_submodels=return_submodels
         )
 
+        counts = self.next_count_from_velocity(
+            x,
+            torch.add(v[0], v[1]) if return_submodels else v
+        )
+
+        # Do forward predictions
         if n_time_steps > 0:
 
             _output_velo = [v]
-            _output_count = [x]
+            _output_count = [counts]
 
-            _x = self.get_last_step(x)
+            _x = self.get_last_step(counts)
 
+            # Get the most recent values for velocity and counts
             if return_submodels:
                 _v = (
                     self.get_last_step(v[0]),
@@ -233,18 +246,13 @@ class SupirFactorBiophysical(
             else:
                 _v = self.get_last_step(v)
 
+            # Iterate through the number of steps for prediction
             for i in range(n_time_steps):
 
-                if return_submodels:
-                    _x = self.next_count_from_velocity(
-                        _x,
-                        torch.add(_v[0], _v[1])
-                    )
-                else:
-                    _x = self.next_count_from_velocity(
-                        _x,
-                        _v
-                    )
+                _x = self.next_count_from_velocity(
+                    _x,
+                    torch.add(_v[0], _v[1]) if return_submodels else _v
+                )
 
                 _v = self.forward_model(
                     _x,
@@ -270,6 +278,9 @@ class SupirFactorBiophysical(
 
             else:
                 v = _cat(_output_data, x)
+
+        elif return_counts:
+            v = counts
 
         return v
 
@@ -438,30 +449,36 @@ class SupirFactorBiophysical(
 
     def _training_step(
         self,
+        n_epochs,
         train_x,
         optimizer,
         loss_function
     ):
 
-        velocity_mse = super()._training_step(
+        velocity_mse = self._calculate_loss(
             train_x,
-            optimizer,
             loss_function
         )
 
-        if self._offset_data:
-            count_mse = super()._training_step(
-                train_x,
-                optimizer,
-                loss_function,
-                output_kwargs={'counts': True}
-            )
-        else:
-            count_mse = 0
+        count_mse = self._calculate_loss(
+            train_x,
+            loss_function,
+            return_counts=True,
+            output_kwargs={
+                'counts': True
+            }
+        )
+
+        mse = velocity_mse + count_mse
+
+        mse.backward()
+        optimizer.step()
+        optimizer.zero_grad()
 
         if self._decay_model and self.joint_optimize_decay_model:
 
             decay_mse = self._decay_model._training_step(
+                n_epochs,
                 train_x,
                 self._decay_model.optimizer,
                 self.decay_loss if self.decay_loss else loss_function,
@@ -469,15 +486,15 @@ class SupirFactorBiophysical(
             )
 
             return (
-                velocity_mse,
-                count_mse,
+                velocity_mse.item(),
+                count_mse.item(),
                 decay_mse
             )
 
         else:
             return (
-                velocity_mse,
-                count_mse,
+                velocity_mse.item(),
+                count_mse.item(),
                 0
             )
 
@@ -518,20 +535,6 @@ class SupirFactorBiophysical(
             return np.mean(
                 np.array(_validation_batch_losses),
                 axis=0
-            )
-
-    @torch.inference_mode()
-    def counts(
-        self,
-        data,
-        n_time_steps=0
-    ):
-
-        with torch.no_grad():
-            return self(
-                data,
-                n_time_steps=n_time_steps,
-                return_counts=True
             )
 
     @torch.inference_mode()

@@ -1,28 +1,16 @@
 import torch
 
 from ._base_model import _TFMixin
-from ._base_trainer import _TrainingMixin
+from ._base_trainer import (
+    _TrainingMixin,
+    _TimeOffsetMixinRecurrent
+)
 from .._utils import _aggregate_r2
-
-
-class _TimeOffsetMixin:
-
-    def input_data(self, x):
-
-        if self._offset_data:
-            input_offset, _ = self._get_data_offsets(x)
-            return x[:, 0:input_offset, :]
-
-        else:
-            return x
-
-    def output_data(self, x, truncate=True, **kwargs):
-        return super().output_data(x, truncate=False, **kwargs)
 
 
 class _TF_RNN_mixin(
     torch.nn.Module,
-    _TimeOffsetMixin,
+    _TimeOffsetMixinRecurrent,
     _TFMixin,
     _TrainingMixin
 ):

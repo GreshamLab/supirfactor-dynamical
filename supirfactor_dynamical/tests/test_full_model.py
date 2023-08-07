@@ -363,18 +363,25 @@ class TestDynamicalModel(unittest.TestCase):
             decay_model=self.decay_model
         )
 
+        def forward_model(x, **kwargs):
+            return torch.full_like(x, 0.1)
+
+        dynamical_model.forward_model = forward_model
+
         with torch.no_grad():
             npt.assert_almost_equal(
-                dynamical_model.input_data(self.ordered_data).numpy(),
-                dynamical_model.counts(
-                    dynamical_model.input_data(self.ordered_data)
+                dynamical_model.input_data(self.ordered_data).numpy() + 0.1,
+                dynamical_model(
+                    dynamical_model.input_data(self.ordered_data),
+                    return_counts=True
                 ).numpy()
             )
 
         self.assertEqual(
-            dynamical_model.counts(
+            dynamical_model(
                 dynamical_model.input_data(self.ordered_data[:, [0], ...]),
-                n_time_steps=9
+                n_time_steps=9,
+                return_counts=True
             ).shape,
             (1, 10, 2)
         )
@@ -410,9 +417,12 @@ class TestDynamicalModel(unittest.TestCase):
                 n_time_steps=9
             )
 
+            c_expect = self.ordered_data[..., 0].numpy()
+            c_expect += self.ordered_data[..., 1].numpy()
+
             npt.assert_almost_equal(
                 c.numpy(),
-                self.ordered_data[..., 0].numpy(),
+                c_expect,
                 decimal=6
             )
 
@@ -452,9 +462,12 @@ class TestDynamicalModel(unittest.TestCase):
                 n_time_steps=9
             )
 
+            c_expect = self.ordered_data[..., 0].numpy()
+            c_expect += self.ordered_data[..., 1].numpy()
+
             npt.assert_almost_equal(
                 c.numpy(),
-                self.ordered_data[..., 0].numpy(),
+                c_expect,
                 decimal=6
             )
 
@@ -468,6 +481,8 @@ class TestDynamicalModel(unittest.TestCase):
                 -1
             )
         )
+
+        L = testy.shape[1]
 
         self.assertFalse(self.dynamical_model._offset_data)
 
@@ -487,7 +502,8 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model._get_data_offsets(
-                self.dynamical_model.input_data(testy)
+                L,
+                loss_offset=self.dynamical_model.loss_offset
             ),
             (10, 5)
         )
@@ -557,10 +573,15 @@ class TestDynamicalModel(unittest.TestCase):
         ).item()
 
         loss = self.dynamical_model._training_step(
+            0,
             XTVD_tensor,
             opt,
             torch.nn.MSELoss()
         )
+
+        print(loss)
+        print(x_mse)
+        print(v_mse)
 
         npt.assert_almost_equal(
             loss[0],
@@ -616,6 +637,7 @@ class TestDynamicalModel(unittest.TestCase):
         ).item()
 
         loss = self.dynamical_model._training_step(
+            0,
             XTVD_tensor,
             opt,
             torch.nn.MSELoss()
@@ -658,6 +680,7 @@ class TestDynamicalModel(unittest.TestCase):
             _correct_n = 4
 
         def _optimizer_correct(
+            num_epoch,
             train_x,
             optimizer,
             loss_function
@@ -748,10 +771,6 @@ class TestDynamicalModelTuneDecay(TestDynamicalModel):
         )
 
         return super().setUp()
-
-    @unittest.skip
-    def test_forward_counts():
-        pass
 
     @unittest.skip
     def test_joint_loss_offsets():
