@@ -25,8 +25,6 @@ class _TFMixin(
     gene_loss_sum_axis = 0
     type_name = "base"
 
-    output_relu = True
-
     hidden_final = None
 
     _velocity_model = False

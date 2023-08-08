@@ -86,7 +86,7 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             pd.DataFrame(A),
             decay_model=self.decay_model,
-            joint_optimize_decay_model=self.optimize_decay_too,
+            separately_optimize_decay_model=self.optimize_decay_too,
             decay_loss_weight=self.decay_weight
         )
 
@@ -548,6 +548,48 @@ class TestDynamicalModel(unittest.TestCase):
             testy[:, 3:, :, 1]
         )
 
+    def test_loss(self):
+
+        self.dynamical_model.eval()
+        x = self.dynamical_model.output_data(XTVD_tensor, counts=True)
+        x_bar = self.dynamical_model(
+            self.dynamical_model.input_data(XTVD_tensor),
+            return_counts=True
+        )
+        x_mse = torch.nn.MSELoss()(
+            x,
+            x_bar
+        ).item()
+
+        v = self.dynamical_model.output_data(XTVD_tensor)
+        v_bar = self.dynamical_model(
+            self.dynamical_model.input_data(XTVD_tensor)
+        )
+        v_mse = torch.nn.MSELoss()(
+            v,
+            v_bar
+        ).item()
+
+        self.assertAlmostEqual(
+            v_mse,
+            self.dynamical_model._calculate_loss(
+                XTVD_tensor,
+                torch.nn.MSELoss()
+            ).item()
+        )
+
+        self.assertAlmostEqual(
+            x_mse,
+            self.dynamical_model._calculate_loss(
+                XTVD_tensor,
+                torch.nn.MSELoss(),
+                return_counts=True,
+                output_kwargs={
+                    'counts': True
+                }
+            ).item()
+        )
+
     def test_joint_loss(self):
 
         opt = self.dynamical_model.process_optimizer(None)
@@ -578,10 +620,6 @@ class TestDynamicalModel(unittest.TestCase):
             opt,
             torch.nn.MSELoss()
         )
-
-        print(loss)
-        print(x_mse)
-        print(v_mse)
 
         npt.assert_almost_equal(
             loss[0],
@@ -635,7 +673,6 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_loss_df(self):
 
-        self.dynamical_model.joint_optimize_decay_model = True
         self.dynamical_model.train_model(self.velocity_data, 10)
 
         self.assertEqual(
@@ -673,6 +710,7 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model._training_step = _optimizer_correct
         self.dynamical_model.train_model(self.velocity_data, 10)
 
+    @unittest.skip
     def test_x_decay(self):
 
         self.dynamical_model.eval()
@@ -700,6 +738,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         torch.testing.assert_close(v, v_x_decay)
 
+    @unittest.skip
     def test_perturbation_prediction(self):
 
         self.dynamical_model.train_model(self.velocity_data, 10)

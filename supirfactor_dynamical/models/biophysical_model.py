@@ -33,8 +33,8 @@ class SupirFactorBiophysical(
 
     time_dependent_decay = True
 
-    joint_optimize_decay_model = False
-    joint_optimize_count_model = False
+    separately_optimize_decay_model = False
+
     decay_loss = None
     decay_loss_weight = None
 
@@ -43,16 +43,14 @@ class SupirFactorBiophysical(
         prior_network,
         trained_count_model=None,
         decay_model=None,
-        joint_optimize_decay_model=False,
-        joint_optimize_count_model=False,
+        separately_optimize_decay_model=False,
         decay_loss=None,
         decay_loss_weight=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
         transcription_model=None,
-        time_dependent_decay=True,
-        output_relu=False
+        time_dependent_decay=True
     ):
         """
         Biophysical deep learning model for transcriptional regulatory
@@ -144,12 +142,10 @@ class SupirFactorBiophysical(
             hidden_dropout_rate
         )
 
-        self.joint_optimize_decay_model = joint_optimize_decay_model
-        self.joint_optimize_count_model = joint_optimize_count_model
+        self.separately_optimize_decay_model = separately_optimize_decay_model
 
         self.decay_loss = decay_loss
         self.decay_loss_weight = decay_loss_weight
-        self.output_relu = output_relu
 
     def train(self, *args, **kwargs):
         super().train(*args, **kwargs)
@@ -193,6 +189,13 @@ class SupirFactorBiophysical(
             loss_offset=loss_offset
         )
 
+    @property
+    def _do_decay_optimization(self):
+        _optimize_decay = self._decay_model is not None
+        _optimize_decay &= self.separately_optimize_decay_model
+
+        return _optimize_decay
+
     @staticmethod
     def freeze(model):
 
@@ -203,26 +206,17 @@ class SupirFactorBiophysical(
         self,
         x,
         n_time_steps=0,
-        x_decay=None,
         return_submodels=False,
         return_counts=False
     ):
 
-        _x_times = self._ntime(x)
-
-        if x_decay is not None:
-            _n_model = _x_times + n_time_steps
-            if _n_model != self._ntime(x_decay):
-                raise ValueError(
-                    f"Cannot use decay input {x_decay.shape} "
-                    f"to model {_n_model} total timepoints"
-                )
-
         v = self.forward_model(
             x,
-            x_decay=self._x_decay(x_decay, _x_times),
             return_submodels=return_submodels
         )
+
+        if n_time_steps == 0 and not return_counts:
+            return v
 
         counts = self.next_count_from_velocity(
             x,
@@ -237,28 +231,18 @@ class SupirFactorBiophysical(
 
             _x = self.get_last_step(counts)
 
-            # Get the most recent values for velocity and counts
-            if return_submodels:
-                _v = (
-                    self.get_last_step(v[0]),
-                    self.get_last_step(v[1])
-                )
-            else:
-                _v = self.get_last_step(v)
-
             # Iterate through the number of steps for prediction
             for i in range(n_time_steps):
+
+                _v = self.forward_model(
+                    _x,
+                    hidden_state=True,
+                    return_submodels=return_submodels
+                )
 
                 _x = self.next_count_from_velocity(
                     _x,
                     torch.add(_v[0], _v[1]) if return_submodels else _v
-                )
-
-                _v = self.forward_model(
-                    _x,
-                    x_decay=self._x_decay(x_decay, 1, _x_times + i),
-                    hidden_state=True,
-                    return_submodels=return_submodels
                 )
 
                 _output_velo.append(_v)
@@ -280,14 +264,13 @@ class SupirFactorBiophysical(
                 v = _cat(_output_data, x)
 
         elif return_counts:
-            v = counts
+            return counts
 
         return v
 
     def forward_model(
         self,
         x,
-        x_decay=None,
         return_submodels=False,
         hidden_state=False
     ):
@@ -320,7 +303,6 @@ class SupirFactorBiophysical(
         # Run the decay model
         x_negative = self.forward_decay_model(
             x,
-            x_decay=x_decay,
             hidden_state=hidden_state
         )
 
@@ -352,7 +334,6 @@ class SupirFactorBiophysical(
     def forward_decay_model(
         self,
         x,
-        x_decay=None,
         hidden_state=False,
         return_decay_constants=False
     ):
@@ -367,29 +348,11 @@ class SupirFactorBiophysical(
         else:
             hidden_state = None
 
-        # Use x_decay instead of x for the decay model
-        if x_decay is not None:
-
-            # Always get decay constants
-            # and then multiply by x if needed
-            x_negative = self._decay_model(
-                x_decay,
-                hidden_state=hidden_state,
-                return_decay_constants=True
-            )
-
-            if not return_decay_constants:
-                x_negative = torch.multiply(
-                    x_negative[None, ...],
-                    x
-                )
-
-        else:
-            x_negative = self._decay_model(
-                x,
-                hidden_state=hidden_state,
-                return_decay_constants=return_decay_constants
-            )
+        x_negative = self._decay_model(
+            x,
+            hidden_state=hidden_state,
+            return_decay_constants=return_decay_constants
+        )
 
         if return_decay_constants:
             return x_negative
@@ -426,7 +389,7 @@ class SupirFactorBiophysical(
 
         # Create separate optimizers for the decay and transcription
         # models if joint_optimize is set
-        if self._decay_model is not None and self.joint_optimize_decay_model:
+        if self._do_decay_optimization:
             self._decay_model.optimizer = self._decay_model.process_optimizer(
                 optimizer
             )
@@ -455,6 +418,41 @@ class SupirFactorBiophysical(
         loss_function
     ):
 
+        # Check to see if the decay model should be separately optimized
+        _optimize_decay = self._do_decay_optimization
+
+        # Run the decay model training separately
+        if _optimize_decay:
+
+            if self._pretrained_decay_epoch_delay is not None:
+                _allow_training = n_epochs > self._pretrained_decay_epoch_delay
+            else:
+                _allow_training = True
+
+            if _allow_training:
+                decay_mse = self._decay_model._training_step(
+                    n_epochs,
+                    train_x,
+                    self._decay_model.optimizer,
+                    self.decay_loss if self.decay_loss else loss_function,
+                    loss_weight=self.decay_loss_weight
+                )
+            else:
+                decay_mse = torch.Tensor([0])
+
+        # Get the decay model loss and mix it in with the rest of the loss
+        elif self._decay_model is not None:
+
+            decay_mse = self._decay_model._calculate_loss(
+                train_x,
+                self.decay_loss if self.decay_loss else loss_function,
+                loss_weight=self.decay_loss_weight
+            )
+
+        # If there is no decay model only use the other losses
+        else:
+            decay_mse = torch.Tensor([0])
+
         velocity_mse = self._calculate_loss(
             train_x,
             loss_function
@@ -469,41 +467,26 @@ class SupirFactorBiophysical(
             }
         )
 
-        mse = velocity_mse + count_mse
+        if _optimize_decay:
+            mse = velocity_mse + count_mse
+
+        else:
+            mse = velocity_mse + count_mse + decay_mse
 
         mse.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-        # Check to see if the decay model should be separately optimized
-        _optimize_decay = self._decay_model is not None
-        _optimize_decay &= self.joint_optimize_decay_model
+        try:
+            decay_mse = decay_mse.item()
+        except AttributeError:
+            pass
 
-        if self._pretrained_decay_epoch_delay is not None:
-            _optimize_decay &= n_epochs > self._pretrained_decay_epoch_delay
-
-        if _optimize_decay:
-
-            decay_mse = self._decay_model._training_step(
-                n_epochs,
-                train_x,
-                self._decay_model.optimizer,
-                self.decay_loss if self.decay_loss else loss_function,
-                loss_weight=self.decay_loss_weight
-            )
-
-            return (
-                velocity_mse.item(),
-                count_mse.item(),
-                decay_mse
-            )
-
-        else:
-            return (
-                velocity_mse.item(),
-                count_mse.item(),
-                0
-            )
+        return (
+            velocity_mse.item(),
+            count_mse.item(),
+            decay_mse
+        )
 
     def _calculate_validation_loss(
         self,
@@ -524,7 +507,7 @@ class SupirFactorBiophysical(
                         loss_function
                     ).item()
 
-                    if self._decay_model and self.joint_optimize_decay_model:
+                    if self._do_decay_optimization:
                         decay_mse = self._decay_model._calculate_loss(
                             val_x,
                             loss_function

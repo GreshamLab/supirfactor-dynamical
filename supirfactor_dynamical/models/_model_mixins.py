@@ -267,16 +267,13 @@ class _ScalingMixin:
 
     @staticmethod
     def make_scalers(
-        count_vec,
+        count_vec=None,
         velo_vec=None
     ):
         """
         Make scaling matrices to scale & unscale
         count and velocity matrix
         """
-
-        if count_vec is None and velo_vec is None:
-            return None, None
 
         # Build scaler matrix to go from count to velocity
         # and back
