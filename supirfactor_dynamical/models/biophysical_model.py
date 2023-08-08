@@ -192,9 +192,7 @@ class SupirFactorBiophysical(
     @property
     def _do_decay_optimization(self):
         _optimize_decay = self._decay_model is not None
-        _optimize_decay &= self.separately_optimize_decay_model
-
-        return _optimize_decay
+        return _optimize_decay & self.separately_optimize_decay_model
 
     @staticmethod
     def freeze(model):
@@ -354,10 +352,19 @@ class SupirFactorBiophysical(
             return_decay_constants=return_decay_constants
         )
 
+        # Return decay constants unchanged
         if return_decay_constants:
             return x_negative
-        else:
+
+        # If the decay module doesn't have a scaler,
+        # try running one here
+        elif self._decay_model.count_to_velocity_scaler is None:
             return self.scale_count_to_velocity(x_negative)
+
+        # If the decay module does have a scaler,
+        # return its output unchanged
+        else:
+            return x_negative
 
     def forward_count_model(
         self,
@@ -430,12 +437,18 @@ class SupirFactorBiophysical(
                 _allow_training = True
 
             if _allow_training:
+
                 decay_mse = self._decay_model._training_step(
                     n_epochs,
                     train_x,
                     self._decay_model.optimizer,
                     self.decay_loss if self.decay_loss else loss_function,
-                    loss_weight=self.decay_loss_weight
+                    loss_weight=self.decay_loss_weight,
+                    x_hat=self(
+                        self.input_data(train_x),
+                        n_time_steps=self.n_additional_predictions,
+                        return_submodels=True
+                    )[1]
                 )
             else:
                 decay_mse = torch.Tensor([0])
@@ -446,7 +459,12 @@ class SupirFactorBiophysical(
             decay_mse = self._decay_model._calculate_loss(
                 train_x,
                 self.decay_loss if self.decay_loss else loss_function,
-                loss_weight=self.decay_loss_weight
+                loss_weight=self.decay_loss_weight,
+                x_hat=self(
+                    self.input_data(train_x),
+                    n_time_steps=self.n_additional_predictions,
+                    return_submodels=True
+                )[1]
             )
 
         # If there is no decay model only use the other losses

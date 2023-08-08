@@ -177,12 +177,17 @@ class _TrainingMixin:
         self,
         x,
         loss_function,
+        x_hat=None,
         loss_weight=None,
         output_kwargs={},
         **kwargs
     ):
+
+        if x_hat is None:
+            x_hat = self._slice_data_and_forward(x, **kwargs)
+
         loss = loss_function(
-            self._slice_data_and_forward(x, **kwargs),
+            x_hat,
             self.output_data(x, **output_kwargs)
         )
 
@@ -363,9 +368,10 @@ class _TrainingMixin:
             **kwargs
         )
 
-        return self.output_model(
-            forward
-        )
+        if isinstance(forward, tuple):
+            return [self.output_model(f) for f in forward]
+        else:
+            return self.output_model(forward)
 
     def output_data(
         self,
