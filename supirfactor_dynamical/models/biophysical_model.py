@@ -50,7 +50,8 @@ class SupirFactorBiophysical(
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
         transcription_model=None,
-        time_dependent_decay=True
+        time_dependent_decay=True,
+        output_relu=None
     ):
         """
         Biophysical deep learning model for transcriptional regulatory
