@@ -3,15 +3,11 @@ import torch
 from ._base_trainer import (
     _TrainingMixin
 )
-from ._model_mixins import (
-    _ScalingMixin
-)
 
 
 class DecayModule(
     torch.nn.Module,
-    _TrainingMixin,
-    _ScalingMixin
+    _TrainingMixin
 ):
 
     type_name = 'decay'
@@ -97,9 +93,7 @@ class DecayModule(
         if return_decay_constants:
             return _x
         else:
-            return self.rescale_velocity(
-                torch.mul(x, _x[None, ...])
-            )
+            return torch.mul(x, _x[None, ...])
 
     def _slice_data_and_forward(self, x):
 

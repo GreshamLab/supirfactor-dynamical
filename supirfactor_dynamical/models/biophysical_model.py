@@ -356,16 +356,8 @@ class SupirFactorBiophysical(
         # Return decay constants unchanged
         if return_decay_constants:
             return x_negative
-
-        # If the decay module doesn't have a scaler,
-        # try running one here
-        elif self._decay_model.count_to_velocity_scaler is None:
-            return self.scale_count_to_velocity(x_negative)
-
-        # If the decay module does have a scaler,
-        # return its output unchanged
         else:
-            return x_negative
+            return self.scale_count_to_velocity(x_negative)
 
     def forward_count_model(
         self,
