@@ -225,25 +225,39 @@ class _ScalingMixin:
         elif velocity_scaling is not False:
             self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
 
-        scalers = self.make_scalers(
+        self.count_to_velocity_scaler = self._zero_safe_div(
             self._count_inverse_scaler,
             self._velocity_inverse_scaler
         )
 
-        self.count_to_velocity_scaler = scalers[0]
-        self.velocity_to_count_scaler = scalers[1]
+        self.velocity_to_count_scaler = self._zero_safe_div(
+            self._velocity_inverse_scaler,
+            self._count_inverse_scaler
+        )
 
         return self
 
     def unscale_counts(self, x):
-        if self.count_scaler is not None:
+        if self._count_inverse_scaler is not None:
             return torch.matmul(x, self.count_scaler)
         else:
             return x
 
     def unscale_velocity(self, x):
-        if self.velocity_scaler is not None:
+        if self._velocity_inverse_scaler is not None:
             return torch.matmul(x, self.velocity_scaler)
+        else:
+            return x
+
+    def rescale_velocity(self, x):
+        if self._velocity_inverse_scaler is not None:
+            return torch.matmul(
+                x,
+                self._zero_safe_div(
+                    None,
+                    self._velocity_inverse_scaler
+                )
+            )
         else:
             return x
 
@@ -264,33 +278,6 @@ class _ScalingMixin:
             return torch.matmul(velocity, self.velocity_to_count_scaler)
         else:
             return velocity
-
-    @staticmethod
-    def make_scalers(
-        count_vec=None,
-        velo_vec=None
-    ):
-        """
-        Make scaling matrices to scale & unscale
-        count and velocity matrix
-        """
-
-        # Build scaler matrix to go from count to velocity
-        # and back
-        count_velocity_scaler = _ScalingMixin._zero_safe_div(
-            count_vec,
-            velo_vec
-        )
-
-        velocity_count_scaler = _ScalingMixin._zero_safe_div(
-            velo_vec,
-            count_vec
-        )
-
-        return (
-            count_velocity_scaler,
-            velocity_count_scaler
-        )
 
     @staticmethod
     def _zero_safe_div(x, y):

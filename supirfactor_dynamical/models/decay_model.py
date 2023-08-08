@@ -97,7 +97,7 @@ class DecayModule(
         if return_decay_constants:
             return _x
         else:
-            return self.scale_count_to_velocity(
+            return self.rescale_velocity(
                 torch.mul(x, _x[None, ...])
             )
 
