@@ -357,7 +357,7 @@ class SupirFactorBiophysical(
         if return_decay_constants:
             return x_negative
         else:
-            return self.scale_count_to_velocity(x_negative)
+            return self.rescale_velocity(x_negative)
 
     def forward_count_model(
         self,
