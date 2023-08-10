@@ -29,6 +29,7 @@ SCALER_ARGS = [
 
 DEPRECATED_ARGS = [
     '_decay_model',
+    '_pretrained_count',
     '_pretrained_decay',
     'g'
 ]
@@ -126,13 +127,6 @@ def read(
 
     # Do special loading stuff for the big biophysical model
     if _state_model == 'biophysical':
-
-        # Load a pretrained count model if the flag is set
-        if freeze_kwargs['_pretrained_count']:
-            kwargs['trained_count_model'] = read(
-                file_name,
-                prefix=prefix + 'count_'
-            )
 
         # Load a decay model if one exists, otherwise no decay model
         if any([k.startswith("_decay") for k in _state_dict_keys]):

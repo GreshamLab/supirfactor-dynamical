@@ -30,16 +30,8 @@ def write(
     prefix=''
 ):
 
-    _write_count_submodel = (
-        (model_object.type_name == 'biophysical') and
-        (model_object._count_model is not None)
-    )
-
     with h5py.File(file_name, mode) as f:
         _write_state(f, model_object, prefix)
-
-        if _write_count_submodel:
-            _write_state(f, model_object._count_model, prefix + "count_")
 
     if hasattr(model_object, 'prior_network'):
         _write_df(
@@ -49,16 +41,6 @@ def write(
                 transpose=True
             ),
             'prior_network'
-        )
-
-    if _write_count_submodel:
-        _write_df(
-            file_name,
-            model_object._count_model._to_dataframe(
-                model_object._count_model.prior_network,
-                transpose=True
-            ),
-            'count_prior_network'
         )
 
 

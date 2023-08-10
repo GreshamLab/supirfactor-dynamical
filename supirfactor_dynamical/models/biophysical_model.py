@@ -27,7 +27,6 @@ class SupirFactorBiophysical(
         'biophysical_decay'
     ]
 
-    _pretrained_count = False
     _pretrained_decay = False
     _pretrained_decay_epoch_delay = 0
 
@@ -41,7 +40,6 @@ class SupirFactorBiophysical(
     def __init__(
         self,
         prior_network,
-        trained_count_model=None,
         decay_model=None,
         separately_optimize_decay_model=False,
         decay_loss=None,
@@ -60,11 +58,6 @@ class SupirFactorBiophysical(
         :param prior_network: Prior knowledge network to constrain affine
             transformation into the TFA layer. Genes x TFs.
         :type prior_network: pd.DataFrame
-        :param trained_count_model: Pretrained count->count learning model
-            to denoise input counts. Will be frozen and not trained during
-            the transcriptional model training. None disables.
-            Defaults to None
-        :type trained_count_model: torch.nn.Module, optional
         :param decay_model: A pretrained decay model which will be frozen
             for transcriptional model. None will create a new decay model
             that will be trained with the transcriptional model.
@@ -89,19 +82,6 @@ class SupirFactorBiophysical(
         super().__init__()
 
         self.prior_network = self.process_prior(prior_network)
-
-        if trained_count_model is not None:
-
-            if isinstance(trained_count_model, str):
-                from .._utils._loader import read
-                trained_count_model = read(trained_count_model)
-
-            self._count_model = trained_count_model
-            self._pretrained_count = True
-            self.freeze(self._count_model)
-
-        else:
-            self._count_model = None
 
         if transcription_model is None:
             transcription_model = TFRNNDecoder
@@ -148,14 +128,6 @@ class SupirFactorBiophysical(
         self.decay_loss = decay_loss
         self.decay_loss_weight = decay_loss_weight
 
-    def train(self, *args, **kwargs):
-        super().train(*args, **kwargs)
-
-        if self._count_model is not None:
-            self._count_model.eval()
-
-        return self
-
     def set_dropouts(
         self,
         input_dropout_rate,
@@ -166,6 +138,12 @@ class SupirFactorBiophysical(
             input_dropout_rate,
             hidden_dropout_rate
         )
+
+        if self._decay_model is not None:
+            self._decay_model.set_dropouts(
+                input_dropout_rate,
+                hidden_dropout_rate
+            )
 
         return super().set_dropouts(
             input_dropout_rate,
@@ -219,11 +197,14 @@ class SupirFactorBiophysical(
 
         counts = self.next_count_from_velocity(
             x,
-            torch.add(v[0], v[1]) if return_submodels else v
+            v
         )
 
+        if n_time_steps == 0 and return_counts:
+            return counts
+
         # Do forward predictions
-        if n_time_steps > 0:
+        else:
 
             _output_velo = [v]
             _output_count = [counts]
@@ -231,7 +212,7 @@ class SupirFactorBiophysical(
             _x = self.get_last_step(counts)
 
             # Iterate through the number of steps for prediction
-            for i in range(n_time_steps):
+            for _ in range(n_time_steps):
 
                 _v = self.forward_model(
                     _x,
@@ -241,7 +222,7 @@ class SupirFactorBiophysical(
 
                 _x = self.next_count_from_velocity(
                     _x,
-                    torch.add(_v[0], _v[1]) if return_submodels else _v
+                    _v
                 )
 
                 _output_velo.append(_v)
@@ -252,18 +233,7 @@ class SupirFactorBiophysical(
             else:
                 _output_data = _output_velo
 
-            if return_submodels and not return_counts:
-
-                v = (
-                    _cat([d[0] for d in _output_data], x),
-                    _cat([d[1] for d in _output_data], x)
-                )
-
-            else:
-                v = _cat(_output_data, x)
-
-        elif return_counts:
-            return counts
+            v = _cat(_output_data, x)
 
         return v
 
@@ -286,12 +256,6 @@ class SupirFactorBiophysical(
         :return: Predicted velocity tensor
         :rtype: torch.Tensor
         """
-
-        # Run the pretrained count model if provided
-        x = self.forward_count_model(
-            x,
-            hidden_state
-        )
 
         # Run the transcriptional model
         x_positive = self.forward_transcription_model(
@@ -359,25 +323,6 @@ class SupirFactorBiophysical(
         else:
             return self.rescale_velocity(x_negative)
 
-    def forward_count_model(
-        self,
-        x,
-        hidden_state=False
-    ):
-        if self._count_model is not None:
-
-            if hidden_state:
-                _hidden = self._count_model.hidden_final
-            else:
-                _hidden = None
-
-            x = self._count_model(
-                x,
-                hidden_state=_hidden
-            )
-
-        return x
-
     def train_model(
         self,
         training_dataloader,
@@ -437,11 +382,13 @@ class SupirFactorBiophysical(
                     self._decay_model.optimizer,
                     self.decay_loss if self.decay_loss else loss_function,
                     loss_weight=self.decay_loss_weight,
-                    x_hat=self(
-                        self.input_data(train_x),
-                        n_time_steps=self.n_additional_predictions,
-                        return_submodels=True
-                    )[1]
+                    x_hat=self._decay_model(
+                        self(
+                            self.input_data(train_x),
+                            n_time_steps=self.n_additional_predictions,
+                            return_counts=True
+                        )
+                    )
                 )
             else:
                 decay_mse = torch.Tensor([0])
@@ -453,11 +400,13 @@ class SupirFactorBiophysical(
                 train_x,
                 self.decay_loss if self.decay_loss else loss_function,
                 loss_weight=self.decay_loss_weight,
-                x_hat=self(
-                    self.input_data(train_x),
-                    n_time_steps=self.n_additional_predictions,
-                    return_submodels=True
-                )[1]
+                x_hat=self._decay_model(
+                    self(
+                        self.input_data(train_x),
+                        n_time_steps=self.n_additional_predictions,
+                        return_counts=True
+                    )
+                )
             )
 
         # If there is no decay model only use the other losses
@@ -603,6 +552,12 @@ class SupirFactorBiophysical(
     def get_last_step(x):
         return x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
 
+    def next_count_from_velocity(self, x, v):
+        if isinstance(v, tuple):
+            v = torch.add(v[0], v[1])
+
+        return super().next_count_from_velocity(x, v)
+
     def predict_perturbation(
         self,
         x,
@@ -652,7 +607,15 @@ class SupirFactorBiophysical(
 
 
 def _cat(_data, x):
-    return torch.cat(
-        _data,
-        dim=x.ndim - 2
-    )
+
+    if isinstance(_data[0], tuple):
+        return (
+            _cat([d[0] for d in _data], x),
+            _cat([d[1] for d in _data], x)
+        )
+
+    else:
+        return torch.cat(
+            _data,
+            dim=x.ndim - 2
+        )

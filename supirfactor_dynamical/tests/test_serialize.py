@@ -350,15 +350,8 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
     def test_serialize_biophysical(self):
 
-        ae = get_model('static_meta')(A, use_prior_weights=True)
-
-        ae._decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A).T, dtype=torch.float32)
-        )
-
         biophysical = get_model('biophysical')(
-            A,
-            trained_count_model=ae
+            A
         )
 
         biophysical.save(self.temp_file_name)
@@ -366,11 +359,6 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
         loaded_biophysical = read(self.temp_file_name)
         loaded_biophysical.eval()
-
-        self._compare_module(
-            biophysical._count_model,
-            loaded_biophysical._count_model
-        )
 
         self._compare_module(
             biophysical._transcription_model,
@@ -406,9 +394,6 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
         loaded_biophysical = read(self.temp_file_name)
         loaded_biophysical.eval()
-
-        self.assertIsNone(biophysical._count_model)
-        self.assertIsNone(loaded_biophysical._count_model)
 
         self._compare_module(
             biophysical._transcription_model,
@@ -452,9 +437,6 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
         loaded_biophysical = read(self.temp_file_name)
         loaded_biophysical.eval()
-
-        self.assertIsNone(biophysical._count_model)
-        self.assertIsNone(loaded_biophysical._count_model)
 
         self._compare_module(
             biophysical._transcription_model,

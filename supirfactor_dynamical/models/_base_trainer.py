@@ -183,11 +183,10 @@ class _TrainingMixin:
         **kwargs
     ):
 
-        if x_hat is None:
-            x_hat = self._slice_data_and_forward(x, **kwargs)
-
         loss = loss_function(
-            x_hat,
+            self._slice_data_and_forward(
+                x, **kwargs
+            ) if x_hat is None else x_hat,
             self.output_data(x, **output_kwargs)
         )
 

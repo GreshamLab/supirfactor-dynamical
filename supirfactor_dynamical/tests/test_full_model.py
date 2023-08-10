@@ -96,15 +96,8 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_construction(self):
 
-        self.count_model = get_model('rnn')(
-            A
-        )
-
-        self.count_model.train_model(self.count_data, 50)
-
         self.dynamical_model = SupirFactorBiophysical(
             A,
-            trained_count_model=self.count_model,
             decay_model=self.decay_model
         )
 
