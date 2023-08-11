@@ -19,7 +19,8 @@ _SERIALIZE_ARGS = [
     'training_time',
     'training_r2',
     'validation_r2',
-    'g'
+    'g',
+    'k'
 ]
 
 

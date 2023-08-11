@@ -473,6 +473,24 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             loaded_decay
         )
 
+    def test_serialize_decay_module_diffk(self):
+
+        decay = get_model('decay')(
+            3,
+            k=10
+        )
+
+        decay.save(self.temp_file_name)
+        decay.eval()
+
+        loaded_decay = read(self.temp_file_name)
+        loaded_decay.eval()
+
+        self._compare_module(
+            decay,
+            loaded_decay
+        )
+
 
 class TestSerializerVelocity(TestSerializer):
 

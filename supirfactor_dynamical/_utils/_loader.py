@@ -31,7 +31,6 @@ DEPRECATED_ARGS = [
     '_decay_model',
     '_pretrained_count',
     '_pretrained_decay',
-    'g'
 ]
 
 INFO_KWARGS = [
@@ -90,13 +89,17 @@ def read(
             for k in _state_args
         }
 
-    # Get the prior
+    # Get the prior and pop out the prior
+    # size variables
     try:
         with pd.HDFStore(file_name, mode='r') as f:
             prior = pd.read_hdf(
                 f,
                 prefix + 'prior_network'
             )
+
+        kwargs.pop('g', None)
+        kwargs.pop('k', None)
 
     # Or get g out of the kwargs for decay model
     except KeyError:
@@ -162,10 +165,6 @@ def read(
     model.load_state_dict(
         _state_dict
     )
-
-    if freeze_kwargs['_pretrained_count']:
-        model.freeze(model._count_model)
-        model._pretrained_count = True
 
     if freeze_kwargs['_pretrained_decay']:
         model._pretrained_decay = True

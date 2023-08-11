@@ -63,6 +63,7 @@ class DecayModule(
 
         self.time_dependent_decay = time_dependent_decay
         self.g = g
+        self.k = k
 
     def forward(
         self,
