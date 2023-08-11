@@ -34,7 +34,7 @@ class DecayModule(
                 k,
                 bias=False
             ),
-            torch.nn.Sigmoid(),
+            torch.nn.Tanh(),
             torch.nn.Dropout(hidden_dropout_rate)
         )
 
@@ -47,10 +47,13 @@ class DecayModule(
             )
 
         else:
-            self._intermediate = torch.nn.Linear(
-                k,
-                k,
-                bias=False
+            self._intermediate = torch.nn.Sequential(
+                torch.nn.Linear(
+                    k,
+                    k,
+                    bias=False
+                ),
+                torch.nn.ReLU()
             )
 
         self._decoder = torch.nn.Linear(
@@ -79,14 +82,10 @@ class DecayModule(
             _x = _x.mean(axis=(0, 1))
             _x = self._intermediate(_x)
 
-        _x = self._decoder(_x)
-
-        if self.training:
-            _x = torch.nn.LeakyReLU(1e-4)(_x)
-        else:
-            _x = torch.nn.ReLU()(_x)
-
-        _x = torch.mul(_x, -1.0)
+        _x = torch.mul(
+            self._decoder(_x),
+            -1.0
+        )
 
         if return_decay_constants:
             return _x
