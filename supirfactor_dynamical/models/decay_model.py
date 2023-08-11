@@ -47,18 +47,18 @@ class DecayModule(
             )
 
         else:
-            self._intermediate = torch.nn.Sequential(
-                torch.nn.Linear(
-                    k,
-                    k,
-                    bias=False
-                ),
-                torch.nn.ReLU()
+            self._intermediate = torch.nn.Linear(
+                k,
+                k,
+                bias=False
             )
 
-        self._decoder = torch.nn.Linear(
-            k,
-            g
+        self._decoder = torch.nn.Sequential(
+            torch.nn.Linear(
+                k,
+                g
+            ),
+            torch.nn.ReLU()
         )
 
         self.time_dependent_decay = time_dependent_decay
