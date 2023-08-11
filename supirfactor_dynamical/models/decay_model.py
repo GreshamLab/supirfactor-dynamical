@@ -68,7 +68,7 @@ class DecayModule(
     def forward(
         self,
         x,
-        hidden_state=None,
+        hidden_state=False,
         return_decay_constants=False
     ):
 
@@ -78,7 +78,16 @@ class DecayModule(
 
         if self.time_dependent_decay:
             _x = _x.mean(axis=0)
-            _x, self.hidden_state = self._intermediate(_x, hidden_state)
+
+            if hidden_state:
+                _state = self.hidden_state
+            else:
+                _state = None
+
+            _x, self.hidden_state = self._intermediate(
+                _x, _state
+            )
+
         else:
             _x = _x.mean(axis=(0, 1))
             _x = self._intermediate(_x)

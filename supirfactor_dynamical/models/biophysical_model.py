@@ -306,13 +306,6 @@ class SupirFactorBiophysical(
         if self._decay_model is None:
             return torch.zeros_like(x)
 
-        # Get the hidden state of the model if
-        # hidden_state is true
-        if hidden_state:
-            hidden_state = self._decay_model.hidden_state
-        else:
-            hidden_state = None
-
         x_negative = self._decay_model(
             x,
             hidden_state=hidden_state,
