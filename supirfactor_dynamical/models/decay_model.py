@@ -34,7 +34,8 @@ class DecayModule(
                 k,
                 bias=False
             ),
-            torch.nn.Sigmoid()
+            torch.nn.Sigmoid(),
+            torch.nn.Dropout(hidden_dropout_rate)
         )
 
         if time_dependent_decay:
@@ -52,12 +53,9 @@ class DecayModule(
                 bias=False
             )
 
-        self._decoder = torch.nn.Sequential(
-            torch.nn.Dropout(hidden_dropout_rate),
-            torch.nn.Linear(
-                k,
-                g
-            )
+        self._decoder = torch.nn.Linear(
+            k,
+            g
         )
 
         self.time_dependent_decay = time_dependent_decay
