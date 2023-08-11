@@ -184,12 +184,14 @@ class SupirFactorBiophysical(
         x,
         n_time_steps=0,
         return_submodels=False,
-        return_counts=False
+        return_counts=False,
+        hidden_state=False
     ):
 
         v = self.forward_model(
             x,
-            return_submodels=return_submodels
+            return_submodels=return_submodels,
+            hidden_state=hidden_state
         )
 
         if n_time_steps == 0 and not return_counts:
