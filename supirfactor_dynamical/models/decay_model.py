@@ -15,7 +15,9 @@ class DecayModule(
     hidden_state = None
 
     time_dependent_decay = True
+
     g = None
+    k = None
 
     def __init__(
         self,
@@ -35,7 +37,13 @@ class DecayModule(
                 bias=False
             ),
             torch.nn.Tanh(),
-            torch.nn.Dropout(hidden_dropout_rate)
+            torch.nn.Dropout(hidden_dropout_rate),
+            torch.nn.Linear(
+                k,
+                k,
+                bias=False
+            ),
+            torch.nn.Tanh(),
         )
 
         if time_dependent_decay:
@@ -77,21 +85,20 @@ class DecayModule(
         _x = self._encoder(x)
 
         if self.time_dependent_decay:
+
             _x = _x.mean(axis=0)
 
-            if hidden_state:
-                _state = self.hidden_state
-            else:
-                _state = None
-
             _x, self.hidden_state = self._intermediate(
-                _x, _state
+                _x,
+                self.hidden_state if hidden_state else None
             )
 
         else:
-            _x = _x.mean(axis=(0, 1))
-            _x = self._intermediate(_x)
+            _x = self._intermediate(
+                _x.mean(axis=(0, 1))
+            )
 
+        # Make the decay rate negative
         _x = torch.mul(
             self._decoder(_x),
             -1.0
@@ -102,11 +109,19 @@ class DecayModule(
         else:
             return torch.mul(x, _x[None, ...])
 
-    def _slice_data_and_forward(self, x):
+    def _slice_data_and_forward(
+        self,
+        x
+    ):
 
         return self(x[..., 0])
 
-    def output_data(self, x, keep_all_dims=False, **kwargs):
+    def output_data(
+        self,
+        x,
+        keep_all_dims=False,
+        **kwargs
+    ):
 
         if keep_all_dims:
             return x

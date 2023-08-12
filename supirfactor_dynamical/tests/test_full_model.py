@@ -683,7 +683,7 @@ class TestDynamicalModel(unittest.TestCase):
         if self.optimize_decay_too:
             _correct_n = 4
         elif self.dynamical_model._decay_model is not None:
-            _correct_n = 9
+            _correct_n = 10
         else:
             _correct_n = 4
 
