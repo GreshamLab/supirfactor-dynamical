@@ -306,17 +306,11 @@ class SupirFactorBiophysical(
         if self._decay_model is None:
             return torch.zeros_like(x)
 
-        x_negative = self._decay_model(
+        return self._decay_model(
             x,
             hidden_state=hidden_state,
             return_decay_constants=return_decay_constants
         )
-
-        # Return decay constants unchanged
-        if return_decay_constants:
-            return x_negative
-        else:
-            return self.rescale_velocity(x_negative)
 
     def train_model(
         self,
