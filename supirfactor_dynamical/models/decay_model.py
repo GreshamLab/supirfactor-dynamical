@@ -71,7 +71,7 @@ class DecayModule(
                 k,
                 g
             ),
-            torch.nn.ReLU()
+            torch.nn.Softplus()
         )
 
         self.time_dependent_decay = time_dependent_decay
