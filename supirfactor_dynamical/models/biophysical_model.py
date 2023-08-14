@@ -46,7 +46,8 @@ class SupirFactorBiophysical(
         hidden_dropout_rate=0.0,
         transcription_model=None,
         time_dependent_decay=True,
-        output_relu=None
+        activation='relu',
+        output_activation='relu'
     ):
         """
         Biophysical deep learning model for transcriptional regulatory
@@ -87,6 +88,9 @@ class SupirFactorBiophysical(
 
         self.prior_network = self.process_prior(prior_network)
 
+        if decay_model is False:
+            output_activation = None
+
         if transcription_model is None:
             transcription_model = TFRNNDecoder
 
@@ -95,7 +99,8 @@ class SupirFactorBiophysical(
             use_prior_weights=use_prior_weights,
             input_dropout_rate=input_dropout_rate,
             hidden_dropout_rate=hidden_dropout_rate,
-            output_relu=decay_model is not False
+            activation=activation,
+            output_activation=output_activation
         )
 
         if decay_model is False:

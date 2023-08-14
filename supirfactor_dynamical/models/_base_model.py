@@ -6,7 +6,6 @@ from torch.nn.utils import prune
 from torch.utils.data import DataLoader
 
 from .._utils import (
-    _process_weights_to_tensor,
     _calculate_erv,
     _calculate_rss
 )
@@ -187,49 +186,24 @@ class _TFMixin(
 
     def set_decoder(
         self,
-        relu=True,
-        decoder_weights=None
+        activation='softplus'
     ):
         """
-        Set decoder, apply weights and enforce decoder sparsity structure
+        Set decoder
 
-        :param relu: Apply activation function (ReLU) to decoder output
-            layer, defaults to True
+        :param activation: Apply activation function to decoder output
+            layer, defaults to 'softplus'
         :type relu: bool, optional
-        :param decoder_weights: Values to use as the initialization for
-            decoder weights. Any values that are zero will be pruned to enforce
-            the same sparsity structure after training. Will skip if None.
-            Defaults to None.
-        :type decoder_weights: pd.DataFrame [G x K], np.ndarray, optional
         """
 
-        self.output_relu = relu
+        self.output_activation = activation
 
-        decoder = torch.nn.Sequential(
-            torch.nn.Linear(self.k, self.g, bias=False),
+        decoder = self.append_activation_function(
+            torch.nn.Sequential(
+                torch.nn.Linear(self.k, self.g, bias=False),
+            ),
+            activation
         )
-
-        if relu:
-            decoder.append(
-                torch.nn.ReLU()
-            )
-
-        if decoder_weights is not None:
-
-            decoder_weights, _ = _process_weights_to_tensor(
-                decoder_weights,
-                transpose=False
-            )
-
-            decoder[0].weight = torch.nn.parameter.Parameter(
-                decoder_weights,
-            )
-
-            prune.custom_from_mask(
-                decoder[0],
-                name='weight',
-                mask=decoder_weights != 0,
-            )
 
         return decoder
 

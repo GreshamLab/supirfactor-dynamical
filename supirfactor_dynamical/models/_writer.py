@@ -5,12 +5,10 @@ import pandas as pd
 _SERIALIZE_ARGS = [
     'input_dropout_rate',
     'hidden_dropout_rate',
-    'output_relu',
     'output_t_plus_one',
     'n_additional_predictions',
     'loss_offset',
     '_velocity_model',
-    '_pretrained_count',
     'time_dependent_decay',
     'decay_k',
     'decay_epoch_delay',
@@ -22,8 +20,23 @@ _SERIALIZE_ARGS = [
     'training_r2',
     'validation_r2',
     'g',
-    'k'
+    'k',
+    'output_activation',
+    'activation'
 ]
+
+_SERIALIZE_ENCODED_ARGS = [
+    'output_activation',
+    'activation'
+]
+
+
+_ENCODE_ACTIVATIONS = {
+    None: 0,
+    'relu': 1,
+    'softplus': 2,
+    'sigmoid': 3
+}
 
 
 def write(
@@ -81,9 +94,15 @@ def _write_state(
     for s_arg in _serialize_args:
 
         if getattr(model_object, s_arg) is not None:
+
+            if s_arg in _SERIALIZE_ENCODED_ARGS:
+                _d = _ENCODE_ACTIVATIONS[getattr(model_object, s_arg)]
+            else:
+                _d = getattr(model_object, s_arg)
+
             f.create_dataset(
                 prefix + s_arg,
-                data=np.array(getattr(model_object, s_arg))
+                data=np.array(_d)
             )
 
     f.create_dataset(

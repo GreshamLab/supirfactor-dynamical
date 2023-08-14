@@ -34,9 +34,8 @@ class _TF_RNN_mixin(
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
-        output_relu=True,
-        decoder_weights=None,
-        sigmoid=False
+        activation='relu',
+        output_activation='relu'
     ):
         """
         Create a recurrent TF autoencoder
@@ -49,17 +48,16 @@ class _TF_RNN_mixin(
         :param use_prior_weights: Use values in the prior_network as the
             initalization for encoder weights, defaults to False
         :type use_prior_weights: bool, optional
-        :param decoder_weights: Values to use as the initialization for
-            decoder weights. Any values that are zero will be pruned to enforce
-            the same sparsity structure after training. Defaults to None
-        :type decoder_weights: pd.DataFrame [G x K], np.ndarray, optional
         :param recurrency_mask: Removed
         :param input_dropout_rate: Training dropout for input genes,
             defaults to 0.5
         :type input_dropout_rate: float, optional
-        :param output_relu: Apply activation function (ReLU) to output
-            layer, constrains to positive, defaults to True
-        :type output_relu: bool, optional
+        :param activation: Apply activation function to hidden
+            layer, defaults to ReLU
+        :type activation: bool, optional
+        :param output_activation: Apply activation function to output
+            layer, defaults to ReLU
+        :type output_activation: bool, optional
         """
 
         super().__init__()
@@ -67,7 +65,7 @@ class _TF_RNN_mixin(
         self.set_encoder(
             prior_network,
             use_prior_weights=use_prior_weights,
-            sigmoid=sigmoid
+            activation=activation
         )
 
         # Build standard ReLU RNN
@@ -77,8 +75,7 @@ class _TF_RNN_mixin(
         self._intermediate = self._create_intermediate(self.k)
 
         self._decoder = self.set_decoder(
-            relu=output_relu,
-            decoder_weights=decoder_weights
+            activation=output_activation
         )
 
         self.set_dropouts(

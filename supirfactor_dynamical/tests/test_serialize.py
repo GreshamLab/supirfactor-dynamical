@@ -93,7 +93,8 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             {
                 'input_dropout_rate': 0.5,
                 'hidden_dropout_rate': 0.0,
-                'output_relu': True
+                'output_activation': 'relu',
+                'activation': 'relu'
             }
         )
 
@@ -141,7 +142,8 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             {
                 'input_dropout_rate': 0.5,
                 'hidden_dropout_rate': 0.0,
-                'output_relu': True
+                'output_activation': 'relu',
+                'activation': 'relu'
             }
         )
 
@@ -162,7 +164,8 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )(
             A,
             use_prior_weights=False,
-            output_relu=False
+            activation='softplus',
+            output_activation='softplus'
         )
 
         ae.set_time_parameters(
@@ -192,7 +195,8 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             {
                 'input_dropout_rate': 0.5,
                 'hidden_dropout_rate': 0.0,
-                'output_relu': False
+                'output_activation': 'softplus',
+                'activation': 'softplus'
             }
         )
 

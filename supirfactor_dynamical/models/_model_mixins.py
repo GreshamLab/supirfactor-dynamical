@@ -64,24 +64,23 @@ class _PriorMixin:
         self,
         prior_network,
         use_prior_weights=False,
-        sigmoid=False
+        activation='softplus'
     ):
 
         prior_network = self.process_prior(
             prior_network
         )
 
-        # Build the encoder module
-        if sigmoid:
-            self.encoder = torch.nn.Sequential(
-                torch.nn.Linear(self.g, self.k, bias=False),
-                torch.nn.Sigmoid()
-            )
-        else:
-            self.encoder = torch.nn.Sequential(
-                torch.nn.Linear(self.g, self.k, bias=False),
-                torch.nn.ReLU()
-            )
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(self.g, self.k, bias=False)
+        )
+
+        self.append_activation_function(
+            self.encoder,
+            activation
+        )
+
+        self.activation = activation
 
         # Replace initialized encoder weights with prior weights
         self.mask_input_weights(
@@ -168,6 +167,28 @@ class _PriorMixin:
             index=self.prior_network_labels[0],
             columns=self.prior_network_labels[1]
         )
+
+    @staticmethod
+    def append_activation_function(
+        module,
+        activation
+    ):
+
+        # Build the encoder module
+        if activation is None:
+            pass
+        elif activation.lower() == 'sigmoid':
+            module.append(torch.nn.Sigmoid())
+        elif activation.lower() == 'softplus':
+            module.append(torch.nn.Softplus())
+        elif activation.lower() == 'relu':
+            module.append(torch.nn.ReLU())
+        else:
+            raise ValueError(
+                f"Activation {activation} unknown"
+            )
+
+        return module
 
 
 class _ScalingMixin:

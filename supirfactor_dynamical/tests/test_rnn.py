@@ -25,19 +25,24 @@ TEST_MEDIUM = torch.rand((3, 20, 4))
 TEST_LONG = torch.rand((3, 50, 4))
 
 
-class TestTFRecurrentDecoder(unittest.TestCase):
+class _SetupMixin:
 
     weight_stack = 1
     class_holder = TFRNNDecoder
 
     t_plusone = True
 
+    activation = 'relu'
+    output_activation = 'relu'
+
     def setUp(self) -> None:
 
         torch.manual_seed(55)
         self.dyn_ae = self.class_holder(
             pd.DataFrame(A),
-            use_prior_weights=True
+            use_prior_weights=True,
+            activation=self.activation,
+            output_activation=self.output_activation
         )
 
         self.dyn_ae._decoder[0].weight = torch.nn.parameter.Parameter(
@@ -61,6 +66,10 @@ class TestTFRecurrentDecoder(unittest.TestCase):
 
         self.expect_mask = A.T == 0
 
+    @staticmethod
+    def _activation(x):
+        return np.maximum(x, 0)
+
     def _reset_dynae_intermediate(self):
 
         # Make the hidden layer a passthrough
@@ -78,13 +87,17 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             torch.zeros((3 * self.weight_stack, 3), dtype=torch.float32)
         )
 
+
+class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
+
     def test_good_dropouts(self):
 
         self.dyn_ae.set_drop_tfs(None)
 
         npt.assert_almost_equal(
-            (X_tensor @ A).numpy(),
-            self.dyn_ae.latent_layer(X_tensor).numpy()
+            self._activation((X_tensor @ A).numpy()),
+            self.dyn_ae.latent_layer(X_tensor).numpy(),
+            decimal=5
         )
 
         self.dyn_ae.set_drop_tfs(0)
@@ -99,6 +112,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
         self.dyn_ae.set_drop_tfs([0, 1])
 
         ll = (X_tensor @ A).numpy()
+        ll = self._activation(ll)
         ll[:, [0, 1]] = 0.
         npt.assert_almost_equal(
             ll,
@@ -472,7 +486,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
         X_time = list(X_loader)[0]
 
         h = X_time.numpy() @ in_weights.T
-        h[h < 0] = 0
+        h = self._activation(h)
 
         self.dyn_ae(X_time)
 
@@ -496,7 +510,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
         X_time = X_time.numpy()
 
         y = h @ out_weights.T
-        y[y < 0] = 0
+        y = self._activation(y)
 
         yrss = (X_time - y) ** 2
         yrss = yrss.sum(axis=(0, 1))
@@ -514,7 +528,7 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             h_partial[:, :, i] = 0
 
             y_partial = h_partial @ out_weights.T
-            y_partial[y_partial < 0] = 0
+            y_partial = self._activation(y_partial)
 
             y_partial_rss = (X_time - y_partial) ** 2
             y_partial_rss = y_partial_rss.sum(axis=(0, 1))
@@ -539,6 +553,15 @@ class TestTFRecurrentDecoder(unittest.TestCase):
                 erv_expect,
                 decimal=1
             )
+
+
+class TestTFRecurrentSoftplus(_SetupMixin, unittest.TestCase):
+
+    activation = 'softplus'
+    output_activation = 'softplus'
+
+
+class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
 
     def test_r2_model(self):
 
@@ -589,8 +612,6 @@ class TestTFRecurrentDecoder(unittest.TestCase):
             ]),
             dtype=torch.float32
         )
-
-        print(base_data.shape)
 
         self.dyn_ae.eval()
 
