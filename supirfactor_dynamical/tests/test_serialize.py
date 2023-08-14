@@ -351,38 +351,6 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
     def test_serialize_biophysical(self):
 
         biophysical = get_model('biophysical')(
-            A
-        )
-
-        biophysical.save(self.temp_file_name)
-        biophysical.eval()
-
-        loaded_biophysical = read(self.temp_file_name)
-        loaded_biophysical.eval()
-
-        self._compare_module(
-            biophysical._transcription_model,
-            loaded_biophysical._transcription_model
-        )
-
-        self._compare_module(
-            biophysical._decay_model,
-            loaded_biophysical._decay_model
-        )
-
-        with torch.no_grad():
-            npt.assert_almost_equal(
-                biophysical(
-                    biophysical.input_data(XTV_tensor)
-                ).numpy(),
-                loaded_biophysical(
-                    loaded_biophysical.input_data(XTV_tensor)
-                ).numpy()
-            )
-
-    def test_serialize_biophysical_nocount(self):
-
-        biophysical = get_model('biophysical')(
             A,
         )
 
@@ -445,6 +413,39 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
         self.assertIsNone(biophysical._decay_model)
         self.assertIsNone(loaded_biophysical._decay_model)
+
+        with torch.no_grad():
+            npt.assert_almost_equal(
+                biophysical(
+                    biophysical.input_data(XTV_tensor)
+                ).numpy(),
+                loaded_biophysical(
+                    loaded_biophysical.input_data(XTV_tensor)
+                ).numpy()
+            )
+
+    def test_serialize_biophysical_diffk(self):
+
+        biophysical = get_model('biophysical')(
+            A,
+            decay_k=50
+        )
+
+        biophysical.save(self.temp_file_name)
+        biophysical.eval()
+
+        loaded_biophysical = read(self.temp_file_name)
+        loaded_biophysical.eval()
+
+        self._compare_module(
+            biophysical._transcription_model,
+            loaded_biophysical._transcription_model
+        )
+
+        self._compare_module(
+            biophysical._decay_model,
+            loaded_biophysical._decay_model
+        )
 
         with torch.no_grad():
             npt.assert_almost_equal(

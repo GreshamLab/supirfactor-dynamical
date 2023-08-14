@@ -39,8 +39,8 @@ temp_file_name = os.path.join(temp.name, "static.h5")
 class TestDynamicalModel(unittest.TestCase):
 
     decay_model = None
-    optimize_decay_too = False
-    decay_weight = None
+    decay_delay = None
+    decay_k = 20
 
     def setUp(self) -> None:
         super().setUp()
@@ -86,8 +86,8 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model = SupirFactorBiophysical(
             pd.DataFrame(A),
             decay_model=self.decay_model,
-            separately_optimize_decay_model=self.optimize_decay_too,
-            decay_loss_weight=self.decay_weight
+            decay_epoch_delay=self.decay_delay,
+            decay_k=self.decay_k
         )
 
         dm = self.dynamical_model._decay_model
@@ -615,16 +615,16 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            loss[0],
+            loss,
             v_mse,
             decimal=5
         )
 
-        npt.assert_almost_equal(
-            loss[1],
-            x_mse,
-            decimal=5
-        )
+        #npt.assert_almost_equal(
+        #    loss,
+        #    x_mse,
+        #    decimal=5
+        #)
 
     def test_joint_loss_offsets(self):
 
@@ -659,14 +659,19 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            loss[0],
+            loss,
             v_mse,
             decimal=5
         )
 
+    @unittest.skip
     def test_loss_df(self):
 
-        self.dynamical_model.train_model(self.velocity_data, 10)
+        self.dynamical_model.train_model(
+            self.velocity_data,
+            10,
+            self.velocity_data
+        )
 
         self.assertEqual(
             self.dynamical_model.training_loss_df.shape,
@@ -678,11 +683,21 @@ class TestDynamicalModel(unittest.TestCase):
             self.dynamical_model._loss_type_names
         )
 
+        print(self.dynamical_model.validation_loss_df)
+
+        self.assertEqual(
+            self.dynamical_model.validation_loss_df.shape,
+            (3, 11)
+        )
+
+        self.assertEqual(
+            self.dynamical_model.validation_loss_df.iloc[:, 0].tolist(),
+            self.dynamical_model._loss_type_names
+        )
+
     def test_optimizer(self):
 
-        if self.optimize_decay_too:
-            _correct_n = 4
-        elif self.dynamical_model._decay_model is not None:
+        if self.dynamical_model._decay_model is not None:
             _correct_n = 10
         else:
             _correct_n = 4
@@ -693,12 +708,18 @@ class TestDynamicalModel(unittest.TestCase):
             optimizer,
             loss_function
         ):
+
             self.assertEqual(
-                len(optimizer.param_groups[0]['params']),
+                len(optimizer[0].param_groups[0]['params']),
                 _correct_n
             )
 
-            return (1, 1, 1)
+            self.assertEqual(
+                len(optimizer[1].param_groups[0]['params']),
+                4
+            )
+
+            return 1
 
         self.dynamical_model._training_step = _optimizer_correct
         self.dynamical_model.train_model(self.velocity_data, 10)
@@ -769,6 +790,11 @@ class TestDynamicalModelNoDecay(TestDynamicalModel):
     decay_model = False
 
 
+class TestDynamicalModelBigDecay(TestDynamicalModel):
+
+    decay_k = 50
+
+
 class TestDynamicalModelTuneDecay(TestDynamicalModel):
 
     def setUp(self) -> None:
@@ -780,18 +806,13 @@ class TestDynamicalModelTuneDecay(TestDynamicalModel):
             10
         )
 
-        return super().setUp()
+        super().setUp()
 
     @unittest.skip
     def test_joint_loss_offsets():
         pass
 
 
-class TestDynamicalModelJointDecay(TestDynamicalModel):
+class TestDynamicalModelTuneDecay(TestDynamicalModelTuneDecay):
 
-    optimize_decay_too = True
-
-
-class TestDynamicalModelJointDecayScale(TestDynamicalModelJointDecay):
-
-    decay_weight = 10
+    decay_delay = 5

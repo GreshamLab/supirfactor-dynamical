@@ -20,29 +20,16 @@ class SupirFactorBiophysical(
 
     type_name = 'biophysical'
 
-    _loss_type_names = [
-        'biophysical_velocity',
-        'biophysical_count',
-        'biophysical_decay'
-    ]
-
-    _pretrained_decay = False
-    _pretrained_decay_epoch_delay = 0
-
     time_dependent_decay = True
-
-    separately_optimize_decay_model = False
-
-    decay_loss = None
-    decay_loss_weight = None
+    decay_epoch_delay = 0
+    decay_k = 20
 
     def __init__(
         self,
         prior_network,
         decay_model=None,
-        separately_optimize_decay_model=False,
-        decay_loss=None,
-        decay_loss_weight=None,
+        decay_epoch_delay=None,
+        decay_k=20,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -62,6 +49,13 @@ class SupirFactorBiophysical(
             that will be trained with the transcriptional model.
             False will disable decay model training. Defaults to None
         :type decay_model: torch.nn.Module, False, or None
+        :param decay_epoch_delay: Number of epochs to freeze decay model
+            during training. Allows transcription model to fit first.
+            None disables. Defaults to None.
+        :type decay_epoch_delay: int, optional
+        :param decay_k: Width of hidden layers in decay model. Ignored if
+            a model is provided to `decay_model`. Defaults to 20.
+        :type decay_k: int, optional
         :param use_prior_weights: Use prior weights for the transcriptional
             embedding into TFA, defaults to False
         :type use_prior_weights: bool, optional
@@ -104,17 +98,20 @@ class SupirFactorBiophysical(
                 decay_model = read(decay_model)
 
             self._decay_model = decay_model
-            self._pretrained_decay = True
+            self.decay_k = self._decay_model.k
+            self.time_dependent_decay = self._decay_model.time_dependent_decay
 
         else:
 
             self._decay_model = DecayModule(
                 self.g,
+                decay_k,
                 input_dropout_rate=input_dropout_rate,
                 hidden_dropout_rate=hidden_dropout_rate,
                 time_dependent_decay=time_dependent_decay
             )
 
+            self.decay_k = decay_k
             self.time_dependent_decay = time_dependent_decay
 
         self.set_dropouts(
@@ -122,10 +119,7 @@ class SupirFactorBiophysical(
             hidden_dropout_rate
         )
 
-        self.separately_optimize_decay_model = separately_optimize_decay_model
-
-        self.decay_loss = decay_loss
-        self.decay_loss_weight = decay_loss_weight
+        self.decay_epoch_delay = decay_epoch_delay
 
     def set_dropouts(
         self,
@@ -310,6 +304,7 @@ class SupirFactorBiophysical(
     ):
 
         # Create separate optimizers for the decay and transcription
+        # models and pass them as tuples
 
         if self._decay_model is not None:
             _decay_optimizer = self._decay_model.process_optimizer(
@@ -428,8 +423,8 @@ class SupirFactorBiophysical(
         return super().next_count_from_velocity(x, v)
 
     def _decay_optimize_epoch(self, n):
-        if self._pretrained_decay_epoch_delay is not None:
-            return n > self._pretrained_decay_epoch_delay
+        if self.decay_epoch_delay is not None:
+            return n > self.decay_epoch_delay
         else:
             return True
 
