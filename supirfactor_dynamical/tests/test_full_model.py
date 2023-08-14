@@ -42,6 +42,8 @@ class TestDynamicalModel(unittest.TestCase):
     decay_delay = None
     decay_k = 20
 
+    optimize_too = False
+
     def setUp(self) -> None:
         super().setUp()
 
@@ -87,12 +89,20 @@ class TestDynamicalModel(unittest.TestCase):
             pd.DataFrame(A),
             decay_model=self.decay_model,
             decay_epoch_delay=self.decay_delay,
-            decay_k=self.decay_k
+            decay_k=self.decay_k,
+            separately_optimize_decay_model=self.optimize_too
         )
 
-        dm = self.dynamical_model._decay_model
-        if dm:
-            dm.optimizer = dm.process_optimizer(None)
+        if self.dynamical_model._decay_model is not None:
+            _opt = self.dynamical_model._decay_model.process_optimizer(None)
+        else:
+            _opt = None
+
+        self.opt = (
+            self.dynamical_model.process_optimizer(None),
+            self.dynamical_model._transcription_model.process_optimizer(None),
+            _opt
+        )
 
     def test_construction(self):
 
@@ -585,18 +595,7 @@ class TestDynamicalModel(unittest.TestCase):
 
     def test_joint_loss(self):
 
-        opt = self.dynamical_model.process_optimizer(None)
-
         self.dynamical_model.eval()
-        x = self.dynamical_model.output_data(XTVD_tensor, counts=True)
-        x_bar = self.dynamical_model(
-            self.dynamical_model.input_data(XTVD_tensor),
-            return_counts=True
-        )
-        x_mse = torch.nn.MSELoss()(
-            x,
-            x_bar
-        ).item()
 
         v = self.dynamical_model.output_data(XTVD_tensor)
         v_bar = self.dynamical_model(
@@ -610,25 +609,17 @@ class TestDynamicalModel(unittest.TestCase):
         loss = self.dynamical_model._training_step(
             0,
             XTVD_tensor,
-            opt,
+            self.opt,
             torch.nn.MSELoss()
         )
 
         npt.assert_almost_equal(
-            loss,
+            loss[0],
             v_mse,
             decimal=5
         )
 
-        #npt.assert_almost_equal(
-        #    loss,
-        #    x_mse,
-        #    decimal=5
-        #)
-
     def test_joint_loss_offsets(self):
-
-        opt = self.dynamical_model.process_optimizer(None)
 
         self.dynamical_model.set_time_parameters(
             n_additional_predictions=1,
@@ -654,12 +645,12 @@ class TestDynamicalModel(unittest.TestCase):
         loss = self.dynamical_model._training_step(
             0,
             XTVD_tensor,
-            opt,
+            self.opt,
             torch.nn.MSELoss()
         )
 
         npt.assert_almost_equal(
-            loss,
+            loss[0],
             v_mse,
             decimal=5
         )
@@ -718,6 +709,14 @@ class TestDynamicalModel(unittest.TestCase):
                 len(optimizer[1].param_groups[0]['params']),
                 4
             )
+
+            if self.dynamical_model._decay_model is None:
+                self.assertFalse(optimizer[2])
+            else:
+                self.assertEqual(
+                    len(optimizer[2].param_groups[0]['params']),
+                    6
+                )
 
             return 1
 
@@ -813,6 +812,17 @@ class TestDynamicalModelTuneDecay(TestDynamicalModel):
         pass
 
 
-class TestDynamicalModelTuneDecay(TestDynamicalModelTuneDecay):
+class TestDynamicalModelTuneDecayDelay(TestDynamicalModelTuneDecay):
 
+    decay_delay = 5
+
+
+class TestDynamicalModelOptimizeDecay(TestDynamicalModelTuneDecay):
+
+    optimize_too = True
+
+
+class TestDynamicalModelOptimizeDecayDelay(TestDynamicalModelTuneDecay):
+
+    optimize_too = True
     decay_delay = 5

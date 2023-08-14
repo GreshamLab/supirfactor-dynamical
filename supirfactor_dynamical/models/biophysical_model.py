@@ -20,9 +20,19 @@ class SupirFactorBiophysical(
 
     type_name = 'biophysical'
 
+    _loss_type_names = [
+        'biophysical_velocity',
+        'biophysical_decay'
+    ]
+
+    separately_optimize_decay_model = False
     time_dependent_decay = True
     decay_epoch_delay = 0
     decay_k = 20
+
+    @property
+    def has_decay(self):
+        return self._decay_model is not None
 
     def __init__(
         self,
@@ -30,6 +40,7 @@ class SupirFactorBiophysical(
         decay_model=None,
         decay_epoch_delay=None,
         decay_k=20,
+        separately_optimize_decay_model=False,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -120,6 +131,7 @@ class SupirFactorBiophysical(
         )
 
         self.decay_epoch_delay = decay_epoch_delay
+        self.separately_optimize_decay_model = separately_optimize_decay_model
 
     def set_dropouts(
         self,
@@ -132,7 +144,7 @@ class SupirFactorBiophysical(
             hidden_dropout_rate
         )
 
-        if self._decay_model is not None:
+        if self.has_decay:
             self._decay_model.set_dropouts(
                 input_dropout_rate,
                 hidden_dropout_rate
@@ -167,7 +179,7 @@ class SupirFactorBiophysical(
             velocity_scaling=False
     ):
 
-        if self._decay_model is not None:
+        if self.has_decay:
             self._decay_model.set_scaling(
                 count_scaling,
                 velocity_scaling
@@ -302,7 +314,7 @@ class SupirFactorBiophysical(
         return_decay_constants=False
     ):
 
-        if self._decay_model is None:
+        if not self.has_decay:
             return torch.zeros_like(x)
 
         return self._decay_model(
@@ -323,12 +335,12 @@ class SupirFactorBiophysical(
         # Create separate optimizers for the decay and transcription
         # models and pass them as tuples
 
-        if self._decay_model is not None:
+        if self.has_decay:
             _decay_optimizer = self._decay_model.process_optimizer(
                 optimizer
             )
         else:
-            _decay_optimizer = None
+            _decay_optimizer = False
 
         optimizer = (
             self.process_optimizer(optimizer),
@@ -348,25 +360,37 @@ class SupirFactorBiophysical(
 
     def _training_step(
         self,
-        n_epochs,
+        epoch_num,
         train_x,
         optimizer,
         loss_function
     ):
 
         if not isinstance(optimizer, tuple):
-            pass
-        elif self._decay_optimize_epoch(n_epochs):
-            optimizer = optimizer[0]
+            main_optimizer = optimizer
+        elif self._decay_optimize_epoch(epoch_num):
+            main_optimizer = optimizer[0]
         else:
-            optimizer = optimizer[1]
+            main_optimizer = optimizer[1]
 
-        return super()._training_step(
-            n_epochs,
+        full_loss = super()._training_step(
+            epoch_num,
             train_x,
-            optimizer,
+            main_optimizer,
             loss_function
         )
+
+        if self._decay_optimize_separate(epoch_num):
+            decay_loss = self._decay_model._training_step(
+                epoch_num,
+                train_x,
+                optimizer[2],
+                loss_function
+            )
+        else:
+            decay_loss = 0.
+
+        return (full_loss, decay_loss)
 
     @torch.inference_mode()
     def erv(
@@ -398,7 +422,7 @@ class SupirFactorBiophysical(
 
                 # If there's a decay model included, run it and subtract it
                 # from the output for the ERV model
-                if self._decay_model is None:
+                if not self.has_decay:
                     yield _data
 
                 else:
@@ -444,6 +468,14 @@ class SupirFactorBiophysical(
             return n > self.decay_epoch_delay
         else:
             return True
+
+    def _decay_optimize_separate(self, n):
+        if not self.has_decay:
+            return False
+        elif not self.separately_optimize_decay_model:
+            return False
+        else:
+            return self._decay_optimize_epoch(n)
 
 
 def _cat(_data, x):

@@ -249,6 +249,10 @@ class _TrainingMixin:
                 **DEFAULT_OPTIMIZER_PARAMS
             )
 
+        # If it's False, pass it back through
+        elif optimizer is False:
+            return False
+
         # If it's a tuple, process the individual tuple elements
         # separately for optimizer
         elif isinstance(optimizer, tuple):
