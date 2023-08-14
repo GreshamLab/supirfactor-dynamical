@@ -41,6 +41,18 @@ INFO_KWARGS = [
     'validation_r2'
 ]
 
+_SERIALIZE_ENCODED_ARGS = [
+    'output_activation',
+    'activation'
+]
+
+_DECODE_ACTIVATIONS = {
+    0: None,
+    1: 'relu',
+    2: 'softplus',
+    3: 'sigmoid'
+}
+
 
 def read(
     file_name,
@@ -127,6 +139,10 @@ def read(
 
     for dead_arg in DEPRECATED_ARGS:
         kwargs.pop(dead_arg, None)
+
+    for encoded_arg in _SERIALIZE_ENCODED_ARGS:
+        if encoded_arg in kwargs:
+            kwargs[encoded_arg] = _DECODE_ACTIVATIONS[kwargs[encoded_arg]]
 
     # Do special loading stuff for the big biophysical model
     if _state_model == 'biophysical':
