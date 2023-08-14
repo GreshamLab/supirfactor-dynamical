@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
@@ -168,17 +167,6 @@ class SupirFactorBiophysical(
             loss_offset=loss_offset
         )
 
-    @property
-    def _do_decay_optimization(self):
-        _optimize_decay = self._decay_model is not None
-        return _optimize_decay & self.separately_optimize_decay_model
-
-    @staticmethod
-    def freeze(model):
-
-        for param in model.parameters():
-            param.requires_grad = False
-
     def forward(
         self,
         x,
@@ -322,21 +310,23 @@ class SupirFactorBiophysical(
     ):
 
         # Create separate optimizers for the decay and transcription
-        # models if joint_optimize is set
-        if self._do_decay_optimization:
-            self._decay_model.optimizer = self._decay_model.process_optimizer(
+
+        if self._decay_model is not None:
+            _decay_optimizer = self._decay_model.process_optimizer(
                 optimizer
             )
-
-            optimizer = self._transcription_model.process_optimizer(
-                optimizer
-            )
-
-        # Otherwise use one optimizer for everything
         else:
-            optimizer = self.process_optimizer(optimizer)
+            _decay_optimizer = None
 
-        super().train_model(
+        optimizer = (
+            self.process_optimizer(optimizer),
+            self._transcription_model.process_optimizer(
+                optimizer
+            ),
+            _decay_optimizer
+        )
+
+        return super().train_model(
             training_dataloader,
             epochs,
             validation_dataloader,
@@ -352,129 +342,19 @@ class SupirFactorBiophysical(
         loss_function
     ):
 
-        # Check to see if the decay model should be separately optimized
-        _optimize_decay = self._do_decay_optimization
-
-        # Run the decay model training separately
-        if _optimize_decay:
-
-            if self._pretrained_decay_epoch_delay is not None:
-                _allow_training = n_epochs > self._pretrained_decay_epoch_delay
-            else:
-                _allow_training = True
-
-            if _allow_training:
-
-                decay_mse = self._decay_model._training_step(
-                    n_epochs,
-                    train_x,
-                    self._decay_model.optimizer,
-                    self.decay_loss if self.decay_loss else loss_function,
-                    loss_weight=self.decay_loss_weight,
-                    x_hat=self._decay_model(
-                        self(
-                            self.input_data(train_x),
-                            n_time_steps=self.n_additional_predictions,
-                            return_counts=True
-                        )
-                    )
-                )
-            else:
-                decay_mse = torch.Tensor([0])
-
-        # Get the decay model loss and mix it in with the rest of the loss
-        elif self._decay_model is not None:
-
-            decay_mse = self._decay_model._calculate_loss(
-                train_x,
-                self.decay_loss if self.decay_loss else loss_function,
-                loss_weight=self.decay_loss_weight,
-                x_hat=self._decay_model(
-                    self(
-                        self.input_data(train_x),
-                        n_time_steps=self.n_additional_predictions,
-                        return_counts=True
-                    )
-                )
-            )
-
-        # If there is no decay model only use the other losses
+        if not isinstance(optimizer, tuple):
+            pass
+        elif self._decay_optimize_epoch(n_epochs):
+            optimizer = optimizer[0]
         else:
-            decay_mse = torch.Tensor([0])
+            optimizer = optimizer[1]
 
-        velocity_mse = self._calculate_loss(
+        return super()._training_step(
+            n_epochs,
             train_x,
+            optimizer,
             loss_function
         )
-
-        count_mse = self._calculate_loss(
-            train_x,
-            loss_function,
-            return_counts=True,
-            output_kwargs={
-                'counts': True
-            }
-        )
-
-        if _optimize_decay:
-            mse = velocity_mse + count_mse
-
-        else:
-            mse = velocity_mse + count_mse + decay_mse
-
-        mse.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        try:
-            decay_mse = decay_mse.item()
-        except AttributeError:
-            pass
-
-        return (
-            velocity_mse.item(),
-            count_mse.item(),
-            decay_mse
-        )
-
-    def _calculate_validation_loss(
-        self,
-        validation_dataloader,
-        loss_function
-    ):
-        # Get validation losses during training
-        # if validation data was provided
-        if validation_dataloader is not None:
-
-            _validation_batch_losses = []
-
-            with torch.no_grad():
-                for val_x in validation_dataloader:
-
-                    full_mse = self._calculate_loss(
-                        val_x,
-                        loss_function
-                    ).item()
-
-                    if self._do_decay_optimization:
-                        decay_mse = self._decay_model._calculate_loss(
-                            val_x,
-                            loss_function
-                        ).item()
-
-                        _validation_batch_losses.append(
-                            (full_mse + decay_mse, full_mse, decay_mse)
-                        )
-
-                    else:
-                        _validation_batch_losses.append(
-                            full_mse
-                        )
-
-            return np.mean(
-                np.array(_validation_batch_losses),
-                axis=0
-            )
 
     @torch.inference_mode()
     def erv(
@@ -547,52 +427,11 @@ class SupirFactorBiophysical(
 
         return super().next_count_from_velocity(x, v)
 
-    def predict_perturbation(
-        self,
-        x,
-        n_time_steps,
-        perturbation,
-        return_submodels=False,
-        return_counts=False
-    ):
-
-        # Get results from the full model
-        self._transcription_model.set_drop_tfs(None)
-
-        if self._decay_model is not None:
-            _x_bar = self(
-                x,
-                return_counts=True,
-                n_time_steps=n_time_steps
-            )
+    def _decay_optimize_epoch(self, n):
+        if self._pretrained_decay_epoch_delay is not None:
+            return n > self._pretrained_decay_epoch_delay
         else:
-            _x_bar = None
-
-        # Set the transcription model for perturbation
-        self._transcription_model.set_drop_tfs(perturbation)
-
-        _perturb_estimate = self(
-            x,
-            n_time_steps=n_time_steps,
-            x_decay=_x_bar,
-            return_submodels=return_submodels,
-            return_counts=return_counts
-        )
-
-        self._transcription_model.set_drop_tfs(None)
-
-        return _perturb_estimate
-
-    @staticmethod
-    def _x_decay(x_decay, len, start=0):
-        if x_decay is None:
-            return None
-
-        return x_decay[:, start:start + len, ...]
-
-    @staticmethod
-    def _ntime(x):
-        return x.shape[1]
+            return True
 
 
 def _cat(_data, x):

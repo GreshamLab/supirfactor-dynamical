@@ -249,6 +249,14 @@ class _TrainingMixin:
                 **DEFAULT_OPTIMIZER_PARAMS
             )
 
+        # If it's a tuple, process the individual tuple elements
+        # separately for optimizer
+        elif isinstance(optimizer, tuple):
+            return tuple(
+                self.process_optimizer(opt)
+                for opt in optimizer
+            )
+
         # If it's an existing optimizer, return it
         elif isinstance(optimizer, torch.optim.Optimizer):
             return optimizer
