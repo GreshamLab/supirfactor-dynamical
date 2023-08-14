@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import os
 
+import numpy as np
 import numpy.testing as npt
 
 import torch
@@ -431,11 +432,41 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             decay_k=50
         )
 
+        biophysical.set_scaling(
+            count_scaling=np.arange(4),
+            velocity_scaling=np.arange(4, 8)
+        )
+
+        biophysical._decay_model.set_scaling(
+            count_scaling=np.arange(4),
+            velocity_scaling=np.arange(4, 8)
+        )
+
         biophysical.save(self.temp_file_name)
         biophysical.eval()
 
         loaded_biophysical = read(self.temp_file_name)
         loaded_biophysical.eval()
+
+        torch.testing.assert_close(
+            biophysical._velocity_inverse_scaler,
+            loaded_biophysical._velocity_inverse_scaler
+        )
+
+        torch.testing.assert_close(
+            biophysical._count_inverse_scaler,
+            loaded_biophysical._count_inverse_scaler
+        )
+
+        torch.testing.assert_close(
+            biophysical._decay_model._velocity_inverse_scaler,
+            loaded_biophysical._decay_model._velocity_inverse_scaler
+        )
+
+        torch.testing.assert_close(
+            biophysical._decay_model._count_inverse_scaler,
+            loaded_biophysical._decay_model._count_inverse_scaler
+        )
 
         self._compare_module(
             biophysical._transcription_model,
@@ -463,11 +494,26 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             3
         )
 
+        decay.set_scaling(
+            count_scaling=np.arange(3),
+            velocity_scaling=np.arange(3, 6)
+        )
+
         decay.save(self.temp_file_name)
         decay.eval()
 
         loaded_decay = read(self.temp_file_name)
         loaded_decay.eval()
+
+        torch.testing.assert_close(
+            decay._velocity_inverse_scaler,
+            loaded_decay._velocity_inverse_scaler
+        )
+
+        torch.testing.assert_close(
+            decay._count_inverse_scaler,
+            loaded_decay._count_inverse_scaler
+        )
 
         self._compare_module(
             decay,

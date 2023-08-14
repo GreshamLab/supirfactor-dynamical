@@ -161,6 +161,23 @@ class SupirFactorBiophysical(
             loss_offset=loss_offset
         )
 
+    def set_scaling(
+            self,
+            count_scaling=False,
+            velocity_scaling=False
+    ):
+
+        if self._decay_model is not None:
+            self._decay_model.set_scaling(
+                count_scaling,
+                velocity_scaling
+            )
+
+        return super().set_scaling(
+            count_scaling,
+            velocity_scaling
+        )
+
     def forward(
         self,
         x,
