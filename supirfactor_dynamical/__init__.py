@@ -24,3 +24,7 @@ from .train import (
 )
 
 from ._utils._loader import read
+
+from .perturbation.predict import (
+    predict_perturbation
+)
