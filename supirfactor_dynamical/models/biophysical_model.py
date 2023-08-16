@@ -199,61 +199,108 @@ class SupirFactorBiophysical(
         self,
         x,
         n_time_steps=0,
+        return_velocities=None,
         return_submodels=False,
         return_counts=False,
+        return_decays=False,
+        unmodified_counts=False,
         hidden_state=False
     ):
 
-        v = self.forward_model(
+        # Calculate model predictions for the data provided
+        counts, v, d = self.forward_time_step(
             x,
             return_submodels=return_submodels,
-            hidden_state=hidden_state
+            return_decays=return_decays,
+            hidden_state=hidden_state,
+            return_unmodified_counts=unmodified_counts
         )
 
-        if n_time_steps == 0 and not return_counts:
-            return v
+        _output_velo = [v]
+        _output_count = [counts]
+        _output_decay = [d]
 
-        counts = self.next_count_from_velocity(
-            x,
-            v
-        )
-
-        if n_time_steps == 0 and return_counts:
-            return counts
-
-        # Do forward predictions
-        else:
-
-            _output_velo = [v]
-            _output_count = [counts]
+        # Do forward predictions starting from the data provided
+        # for n_time_steps time units
+        if n_time_steps > 0:
 
             _x = self.get_last_step(counts)
 
             # Iterate through the number of steps for prediction
             for _ in range(n_time_steps):
 
-                _v = self.forward_model(
+                # Call the model on a single time point to get velocity
+                # and update the counts by adding velocity
+                _x, _v, _d = self.forward_time_step(
                     _x,
                     hidden_state=True,
-                    return_submodels=return_submodels
-                )
-
-                _x = self.next_count_from_velocity(
-                    _x,
-                    _v
+                    return_submodels=return_submodels,
+                    return_decays=return_decays,
+                    return_unmodified_counts=False
                 )
 
                 _output_velo.append(_v)
                 _output_count.append(_x)
+                _output_decay.append(_d)
 
-            if return_counts:
-                _output_data = _output_count
-            else:
-                _output_data = _output_velo
+        # Backwards compatibility; only returning velocities if
+        # return_velocities=True or no other return flag is set
+        # because return_counts used to only return counts instead
+        # of returning velocities & counts
+        if return_velocities is None and (return_counts or return_decays):
+            return_velocities = False
+        elif return_velocities is None:
+            return_velocities = True
 
-            v = _cat(_output_data, x)
+        # Decide which model predictions to return
+        # based on flags provided
+        returns = tuple(
+            _cat(output, x) if n_time_steps > 0 else output[0]
+            for output, output_flag in (
+                (_output_velo, return_velocities),
+                (_output_count, return_counts),
+                (_output_decay, return_decays)
+            ) if output_flag
+        )
 
-        return v
+        if len(returns) == 0:
+            return None
+        elif len(returns) == 1:
+            return returns[0]
+        else:
+            return returns
+
+    def forward_time_step(
+        self,
+        x,
+        hidden_state=True,
+        return_submodels=False,
+        return_decays=False,
+        return_unmodified_counts=False
+    ):
+
+        _v = self.forward_model(
+            x,
+            hidden_state=hidden_state,
+            return_submodels=return_submodels
+        )
+
+        if return_decays:
+            _d = self.forward_decay_model(
+                x,
+                hidden_state=hidden_state,
+                return_decay_constants=True
+            )
+        else:
+            _d = None
+
+        if not return_unmodified_counts:
+            x = self.next_count_from_velocity(
+                x,
+                _v
+            )
+
+        return x, _v, _d
 
     def forward_model(
         self,
@@ -457,6 +504,10 @@ class SupirFactorBiophysical(
 
     def output_weights(self, *args, **kwargs):
         return self._transcription_model.output_weights(*args, **kwargs)
+
+    def set_drop_tfs(self, *args, **kwargs):
+        self._transcription_model.set_drop_tfs(*args, **kwargs)
+        return self
 
     @staticmethod
     def get_last_step(x):

@@ -723,66 +723,6 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model._training_step = _optimizer_correct
         self.dynamical_model.train_model(self.velocity_data, 10)
 
-    @unittest.skip
-    def test_x_decay(self):
-
-        self.dynamical_model.eval()
-
-        in_data = self.dynamical_model.input_data(XTV_tensor)
-        n_time = self.dynamical_model._ntime(in_data)
-
-        self.assertEqual(n_time, 4)
-
-        v = self.dynamical_model(
-            in_data
-        )
-
-        v_x_decay = self.dynamical_model(
-            in_data,
-            x_decay=in_data
-        )
-
-        torch.testing.assert_close(
-            in_data,
-            self.dynamical_model._x_decay(
-                in_data, n_time
-            )
-        )
-
-        torch.testing.assert_close(v, v_x_decay)
-
-    @unittest.skip
-    def test_perturbation_prediction(self):
-
-        self.dynamical_model.train_model(self.velocity_data, 10)
-
-        in_data = self.dynamical_model.input_data(XTV_tensor)
-
-        predicts = self.dynamical_model.predict_perturbation(
-            in_data,
-            n_time_steps=5,
-            perturbation=1
-        )
-
-        self.assertEqual(
-            predicts.shape,
-            (25, 9, 4)
-        )
-
-        with torch.no_grad():
-
-            bad_predicts = self.dynamical_model(
-                in_data,
-                x_decay=torch.zeros(25, 9, 4),
-                n_time_steps=5,
-                return_submodels=True
-            )
-
-        self.assertEqual(
-            bad_predicts[1].shape,
-            (25, 9, 4)
-        )
-
 
 class TestDynamicalModelNoDecay(TestDynamicalModel):
 

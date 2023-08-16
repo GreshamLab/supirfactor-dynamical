@@ -2,6 +2,7 @@ import torch
 import pandas as pd
 import warnings
 
+from torch.nn.utils import prune
 from .._utils import _process_weights_to_tensor
 
 
@@ -91,9 +92,72 @@ class _PriorMixin:
 
         return self
 
+    def set_decoder(
+        self,
+        activation='softplus'
+    ):
+        """
+        Set decoder
+
+        :param activation: Apply activation function to decoder output
+            layer, defaults to 'softplus'
+        :type relu: bool, optional
+        """
+
+        self.output_activation = activation
+
+        decoder = self.append_activation_function(
+            torch.nn.Sequential(
+                torch.nn.Linear(self.k, self.g, bias=False),
+            ),
+            activation
+        )
+
+        return decoder
+
+    def mask_input_weights(
+        self,
+        mask,
+        use_mask_weights=False,
+        layer_name='weight_ih_l0',
+        weight_vstack=None
+    ):
+
+        if isinstance(self.encoder, torch.nn.Sequential):
+            encoder = self.encoder[0]
+        else:
+            encoder = self.encoder
+
+        if weight_vstack is not None and weight_vstack > 1:
+            mask = torch.vstack([mask for _ in range(weight_vstack)])
+
+        if mask.shape != getattr(encoder, layer_name).shape:
+            raise ValueError(
+                f"Mask shape {mask.shape} does not match weights {layer_name} "
+                f"shape {getattr(encoder, layer_name).shape}"
+            )
+
+        # Replace initialized encoder weights with prior weights
+        if use_mask_weights:
+            setattr(
+                encoder,
+                layer_name,
+                torch.nn.parameter.Parameter(
+                    torch.clone(mask)
+                )
+            )
+
+        # Mask to prior
+        prune.custom_from_mask(
+            encoder,
+            name=layer_name,
+            mask=mask != 0
+        )
+
     def set_drop_tfs(
         self,
-        drop_tfs
+        drop_tfs,
+        raise_error=True
     ):
         """
         Remove specific TF nodes from the TF layer
@@ -106,7 +170,7 @@ class _PriorMixin:
 
         if drop_tfs is None:
             self._drop_tf = None
-            return
+            return self
 
         elif self.prior_network_labels[1] is None:
             raise RuntimeError(
@@ -114,25 +178,29 @@ class _PriorMixin:
                 "use a labeled DataFrame for the prior network"
             )
 
-        elif not isinstance(
+        if not isinstance(
             drop_tfs,
             (tuple, list, pd.Series, pd.Index)
         ):
-            self._drop_tf = [drop_tfs]
+            drop_tfs = [drop_tfs]
 
         else:
-            self._drop_tf = drop_tfs
+            drop_tfs = drop_tfs
 
-        _no_match = set(self._drop_tf).difference(
+        _no_match = set(drop_tfs).difference(
             self.prior_network_labels[1]
         )
 
         if len(_no_match) != 0:
-            warnings.warn(
-                f"{len(_no_match)} / {len(self._drop_tf)} labels don't match "
-                f"model labels: {list(_no_match)}",
-                RuntimeWarning
-            )
+
+            _msg = f"{len(_no_match)} / {len(drop_tfs)} labels don't match "
+            _msg += f"model labels: {list(_no_match)}"
+
+            if raise_error:
+                raise ValueError(_msg)
+
+            else:
+                warnings.warn(_msg, RuntimeWarning)
 
         return self
 

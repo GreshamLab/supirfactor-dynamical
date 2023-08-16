@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import pandas as pd
 
-from torch.nn.utils import prune
 from torch.utils.data import DataLoader
 
 from .._utils import (
@@ -183,68 +182,6 @@ class _TFMixin(
                 tensor_list,
                 dim=tensor_list[0].ndim - 2
             )
-
-    def set_decoder(
-        self,
-        activation='softplus'
-    ):
-        """
-        Set decoder
-
-        :param activation: Apply activation function to decoder output
-            layer, defaults to 'softplus'
-        :type relu: bool, optional
-        """
-
-        self.output_activation = activation
-
-        decoder = self.append_activation_function(
-            torch.nn.Sequential(
-                torch.nn.Linear(self.k, self.g, bias=False),
-            ),
-            activation
-        )
-
-        return decoder
-
-    def mask_input_weights(
-        self,
-        mask,
-        use_mask_weights=False,
-        layer_name='weight_ih_l0',
-        weight_vstack=None
-    ):
-
-        if isinstance(self.encoder, torch.nn.Sequential):
-            encoder = self.encoder[0]
-        else:
-            encoder = self.encoder
-
-        if weight_vstack is not None and weight_vstack > 1:
-            mask = torch.vstack([mask for _ in range(weight_vstack)])
-
-        if mask.shape != getattr(encoder, layer_name).shape:
-            raise ValueError(
-                f"Mask shape {mask.shape} does not match weights {layer_name} "
-                f"shape {getattr(encoder, layer_name).shape}"
-            )
-
-        # Replace initialized encoder weights with prior weights
-        if use_mask_weights:
-            setattr(
-                encoder,
-                layer_name,
-                torch.nn.parameter.Parameter(
-                    torch.clone(mask)
-                )
-            )
-
-        # Mask to prior
-        prune.custom_from_mask(
-            encoder,
-            name=layer_name,
-            mask=mask != 0
-        )
 
     @torch.inference_mode()
     def output_weights(
