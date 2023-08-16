@@ -197,10 +197,12 @@ class _PriorMixin:
             _msg += f"model labels: {list(_no_match)}"
 
             if raise_error:
-                raise ValueError(_msg)
+                raise RuntimeError(_msg)
 
             else:
                 warnings.warn(_msg, RuntimeWarning)
+
+        self._drop_tf = drop_tfs
 
         return self
 

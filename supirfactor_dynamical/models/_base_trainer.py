@@ -173,20 +173,36 @@ class _TrainingMixin:
 
         return mse.item()
 
+    def _calculate_all_losses(
+        self,
+        x,
+        loss_function,
+        loss_weight=None,
+        output_kwargs={},
+        **kwargs
+    ):
+
+        loss = self._calculate_loss(
+            x,
+            loss_function,
+            loss_weight=loss_weight,
+            output_kwargs=output_kwargs,
+            **kwargs
+        ).item()
+
+        return (loss, )
+
     def _calculate_loss(
         self,
         x,
         loss_function,
-        x_hat=None,
         loss_weight=None,
         output_kwargs={},
         **kwargs
     ):
 
         loss = loss_function(
-            self._slice_data_and_forward(
-                x, **kwargs
-            ) if x_hat is None else x_hat,
+            self._slice_data_and_forward(x, **kwargs),
             self.output_data(x, **output_kwargs)
         )
 
@@ -210,13 +226,13 @@ class _TrainingMixin:
                 for val_x in validation_dataloader:
 
                     _validation_batch_losses.append(
-                        self._calculate_loss(
+                        self._calculate_all_losses(
                             val_x,
                             loss_function
-                        ).item()
+                        )
                     )
 
-            return np.mean(_validation_batch_losses)
+            return np.mean(np.array(_validation_batch_losses), axis=0)
 
     def set_dropouts(
         self,

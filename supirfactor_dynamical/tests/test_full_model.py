@@ -655,7 +655,6 @@ class TestDynamicalModel(unittest.TestCase):
             decimal=5
         )
 
-    @unittest.skip
     def test_loss_df(self):
 
         self.dynamical_model.train_model(
@@ -666,7 +665,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model.training_loss_df.shape,
-            (3, 11)
+            (2, 11)
         )
 
         self.assertEqual(
@@ -678,7 +677,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model.validation_loss_df.shape,
-            (3, 11)
+            (2, 11)
         )
 
         self.assertEqual(

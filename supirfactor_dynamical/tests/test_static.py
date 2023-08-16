@@ -487,19 +487,19 @@ class TestTFDropouts(unittest.TestCase):
         self.ae.set_drop_tfs(None)
 
         with self.assertWarns(RuntimeWarning):
-            self.ae.set_drop_tfs("A")
+            self.ae.set_drop_tfs("A", raise_error=False)
 
         with self.assertWarns(RuntimeWarning):
-            self.ae.set_drop_tfs("C")
+            self.ae.set_drop_tfs("C", raise_error=False)
 
         with self.assertWarns(RuntimeWarning):
-            self.ae.set_drop_tfs(["A", "c"])
+            self.ae.set_drop_tfs(["A", "c"], raise_error=False)
 
         with self.assertWarns(RuntimeWarning):
-            self.ae.set_drop_tfs(["A", 0])
+            self.ae.set_drop_tfs(["A", 0], raise_error=False)
 
         with self.assertWarns(RuntimeWarning):
-            self.ae.set_drop_tfs(["A", 0, 1, 2])
+            self.ae.set_drop_tfs(["A", 0, 1, 2], raise_error=False)
 
         self.ae.set_drop_tfs([0, 1, 2])
 

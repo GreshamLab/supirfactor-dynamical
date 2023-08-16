@@ -206,6 +206,35 @@ class SupirFactorBiophysical(
         unmodified_counts=False,
         hidden_state=False
     ):
+        """
+        Run model on data x
+
+        :param x: Input data of (N, L, G) where N is batch, L is
+            sequence length, and G is gene features
+        :type x: torch.Tensor
+        :param n_time_steps: Number of time steps to predict from, starting
+            at the end of the input data, defaults to 0
+        :type n_time_steps: int, optional
+        :param return_velocities: Return velocity predictions, defaults to None
+        :type return_velocities: bool, optional
+        :param return_submodels: Return velocity positive & negative submodels
+            as a tuple of velocities, defaults to False
+        :type return_submodels: bool, optional
+        :param return_counts: Return count predictions, defaults to False
+        :type return_counts: bool, optional
+        :param return_decays: Return decay rate predictions, defaults to False
+        :type return_decays: bool, optional
+        :param unmodified_counts: Return unmodified counts from input data x,
+            instead of the next time step prediction within the input sequence,
+            defaults to False
+        :type unmodified_counts: bool, optional
+        :param hidden_state: Use the existing hidden state of the model
+            instead of reinitializing it, defaults to False
+        :type hidden_state: bool, optional
+        :return: Velocity, Count, and Decay Rate predictions, depending on
+            the return flags provided
+        :rtype: torch.Tensor or tuple(torch.Tensor)
+        """
 
         # Calculate model predictions for the data provided
         counts, v, d = self.forward_time_step(
@@ -444,6 +473,34 @@ class SupirFactorBiophysical(
 
         return (full_loss, decay_loss)
 
+    def _calculate_all_losses(
+        self,
+        x,
+        loss_function,
+        loss_weight=None,
+        output_kwargs={},
+        **kwargs
+    ):
+
+        loss = self._calculate_loss(
+            x,
+            loss_function,
+            loss_weight=loss_weight,
+            output_kwargs=output_kwargs,
+            **kwargs
+        ).item()
+
+        if self._decay_optimize_separate(True):
+            decay_loss = self._decay_model._calculate_loss(
+                x,
+                loss_function,
+                loss_weight=loss_weight
+            ).item()
+        else:
+            decay_loss = 0.
+
+        return (loss, decay_loss)
+
     @torch.inference_mode()
     def erv(
         self,
@@ -530,6 +587,8 @@ class SupirFactorBiophysical(
             return False
         elif not self.separately_optimize_decay_model:
             return False
+        elif n is True:
+            return True
         else:
             return self._decay_optimize_epoch(n)
 
