@@ -124,19 +124,17 @@ class TestDynamicalModel(unittest.TestCase):
                 )
 
                 if self.decay_model is False:
-                    torch.testing.assert_close(
-                        predict_neg,
-                        torch.zeros_like(predict_neg)
+                    self.assertIsNone(
+                        predict_neg
                     )
                 else:
                     self.assertGreaterEqual(predict_pos.min(), 0)
+                    self.assertGreaterEqual(0, predict_neg.max())
 
-                self.assertGreaterEqual(0, predict_neg.max())
-
-                npt.assert_almost_equal(
-                    (predict_pos + predict_neg).numpy(),
-                    predicts.numpy()
-                )
+                    npt.assert_almost_equal(
+                        (predict_pos + predict_neg).numpy(),
+                        predicts.numpy()
+                    )
 
     def test_training_offset(self):
 
@@ -159,14 +157,13 @@ class TestDynamicalModel(unittest.TestCase):
             )
         else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
-        self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-        self.assertTrue(np.all(xn.detach().numpy() <= 0))
-
-        npt.assert_almost_equal(
-            xn.detach().numpy() + xp.detach().numpy(),
-            x.detach().numpy()
-        )
+            npt.assert_almost_equal(
+                xn.detach().numpy() + xp.detach().numpy(),
+                x.detach().numpy()
+            )
 
     def test_training_predict(self):
 
@@ -195,14 +192,13 @@ class TestDynamicalModel(unittest.TestCase):
             )
         else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
-        self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-        self.assertTrue(np.all(xn.detach().numpy() <= 0))
-
-        npt.assert_almost_equal(
-            xn.detach().numpy() + xp.detach().numpy(),
-            x.detach().numpy()
-        )
+            npt.assert_almost_equal(
+                xn.detach().numpy() + xp.detach().numpy(),
+                x.detach().numpy()
+            )
 
     def test_training_scale(self):
 
@@ -231,14 +227,13 @@ class TestDynamicalModel(unittest.TestCase):
             )
         else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
-        self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-        self.assertTrue(np.all(xn.detach().numpy() <= 0))
-
-        npt.assert_almost_equal(
-            xn.detach().numpy() + xp.detach().numpy(),
-            x.detach().numpy()
-        )
+            npt.assert_almost_equal(
+                xn.detach().numpy() + xp.detach().numpy(),
+                x.detach().numpy()
+            )
 
     def test_training_constant_decay_predict(self):
 
@@ -273,14 +268,13 @@ class TestDynamicalModel(unittest.TestCase):
             )
         else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
-        self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-        self.assertTrue(np.all(xn.detach().numpy() <= 0))
-
-        npt.assert_almost_equal(
-            xn.detach().numpy() + xp.detach().numpy(),
-            x.detach().numpy()
-        )
+            npt.assert_almost_equal(
+                xn.detach().numpy() + xp.detach().numpy(),
+                x.detach().numpy()
+            )
 
     def test_training_constant_decay(self):
 
@@ -315,14 +309,13 @@ class TestDynamicalModel(unittest.TestCase):
             )
         else:
             self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.detach().numpy() <= 0))
 
-        self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-        self.assertTrue(np.all(xn.detach().numpy() <= 0))
-
-        npt.assert_almost_equal(
-            xn.detach().numpy() + xp.detach().numpy(),
-            x.detach().numpy()
-        )
+            npt.assert_almost_equal(
+                xn.detach().numpy() + xp.detach().numpy(),
+                x.detach().numpy()
+            )
 
     def test_train_loop(self):
 
@@ -367,7 +360,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         def forward_model(x, **kwargs):
-            return torch.full_like(x, 0.1)
+            return torch.full_like(x, 0.1), None
 
         dynamical_model.forward_model = forward_model
 
@@ -400,7 +393,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         def forward_model(x, **kwargs):
-            return torch.full_like(x, 0.1)
+            return torch.full_like(x, 0.1), None
 
         dynamical_model.forward_model = forward_model
 
@@ -445,7 +438,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         def forward_model(x, **kwargs):
-            return torch.full_like(x, 1)
+            return torch.full_like(x, 1), None
 
         dynamical_model.forward_model = forward_model
 
@@ -672,8 +665,6 @@ class TestDynamicalModel(unittest.TestCase):
             self.dynamical_model.training_loss_df.iloc[:, 0].tolist(),
             self.dynamical_model._loss_type_names
         )
-
-        print(self.dynamical_model.validation_loss_df)
 
         self.assertEqual(
             self.dynamical_model.validation_loss_df.shape,

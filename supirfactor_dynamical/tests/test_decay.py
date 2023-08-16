@@ -1,7 +1,6 @@
 import unittest
 
 import numpy as np
-import numpy.testing as npt
 
 import torch
 from torch.utils.data import DataLoader
@@ -70,8 +69,13 @@ class TestDecayModule(unittest.TestCase):
 
             with torch.no_grad():
 
-                dout = decay(d[..., 0]).numpy()
-                dc_out = decay(d[..., 0], return_decay_constants=True).numpy()
+                dout, dc_out = decay(
+                    d[..., 0],
+                    return_decay_constants=True
+                )
+
+                dout = dout.numpy()
+                dc_out = dc_out.numpy()
 
                 self.assertEqual(
                     dout.shape,
@@ -113,8 +117,13 @@ class TestDecayModule(unittest.TestCase):
 
             with torch.no_grad():
 
-                dout = decay(d[..., 0]).numpy()
-                dc_out = decay(d[..., 0], return_decay_constants=True).numpy()
+                dout, dc_out = decay(
+                    d[..., 0],
+                    return_decay_constants=True
+                )
+
+                dout = dout.numpy()
+                dc_out = dc_out.numpy()
 
                 self.assertEqual(
                     dout.shape,

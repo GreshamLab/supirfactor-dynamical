@@ -109,12 +109,14 @@ class DecayModule(
             -1.0
         )
 
+        _v = self.rescale_velocity(
+            torch.mul(x, _x[None, ...])
+        )
+
         if return_decay_constants:
-            return _x
+            return _v, _x
         else:
-            return self.rescale_velocity(
-                torch.mul(x, _x[None, ...])
-            )
+            return _v
 
     def _slice_data_and_forward(
         self,

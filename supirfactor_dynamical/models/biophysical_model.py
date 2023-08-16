@@ -8,6 +8,7 @@ from ._base_trainer import (
 )
 from ._base_velocity_model import _VelocityMixin
 from .decay_model import DecayModule
+from .._utils.misc import (_cat, _add)
 
 
 class SupirFactorBiophysical(
@@ -240,7 +241,6 @@ class SupirFactorBiophysical(
         counts, v, d = self.forward_time_step(
             x,
             return_submodels=return_submodels,
-            return_decays=return_decays,
             hidden_state=hidden_state,
             return_unmodified_counts=unmodified_counts
         )
@@ -249,28 +249,25 @@ class SupirFactorBiophysical(
         _output_count = [counts]
         _output_decay = [d]
 
-        # Do forward predictions starting from the data provided
-        # for n_time_steps time units
-        if n_time_steps > 0:
+        # Do forward predictions starting from the last value in the
+        # data provided for n_time_steps time units
+        _x = counts[:, [-1], :]
 
-            _x = self.get_last_step(counts)
+        # Iterate through the number of steps for prediction
+        for _ in range(n_time_steps):
 
-            # Iterate through the number of steps for prediction
-            for _ in range(n_time_steps):
+            # Call the model on a single time point to get velocity
+            # and update the counts by adding velocity
+            _x, _v, _d = self.forward_time_step(
+                _x,
+                hidden_state=True,
+                return_submodels=return_submodels,
+                return_unmodified_counts=False
+            )
 
-                # Call the model on a single time point to get velocity
-                # and update the counts by adding velocity
-                _x, _v, _d = self.forward_time_step(
-                    _x,
-                    hidden_state=True,
-                    return_submodels=return_submodels,
-                    return_decays=return_decays,
-                    return_unmodified_counts=False
-                )
-
-                _output_velo.append(_v)
-                _output_count.append(_x)
-                _output_decay.append(_d)
+            _output_velo.append(_v)
+            _output_count.append(_x)
+            _output_decay.append(_d)
 
         # Backwards compatibility; only returning velocities if
         # return_velocities=True or no other return flag is set
@@ -284,11 +281,11 @@ class SupirFactorBiophysical(
         # Decide which model predictions to return
         # based on flags provided
         returns = tuple(
-            _cat(output, x) if n_time_steps > 0 else output[0]
-            for output, output_flag in (
-                (_output_velo, return_velocities),
-                (_output_count, return_counts),
-                (_output_decay, return_decays)
+            _cat(output, output_dim) if n_time_steps > 0 else output[0]
+            for output, output_flag, output_dim in (
+                (_output_velo, return_velocities, 1),
+                (_output_count, return_counts, 1),
+                (_output_decay, return_decays, 0)
             ) if output_flag
         )
 
@@ -304,24 +301,14 @@ class SupirFactorBiophysical(
         x,
         hidden_state=True,
         return_submodels=False,
-        return_decays=False,
         return_unmodified_counts=False
     ):
 
-        _v = self.forward_model(
+        _v, _d = self.forward_model(
             x,
             hidden_state=hidden_state,
             return_submodels=return_submodels
         )
-
-        if return_decays:
-            _d = self.forward_decay_model(
-                x,
-                hidden_state=hidden_state,
-                return_decay_constants=True
-            )
-        else:
-            _d = None
 
         if not return_unmodified_counts:
             x = self.next_count_from_velocity(
@@ -358,19 +345,20 @@ class SupirFactorBiophysical(
         )
 
         # Run the decay model
-        x_negative = self.forward_decay_model(
+        x_negative, x_decay_rate = self.forward_decay_model(
             x,
-            hidden_state=hidden_state
+            hidden_state=hidden_state,
+            return_decay_constants=True
         )
 
         if return_submodels:
-            return x_positive, x_negative
+            return (x_positive, x_negative), x_decay_rate
 
         elif x_negative is None:
-            return x_positive
+            return x_positive, x_decay_rate
 
         else:
-            return torch.add(x_positive, x_negative)
+            return _add(x_positive, x_negative), x_decay_rate
 
     def forward_transcription_model(
         self,
@@ -395,8 +383,10 @@ class SupirFactorBiophysical(
         return_decay_constants=False
     ):
 
-        if not self.has_decay:
-            return torch.zeros_like(x)
+        if not self.has_decay and return_decay_constants:
+            return None, None
+        elif not self.has_decay:
+            return None
 
         return self._decay_model(
             x,
@@ -566,13 +556,9 @@ class SupirFactorBiophysical(
         self._transcription_model.set_drop_tfs(*args, **kwargs)
         return self
 
-    @staticmethod
-    def get_last_step(x):
-        return x[:, [-1], :] if x.ndim == 3 else x[[-1], :]
-
     def next_count_from_velocity(self, x, v):
         if isinstance(v, tuple):
-            v = torch.add(v[0], v[1])
+            v = _add(v[0], v[1])
 
         return super().next_count_from_velocity(x, v)
 
@@ -591,18 +577,3 @@ class SupirFactorBiophysical(
             return True
         else:
             return self._decay_optimize_epoch(n)
-
-
-def _cat(_data, x):
-
-    if isinstance(_data[0], tuple):
-        return (
-            _cat([d[0] for d in _data], x),
-            _cat([d[1] for d in _data], x)
-        )
-
-    else:
-        return torch.cat(
-            _data,
-            dim=x.ndim - 2
-        )
