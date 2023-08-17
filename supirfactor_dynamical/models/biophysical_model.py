@@ -445,7 +445,7 @@ class SupirFactorBiophysical(
             positive=True
         )
 
-        if self._decay_optimize_separate(epoch_num):
+        if self._decay_optimize(epoch_num):
             negative_loss = super()._training_step(
                 epoch_num,
                 train_x,
@@ -455,6 +455,19 @@ class SupirFactorBiophysical(
             )
         else:
             negative_loss = 0
+
+        if (
+            self.separately_optimize_decay_model and 
+            self._decay_optimize(epoch_num)
+        ):
+            decay_loss = super()._training_step(
+                epoch_num,
+                train_x,
+                optimizer[2],
+                loss_function,
+                positive=False,
+                decay_output=True
+            )
 
         return positive_loss, negative_loss
 
@@ -482,7 +495,8 @@ class SupirFactorBiophysical(
         self,
         x,
         loss_function,
-        positive=True
+        positive=True,
+        decay_output=False
     ):
 
         pos, neg = self._slice_data_and_forward(
@@ -490,17 +504,27 @@ class SupirFactorBiophysical(
             return_submodels=True
         )
 
+        if decay_output:
+            _output = self.output_data(
+                x,
+                decay=True
+            )
+        else:
+            _output = self.output_data(
+                x
+            )
+
         if neg is None:
             return loss_function(
                 pos,
-                self.output_data(x)
+                _output
             )
 
         elif positive:
             return loss_function(
                 pos,
                 torch.subtract(
-                    self.output_data(x),
+                    _output,
                     neg
                 )
             )
@@ -509,7 +533,7 @@ class SupirFactorBiophysical(
             return loss_function(
                 neg,
                 torch.subtract(
-                    self.output_data(x),
+                    _output,
                     pos
                 )
             )
@@ -585,16 +609,12 @@ class SupirFactorBiophysical(
 
         return super().next_count_from_velocity(x, v)
 
-    def _decay_optimize_epoch(self, n):
-        if self.decay_epoch_delay is not None:
-            return n > self.decay_epoch_delay
-        else:
-            return True
-
-    def _decay_optimize_separate(self, n):
+    def _decay_optimize(self, n):
         if not self.has_decay:
             return False
         elif n is True:
             return True
+        elif self.decay_epoch_delay is not None:
+            return n > self.decay_epoch_delay
         else:
-            return self._decay_optimize_epoch(n)
+            return True

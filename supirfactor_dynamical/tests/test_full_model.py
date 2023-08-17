@@ -28,6 +28,7 @@ from ._stubs import (
     T,
     XV_tensor,
     XTV_tensor,
+    XVD_tensor,
     XTVD_tensor
 )
 
@@ -767,8 +768,21 @@ class TestDynamicalModelOptimizeDecay(TestDynamicalModelTuneDecay):
 
     optimize_too = True
 
+    def setUp(self) -> None:
+        super().setUp()
+        self.velocity_data = DataLoader(
+            TimeDataset(
+                XVD_tensor,
+                T,
+                0,
+                4,
+                1,
+                sequence_length=3
+            ),
+            batch_size=25
+        )
 
-class TestDynamicalModelOptimizeDecayDelay(TestDynamicalModelTuneDecay):
 
-    optimize_too = True
+class TestDynamicalModelOptimizeDecayDelay(TestDynamicalModelOptimizeDecay):
+
     decay_delay = 5
