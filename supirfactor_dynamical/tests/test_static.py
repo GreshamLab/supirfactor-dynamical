@@ -586,7 +586,10 @@ class TestTFAutoencoderOffset(unittest.TestCase):
             20
         )
 
-        predictions = self.ae.predict(self.static_dataloader, 10)
+        predictions = self.ae.predict(
+            self.static_dataloader,
+            n_time_steps=10
+        )
 
         self.assertEqual(
             predictions.shape,
@@ -598,7 +601,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
                 X_tensor,
                 batch_size=5
             ),
-            20
+            n_time_steps=20
         )
 
         self.assertEqual(
@@ -608,7 +611,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         predictions = self.ae.predict(
             X_tensor[0:25, :],
-            20
+            n_time_steps=20
         )
 
         self.assertEqual(
@@ -618,7 +621,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         predictions = self.ae.predict(
             X_tensor[0, :],
-            20
+            n_time_steps=20
         )
 
         self.assertEqual(

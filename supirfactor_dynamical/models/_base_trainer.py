@@ -389,16 +389,13 @@ class _TrainingMixin:
         **kwargs
     ):
 
-        forward = self(
-            self.input_data(train_x),
-            n_time_steps=self.n_additional_predictions,
-            **kwargs
+        return self.output_model(
+            self(
+                self.input_data(train_x),
+                n_time_steps=self.n_additional_predictions,
+                **kwargs
+            )
         )
-
-        if isinstance(forward, tuple):
-            return [self.output_model(f) for f in forward]
-        else:
-            return self.output_model(forward)
 
     def output_data(
         self,
@@ -473,11 +470,20 @@ class _TrainingMixin:
         :rtype: torch.Tensor
         """
 
-        return self.output_data(
-            x,
-            output_t_plus_one=False,
-            keep_all_dims=True
-        )
+        if isinstance(x, (tuple, list)):
+            return tuple(
+                self.output_model(_x) for _x in x
+            )
+
+        elif x is None:
+            return None
+
+        else:
+            return self.output_data(
+                x,
+                output_t_plus_one=False,
+                keep_all_dims=True
+            )
 
     def input_data(self, x):
         """

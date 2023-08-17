@@ -9,6 +9,8 @@ from .._utils import (
     _calculate_rss
 )
 
+from .._utils.misc import _cat
+
 from ._model_mixins import (
     _PriorMixin,
     _ScalingMixin
@@ -415,33 +417,47 @@ class _TFMixin(
     def predict(
         self,
         x,
-        n_time_steps
+        **kwargs
     ):
+        """
+        Wraps forward so that it will take a
+        Tensor, numpy-like array, or a DataLoader
 
-        if not self.output_t_plus_one:
-            raise RuntimeError(
-                "Model not trained for prediction"
-            )
+        :param x: Input data
+        :type x: torch.Tensor, np.ndarray, torch.DataLoader
+        :return: Model outputs, concatenated on the first axis
+            if necessary
+        :rtype: torch.Tensor, tuple(torch.Tensor)
+        """
 
         self.eval()
 
         # Recursive call if x is a DataLoader
         if isinstance(x, DataLoader):
-            return torch.cat(
-                [
-                    self.forward(
-                        batch_x,
-                        n_time_steps=n_time_steps
-                    )
-                    for batch_x in x
-                ],
-                dim=0
-            )
+            results = [
+                self(
+                    batch_x,
+                    **kwargs
+                )
+                for batch_x in x
+            ]
+
+            if len(results) == 1:
+                return results[0]
+
+            if isinstance(results[0], torch.Tensor):
+                return _cat(results, 0)
+
+            else:
+                return tuple(
+                    _cat([results[i][j] for i in range(len(results))], 0)
+                    for j in range(len(results[0]))
+                )
 
         elif not torch.is_tensor(x):
             x = torch.Tensor(x)
 
-        return self.forward(
+        return self(
             x,
-            n_time_steps=n_time_steps
+            **kwargs
         )

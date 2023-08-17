@@ -373,7 +373,7 @@ class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
 
         predictions = self.dyn_ae.predict(
             X_tensor[[0, 25, 50, 75], :],
-            20
+            n_time_steps=20
         )
 
         self.assertEqual(
