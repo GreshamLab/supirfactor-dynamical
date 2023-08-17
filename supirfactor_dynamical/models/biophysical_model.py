@@ -22,8 +22,9 @@ class SupirFactorBiophysical(
     type_name = 'biophysical'
 
     _loss_type_names = [
-        'biophysical_velocity',
-        'biophysical_decay'
+        'biophysical_transcription',
+        'biophysical_decay_velocity',
+        'biophysical_decay_rate'
     ]
 
     separately_optimize_decay_model = False
@@ -405,20 +406,13 @@ class SupirFactorBiophysical(
 
         # Create separate optimizers for the decay and transcription
         # models and pass them as tuples
-
-        if self.has_decay:
-            _decay_optimizer = self._decay_model.process_optimizer(
-                optimizer
-            )
-        else:
-            _decay_optimizer = False
-
         optimizer = (
-            self.process_optimizer(optimizer),
             self._transcription_model.process_optimizer(
                 optimizer
             ),
-            _decay_optimizer
+            self._decay_model.process_optimizer(
+                optimizer
+            ) if self.has_decay else False
         )
 
         return super().train_model(
@@ -436,11 +430,30 @@ class SupirFactorBiophysical(
         optimizer,
         loss_function
     ):
+        """
+        Do a training step for the transcription model
+        and for the decay model if conditions for that
+        are satisfied
+
+        :param epoch_num: Epoch number
+        :type epoch_num: int
+        :param train_x: Training data (N, L, G, ...)
+        :type train_x: torch.Tensor
+        :param optimizer: Tuple of optimizers where
+            optimizer[0] is for transcription model and
+            optimizer[1] is for decay model
+        :type optimizer: torch.optim, torch.optim
+        :param loss_function: Loss function
+        :type loss_function: torch.nn.Loss
+        :return: Returns transcription model loss,
+            decay loss, and decay tuning loss
+        :rtype: float, float, float
+        """
 
         positive_loss = super()._training_step(
             epoch_num,
             train_x,
-            optimizer[1],
+            optimizer[0],
             loss_function,
             positive=True
         )
@@ -449,7 +462,7 @@ class SupirFactorBiophysical(
             negative_loss = super()._training_step(
                 epoch_num,
                 train_x,
-                optimizer[2],
+                optimizer[1],
                 loss_function,
                 positive=False
             )
@@ -457,19 +470,21 @@ class SupirFactorBiophysical(
             negative_loss = 0
 
         if (
-            self.separately_optimize_decay_model and 
+            self.separately_optimize_decay_model and
             self._decay_optimize(epoch_num)
         ):
             decay_loss = super()._training_step(
                 epoch_num,
                 train_x,
-                optimizer[2],
+                optimizer[1],
                 loss_function,
                 positive=False,
                 decay_output=True
             )
+        else:
+            decay_loss = 0
 
-        return positive_loss, negative_loss
+        return positive_loss, negative_loss, decay_loss
 
     def _calculate_all_losses(
         self,
@@ -483,13 +498,29 @@ class SupirFactorBiophysical(
             positive=True
         ).item()
 
-        decay_loss = self._calculate_loss(
-            x,
-            loss_function,
-            positive=False
-        ).item()
+        if self.has_decay:
+            decay_loss = self._calculate_loss(
+                x,
+                loss_function,
+                positive=False
+            ).item()
+        else:
+            decay_loss = 0
 
-        return loss, decay_loss
+        if (
+            self.has_decay and
+            self.separately_optimize_decay_model
+        ):
+            decay_rate_loss = self._calculate_loss(
+                x,
+                loss_function,
+                positive=False,
+                decay_output=True
+            ).item()
+        else:
+            decay_rate_loss = 0
+
+        return loss, decay_loss, decay_rate_loss
 
     def _calculate_loss(
         self,
@@ -504,39 +535,51 @@ class SupirFactorBiophysical(
             return_submodels=True
         )
 
+        if positive and decay_output:
+            raise ValueError(
+                "Cannot set positive=True and decay_output=True"
+            )
+        elif neg is None and decay_output:
+            raise ValueError(
+                "Cannot set decay_output=True without a decay model"
+            )
+
+        # Compare decay velocity to data decay velocity
         if decay_output:
+            _input = neg
             _output = self.output_data(
                 x,
                 decay=True
             )
+
+        # Compare transcription velocity to data velocity minus
+        # decay component
+        elif positive and neg is not None:
+            _input = pos
+            _output = torch.subtract(
+                self.output_data(x),
+                neg
+            )
+
+        # Compare decay velocity to data velocity minus
+        # transcription component
+        elif neg is not None:
+            _input = neg
+            _output = torch.subtract(
+                self.output_data(x),
+                pos
+            )
+
+        # Compare overall velocity to data velocity
         else:
-            _output = self.output_data(
-                x
-            )
+            _input = pos
+            _output = self.output_data(x)
 
-        if neg is None:
-            return loss_function(
-                pos,
-                _output
-            )
-
-        elif positive:
-            return loss_function(
-                pos,
-                torch.subtract(
-                    _output,
-                    neg
-                )
-            )
-
-        else:
-            return loss_function(
-                neg,
-                torch.subtract(
-                    _output,
-                    pos
-                )
-            )
+        # Calculate loss
+        return loss_function(
+            _input,
+            _output
+        )
 
     @torch.inference_mode()
     def erv(

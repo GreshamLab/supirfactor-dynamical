@@ -675,7 +675,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model.training_loss_df.shape,
-            (2, 11)
+            (3, 11)
         )
 
         self.assertEqual(
@@ -685,7 +685,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model.validation_loss_df.shape,
-            (2, 11)
+            (3, 11)
         )
 
         self.assertEqual(
@@ -694,11 +694,6 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
     def test_optimizer(self):
-
-        if self.dynamical_model._decay_model is not None:
-            _correct_n = 10
-        else:
-            _correct_n = 4
 
         def _optimizer_correct(
             num_epoch,
@@ -709,19 +704,14 @@ class TestDynamicalModel(unittest.TestCase):
 
             self.assertEqual(
                 len(optimizer[0].param_groups[0]['params']),
-                _correct_n
-            )
-
-            self.assertEqual(
-                len(optimizer[1].param_groups[0]['params']),
                 4
             )
 
             if self.dynamical_model._decay_model is None:
-                self.assertFalse(optimizer[2])
+                self.assertFalse(optimizer[1])
             else:
                 self.assertEqual(
-                    len(optimizer[2].param_groups[0]['params']),
+                    len(optimizer[1].param_groups[0]['params']),
                     6
                 )
 
