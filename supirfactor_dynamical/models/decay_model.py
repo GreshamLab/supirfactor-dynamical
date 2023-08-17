@@ -19,8 +19,6 @@ class DecayModule(
 
     hidden_state = None
 
-    time_dependent_decay = True
-
     g = None
     k = None
 
@@ -29,8 +27,7 @@ class DecayModule(
         g,
         k=20,
         input_dropout_rate=0.5,
-        hidden_dropout_rate=0.0,
-        time_dependent_decay=True
+        hidden_dropout_rate=0.0
     ):
         super().__init__()
 
@@ -48,23 +45,16 @@ class DecayModule(
                 k,
                 bias=False
             ),
-            torch.nn.Tanh(),
+            torch.nn.Tanh()
         )
 
-        if time_dependent_decay:
-            self._intermediate = torch.nn.RNN(
-                k,
-                k,
-                1,
-                bias=False
-            )
-
-        else:
-            self._intermediate = torch.nn.Linear(
-                k,
-                k,
-                bias=False
-            )
+        self._intermediate = torch.nn.RNN(
+            k,
+            k,
+            1,
+            bias=False,
+            batch_first=True
+        )
 
         self._decoder = torch.nn.Sequential(
             torch.nn.Linear(
@@ -74,7 +64,6 @@ class DecayModule(
             torch.nn.Softplus()
         )
 
-        self.time_dependent_decay = time_dependent_decay
         self.g = g
         self.k = k
 
@@ -89,19 +78,10 @@ class DecayModule(
         # and then take the mean over the batch axis (0)
         _x = self._encoder(x)
 
-        if self.time_dependent_decay:
-
-            _x = _x.mean(axis=0)
-
-            _x, self.hidden_state = self._intermediate(
-                _x,
-                self.hidden_state if hidden_state else None
-            )
-
-        else:
-            _x = self._intermediate(
-                _x.mean(axis=(0, 1))
-            )
+        _x, self.hidden_state = self._intermediate(
+            _x,
+            self.hidden_state if hidden_state else None
+        )
 
         # Make the decay rate negative
         _x = torch.mul(
@@ -109,8 +89,10 @@ class DecayModule(
             -1.0
         )
 
+        # Multiply decay rate by input counts to get
+        # decay velocity
         _v = self.rescale_velocity(
-            torch.mul(x, _x[None, ...])
+            torch.mul(x, _x)
         )
 
         if return_decay_constants:

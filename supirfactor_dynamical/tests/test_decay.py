@@ -6,7 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
-    TimeDataset
+    TimeDataset,
+    SupirFactorBiophysical
 )
 
 from supirfactor_dynamical.models.decay_model import (
@@ -14,6 +15,7 @@ from supirfactor_dynamical.models.decay_model import (
 )
 
 from ._stubs import (
+    A,
     T,
     XV_tensor
 )
@@ -84,57 +86,9 @@ class TestDecayModule(unittest.TestCase):
 
                 self.assertEqual(
                     dc_out.shape,
-                    (3, 4)
-                )
-
-                self.assertTrue(
-                    np.all(dout <= 0)
-                )
-
-                self.assertTrue(
-                    np.all(dc_out <= 0)
-                )
-
-        self.assertEqual(len(decay.training_loss), 10)
-
-    def test_training_static(self):
-
-        decay = DecayModule(4, 2, time_dependent_decay=False)
-
-        for d in self.velocity_data:
-
-            decay.train_model(
-                [torch.stack((
-                    d[..., 0],
-                    torch.nn.ReLU()(d[..., 1] * -1) * -1
-                    ),
-                    dim=-1
-                )],
-                10
-            )
-
-            decay.eval()
-
-            with torch.no_grad():
-
-                dout, dc_out = decay(
-                    d[..., 0],
-                    return_decay_constants=True
-                )
-
-                dout = dout.numpy()
-                dc_out = dc_out.numpy()
-
-                self.assertEqual(
-                    dout.shape,
                     (25, 3, 4)
                 )
 
-                self.assertEqual(
-                    dc_out.shape,
-                    (4, )
-                )
-
                 self.assertTrue(
                     np.all(dout <= 0)
                 )
@@ -144,3 +98,25 @@ class TestDecayModule(unittest.TestCase):
                 )
 
         self.assertEqual(len(decay.training_loss), 10)
+
+    def test_training_in_context(self):
+
+        full_model = SupirFactorBiophysical(
+            A,
+            decay_model=DecayModule(4, 2)
+        )
+
+        full_model.train_model(self.velocity_data, 20)
+
+    def test_training_in_context_predict(self):
+
+        full_model = SupirFactorBiophysical(
+            A,
+            decay_model=DecayModule(4, 2)
+        )
+
+        full_model.set_time_parameters(
+            n_additional_predictions=1
+        )
+
+        full_model.train_model(self.velocity_data, 20)

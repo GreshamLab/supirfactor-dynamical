@@ -128,7 +128,7 @@ class TestPerturbBiophysical(unittest.TestCase):
         torch.testing.assert_close(
             torch.multiply(
                 in_data,
-                dr[None, ...]
+                dr
             ),
             velo[1]
         )

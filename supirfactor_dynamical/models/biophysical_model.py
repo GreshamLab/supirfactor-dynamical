@@ -28,7 +28,6 @@ class SupirFactorBiophysical(
     ]
 
     separately_optimize_decay_model = False
-    time_dependent_decay = True
     decay_epoch_delay = 0
     decay_k = 20
 
@@ -47,7 +46,6 @@ class SupirFactorBiophysical(
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
         transcription_model=None,
-        time_dependent_decay=True,
         activation='relu',
         output_activation='relu'
     ):
@@ -117,7 +115,6 @@ class SupirFactorBiophysical(
 
             self._decay_model = decay_model
             self.decay_k = self._decay_model.k
-            self.time_dependent_decay = self._decay_model.time_dependent_decay
 
         else:
 
@@ -126,11 +123,9 @@ class SupirFactorBiophysical(
                 decay_k,
                 input_dropout_rate=input_dropout_rate,
                 hidden_dropout_rate=hidden_dropout_rate,
-                time_dependent_decay=time_dependent_decay
             )
 
             self.decay_k = decay_k
-            self.time_dependent_decay = time_dependent_decay
 
         self.set_dropouts(
             input_dropout_rate,
@@ -286,7 +281,7 @@ class SupirFactorBiophysical(
             for output, output_flag, output_dim in (
                 (_output_velo, return_velocities, 1),
                 (_output_count, return_counts, 1),
-                (_output_decay, return_decays, 0)
+                (_output_decay, return_decays, 1)
             ) if output_flag
         )
 
