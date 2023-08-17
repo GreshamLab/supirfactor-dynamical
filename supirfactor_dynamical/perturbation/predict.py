@@ -13,7 +13,7 @@ def predict_perturbation(
     perturbation,
     n_time_steps,
     return_submodels=False,
-    unmodified_counts=True
+    unmodified_counts=False
 ):
 
     _L = data.shape[1]

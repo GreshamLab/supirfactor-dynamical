@@ -225,6 +225,39 @@ class TestPerturbBiophysical(unittest.TestCase):
             predicts[1]
         )
 
+    def test_no_perturb_predict_helper(self):
+
+        data = self.dynamical_model.input_data(
+            next(iter(
+                self.velocity_data
+            ))
+        )
+
+        outs = self.dynamical_model.predict(
+            data,
+            n_time_steps=5,
+            return_submodels=True
+        )
+
+        perturbs = predict_perturbation(
+            self.dynamical_model,
+            data,
+            None,
+            5,
+            return_submodels=True,
+            unmodified_counts=False
+        )
+
+        torch.testing.assert_close(
+            outs[0],
+            perturbs[0][0]
+        )
+
+        torch.testing.assert_close(
+            outs[1],
+            perturbs[0][1]
+        )
+
     def test_perturb_prediction(self):
 
         in_data = self.dynamical_model.input_data(XTV_tensor)
