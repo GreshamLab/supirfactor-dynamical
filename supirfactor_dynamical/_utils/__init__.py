@@ -17,3 +17,8 @@ from ._utils import (
 from ._trunc_robust_scaler import (
     TruncRobustScaler
 )
+
+from .misc import (
+    _add,
+    _cat
+)

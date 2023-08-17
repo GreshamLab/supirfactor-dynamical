@@ -8,10 +8,13 @@ from .._utils import (
     _calculate_rss,
     _calculate_tss,
     _calculate_r2,
-    _aggregate_r2
+    _aggregate_r2,
+    _cat
 )
 
 from ._writer import write
+
+from torch.utils.data import DataLoader
 
 
 DEFAULT_OPTIMIZER_PARAMS = {
@@ -593,6 +596,55 @@ class _TrainingMixin:
             x = torch.Tensor(x)
 
         return x
+
+    @torch.inference_mode()
+    def predict(
+        self,
+        x,
+        **kwargs
+    ):
+        """
+        Wraps forward so that it will take a
+        Tensor, numpy-like array, or a DataLoader
+
+        :param x: Input data
+        :type x: torch.Tensor, np.ndarray, torch.DataLoader
+        :return: Model outputs, concatenated on the first axis
+            if necessary
+        :rtype: torch.Tensor, tuple(torch.Tensor)
+        """
+
+        self.eval()
+
+        # Recursive call if x is a DataLoader
+        if isinstance(x, DataLoader):
+            results = [
+                self(
+                    batch_x,
+                    **kwargs
+                )
+                for batch_x in x
+            ]
+
+            if len(results) == 1:
+                return results[0]
+
+            if isinstance(results[0], torch.Tensor):
+                return _cat(results, 0)
+
+            else:
+                return tuple(
+                    _cat([results[i][j] for i in range(len(results))], 0)
+                    for j in range(len(results[0]))
+                )
+
+        elif not torch.is_tensor(x):
+            x = torch.Tensor(x)
+
+        return self(
+            x,
+            **kwargs
+        )
 
 
 def _shuffle_time_data(dl):
