@@ -35,7 +35,7 @@ def predict_perturbation(
         _v = _get_perturbed_velocities(
             model,
             data,
-            decay_rates[None, 0:_L, :]
+            decay_rates[:, 0:_L, :]
         )
 
         if unmodified_counts:
@@ -59,7 +59,7 @@ def predict_perturbation(
             _v = _get_perturbed_velocities(
                 model,
                 _x,
-                decay_rates[None, _offset:_offset + 1, :],
+                decay_rates[:, _offset:_offset + 1, :],
                 hidden_state=True
             )
 
