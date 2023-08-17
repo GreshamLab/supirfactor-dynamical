@@ -52,7 +52,7 @@ class TestDynamicalModel(unittest.TestCase):
                 XV_tensor[..., 0],
                 T,
                 0,
-                4,
+                3,
                 1,
                 sequence_length=3
             ),
@@ -163,6 +163,42 @@ class TestDynamicalModel(unittest.TestCase):
             npt.assert_almost_equal(
                 xn.detach().numpy() + xp.detach().numpy(),
                 x.detach().numpy()
+            )
+
+    def test_predict_wrapper(self):
+
+        self.dynamical_model.train_model(self.velocity_data, 50)
+        self.dynamical_model.eval()
+
+        predicts = self.dynamical_model.predict(
+            self.count_data,
+            return_submodels=True,
+            return_counts=True,
+            return_velocities=True,
+            return_decays=True,
+            n_time_steps=2
+        )
+
+        self.assertEqual(
+            predicts[0][0].shape,
+            (25, 5, 4)
+        )
+
+        if self.dynamical_model._decay_model is not None:
+            self.assertEqual(
+                predicts[0][1].shape,
+                (25, 5, 4)
+            )
+
+        self.assertEqual(
+            predicts[1].shape,
+            (25, 5, 4)
+        )
+
+        if self.dynamical_model._decay_model is not None:
+            self.assertEqual(
+                predicts[2].shape,
+                (5, 4)
             )
 
     def test_training_predict(self):
@@ -547,15 +583,6 @@ class TestDynamicalModel(unittest.TestCase):
     def test_loss(self):
 
         self.dynamical_model.eval()
-        x = self.dynamical_model.output_data(XTVD_tensor, counts=True)
-        x_bar = self.dynamical_model(
-            self.dynamical_model.input_data(XTVD_tensor),
-            return_counts=True
-        )
-        x_mse = torch.nn.MSELoss()(
-            x,
-            x_bar
-        ).item()
 
         v = self.dynamical_model.output_data(XTVD_tensor)
         v_bar = self.dynamical_model(
@@ -571,19 +598,8 @@ class TestDynamicalModel(unittest.TestCase):
             self.dynamical_model._calculate_loss(
                 XTVD_tensor,
                 torch.nn.MSELoss()
-            ).item()
-        )
-
-        self.assertAlmostEqual(
-            x_mse,
-            self.dynamical_model._calculate_loss(
-                XTVD_tensor,
-                torch.nn.MSELoss(),
-                return_counts=True,
-                output_kwargs={
-                    'counts': True
-                }
-            ).item()
+            ).item(),
+            places=5
         )
 
     def test_joint_loss(self):

@@ -437,59 +437,82 @@ class SupirFactorBiophysical(
         loss_function
     ):
 
-        if not isinstance(optimizer, tuple):
-            main_optimizer = optimizer
-        elif self._decay_optimize_epoch(epoch_num):
-            main_optimizer = optimizer[0]
-        else:
-            main_optimizer = optimizer[1]
-
-        full_loss = super()._training_step(
+        positive_loss = super()._training_step(
             epoch_num,
             train_x,
-            main_optimizer,
-            loss_function
+            optimizer[1],
+            loss_function,
+            positive=True
         )
 
         if self._decay_optimize_separate(epoch_num):
-            decay_loss = self._decay_model._training_step(
+            negative_loss = super()._training_step(
                 epoch_num,
                 train_x,
                 optimizer[2],
-                loss_function
+                loss_function,
+                positive=False
             )
         else:
-            decay_loss = 0.
+            negative_loss = 0
 
-        return (full_loss, decay_loss)
+        return positive_loss, negative_loss
 
     def _calculate_all_losses(
         self,
         x,
         loss_function,
-        loss_weight=None,
-        output_kwargs={},
-        **kwargs
     ):
 
         loss = self._calculate_loss(
             x,
             loss_function,
-            loss_weight=loss_weight,
-            output_kwargs=output_kwargs,
-            **kwargs
+            positive=True
         ).item()
 
-        if self._decay_optimize_separate(True):
-            decay_loss = self._decay_model._calculate_loss(
-                x,
-                loss_function,
-                loss_weight=loss_weight
-            ).item()
-        else:
-            decay_loss = 0.
+        decay_loss = self._calculate_loss(
+            x,
+            loss_function,
+            positive=False
+        ).item()
 
-        return (loss, decay_loss)
+        return loss, decay_loss
+
+    def _calculate_loss(
+        self,
+        x,
+        loss_function,
+        positive=True
+    ):
+
+        pos, neg = self._slice_data_and_forward(
+            x,
+            return_submodels=True
+        )
+
+        if neg is None:
+            return loss_function(
+                pos,
+                self.output_data(x)
+            )
+
+        elif positive:
+            return loss_function(
+                pos,
+                torch.subtract(
+                    self.output_data(x),
+                    neg
+                )
+            )
+
+        else:
+            return loss_function(
+                neg,
+                torch.subtract(
+                    self.output_data(x),
+                    pos
+                )
+            )
 
     @torch.inference_mode()
     def erv(
@@ -570,8 +593,6 @@ class SupirFactorBiophysical(
 
     def _decay_optimize_separate(self, n):
         if not self.has_decay:
-            return False
-        elif not self.separately_optimize_decay_model:
             return False
         elif n is True:
             return True
