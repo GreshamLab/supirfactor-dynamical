@@ -31,6 +31,7 @@ DEPRECATED_ARGS = [
     '_decay_model',
     '_pretrained_count',
     '_pretrained_decay',
+    'time_dependent_decay'
 ]
 
 INFO_KWARGS = [
