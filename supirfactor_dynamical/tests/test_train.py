@@ -8,10 +8,12 @@ from torch.utils.data import DataLoader
 from supirfactor_dynamical import (
     joint_model_training,
     TimeDataset,
-    get_model
+    get_model,
+    model_training,
+    pretrain_and_tune_dynamic_model,
+    process_results_to_dataframes,
+    process_combined_results
 )
-
-from supirfactor_dynamical.train import pretrain_and_tune_dynamic_model
 
 from supirfactor_dynamical.models import _CLASS_DICT
 
@@ -23,7 +25,7 @@ from ._stubs import (
 )
 
 
-class TestCoupledTraining(unittest.TestCase):
+class _SetupMixin:
 
     def setUp(self) -> None:
         torch.manual_seed(55)
@@ -60,6 +62,9 @@ class TestCoupledTraining(unittest.TestCase):
             index=['A', 'B', 'C', 'D'],
             columns=['A', 'B', 'C']
         )
+
+
+class TestCoupledTraining(_SetupMixin, unittest.TestCase):
 
     def test_training(self):
 
@@ -258,3 +263,143 @@ class TestVelocityTraining(unittest.TestCase):
             results[2],
             _CLASS_DICT['rnn']
         )
+
+
+class TestResultsProcessing(_SetupMixin, unittest.TestCase):
+
+    def test_no_inputs(self):
+
+        a, b, c = process_results_to_dataframes()
+
+        self.assertIsNone(a)
+        self.assertIsNone(b)
+        self.assertIsNone(c)
+
+    def test_results_and_model_no_validation(self):
+
+        model, result = model_training(
+            self.dynamic_dataloader,
+            pd.DataFrame(A),
+            20,
+        )
+
+        a, b, c = process_results_to_dataframes(
+            model,
+            result
+        )
+
+        self.assertIsNone(c)
+        self.assertEqual(a.shape, (1, 6))
+        self.assertEqual(b.shape, (1, 23))
+
+    def test_results_and_model_validation(self):
+
+        model, result = model_training(
+            self.dynamic_dataloader,
+            pd.DataFrame(A),
+            20,
+            validation_dataloader=self.dynamic_dataloader
+        )
+
+        a, b, c = process_results_to_dataframes(
+            model,
+            result
+        )
+
+        self.assertIsNone(c)
+        self.assertEqual(a.shape, (1, 6))
+        self.assertEqual(b.shape, (2, 23))
+
+    def test_no_model(self):
+
+        model, result = model_training(
+            self.dynamic_dataloader,
+            pd.DataFrame(A),
+            10,
+            validation_dataloader=self.dynamic_dataloader
+        )
+
+        a, b, c = process_results_to_dataframes(
+            results_object=result
+        )
+
+        self.assertIsNone(c)
+        self.assertEqual(a.shape, (1, 6))
+        self.assertIsNone(b)
+
+    def test_no_result(self):
+
+        model, result = model_training(
+            self.dynamic_dataloader,
+            pd.DataFrame(A),
+            10,
+            validation_dataloader=self.dynamic_dataloader
+        )
+
+        a, b, c = process_results_to_dataframes(
+            model
+        )
+
+        self.assertIsNone(c)
+        self.assertEqual(a.shape, (1, 3))
+        self.assertEqual(b.shape, (2, 13))
+
+    def test_results_and_model_validation_leaders(self):
+
+        model, result = model_training(
+            self.dynamic_dataloader,
+            pd.DataFrame(A),
+            20,
+            validation_dataloader=self.dynamic_dataloader
+        )
+
+        a, b, c = process_results_to_dataframes(
+            model,
+            result,
+            model_type="Bananas",
+            leader_columns=['a', 'b', 'c'],
+            leader_values=['pants', 'hat', 'shoes']
+        )
+
+        self.assertIsNone(c)
+        self.assertEqual(a.shape, (1, 9))
+        self.assertEqual(b.shape, (2, 26))
+
+        self.assertListEqual(
+            a['a'].values.tolist(),
+            ['pants']
+        )
+
+        self.assertListEqual(
+            b['a'].values.tolist(),
+            ['pants'] * 2
+        )
+
+        self.assertListEqual(
+            a['Model_Type'].values.tolist(),
+            ['Bananas']
+        )
+
+        self.assertListEqual(
+            b['Model_Type'].values.tolist(),
+            ['Bananas'] * 2
+        )
+
+    def test_combining_results(self):
+
+        model, result, erv = model_training(
+            self.dynamic_dataloader,
+            pd.DataFrame(A),
+            20,
+            validation_dataloader=self.dynamic_dataloader,
+            return_erv=True
+        )
+
+        a = process_combined_results(
+            [(result, erv), (result, erv), (result, erv)],
+            pd.DataFrame(A),
+            pd.DataFrame(A),
+            'combined'
+        )
+
+        self.assertEqual(a.shape, (1, 6))

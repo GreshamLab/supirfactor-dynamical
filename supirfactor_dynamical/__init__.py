@@ -9,12 +9,14 @@ from .models import (
 )
 
 from ._utils import (
-    evaluate_results,
-    TruncRobustScaler
+    TruncRobustScaler,
+    TimeDataset
 )
 
-from .time_dataset import (
-    TimeDataset
+from .postprocessing import (
+    evaluate_results,
+    process_results_to_dataframes,
+    process_combined_results
 )
 
 from .train import (

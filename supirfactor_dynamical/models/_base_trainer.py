@@ -576,7 +576,9 @@ class _TrainingMixin:
 
     def _loss_df(self, loss_array):
 
-        if loss_array.ndim == 1:
+        if loss_array.size == 0:
+            return None
+        elif loss_array.ndim == 1:
             loss_array = loss_array.reshape(-1, 1)
 
         _loss = pd.DataFrame(loss_array.T)

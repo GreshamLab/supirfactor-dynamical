@@ -6,10 +6,6 @@ from ._math import (
     _calculate_tss
 )
 
-from ._results import (
-    evaluate_results
-)
-
 from ._utils import (
     _process_weights_to_tensor
 )
@@ -21,4 +17,8 @@ from ._trunc_robust_scaler import (
 from .misc import (
     _add,
     _cat
+)
+
+from .time_dataset import (
+    TimeDataset
 )

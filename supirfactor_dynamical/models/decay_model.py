@@ -118,3 +118,55 @@ class DecayModule(
             return x
         else:
             return x[..., -1]
+
+
+class DecayModuleSimple(DecayModule):
+
+    @property
+    def decay_rates(self):
+        return self._activation(
+            self._decay_rates
+        ) * -1
+
+    def __init__(
+        self,
+        g,
+        k=20,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0
+    ):
+        torch.nn.Module.__init__(self)
+
+        self._decay_rates = torch.nn.Parameter(
+            self.to_tensor(g)
+        )
+
+        self._activation = torch.nn.Softplus(threshold=4)
+
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
+
+    def forward(
+        self,
+        x,
+        hidden_state=False,
+        return_decay_constants=False
+    ):
+
+        _decay_rates = self.decay_rates
+
+        # Multiply decay rate by input counts to get
+        # decay velocity
+        _v = self.rescale_velocity(
+            torch.mul(
+                x,
+                _decay_rates[None, ...]
+            )
+        )
+
+        if return_decay_constants:
+            return _v, _decay_rates
+        else:
+            return _v
