@@ -8,8 +8,8 @@ from supirfactor_dynamical import TruncRobustScaler
 
 def load_data_files_jtb_2023(
     adata_file,
-    prior_file,
-    gold_standard_file,
+    prior_file=None,
+    gold_standard_file=None,
     counts=True,
     velocity=False,
     decay_velocity=False
@@ -62,26 +62,32 @@ def load_data_files_jtb_2023(
         'cc': (adata.obs['program_cc_time'].values, 0, 88, None)
     }
 
-    print(f"Loading and processing priors from {prior_file}")
-    prior = pd.read_csv(
-        prior_file,
-        sep="\t",
-        index_col=0
-    ).reindex(
-        adata.var_names,
-        axis=0
-    ).fillna(
-        0
-    ).astype(int)
+    if prior_file is not None:
+        print(f"Loading and processing priors from {prior_file}")
+        prior = pd.read_csv(
+            prior_file,
+            sep="\t",
+            index_col=0
+        ).reindex(
+            adata.var_names,
+            axis=0
+        ).fillna(
+            0
+        ).astype(int)
 
-    prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
+        prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
+    else:
+        prior = None
 
-    print(f"Loading and processing gold standard from {gold_standard_file}")
-    gs = pd.read_csv(
-        gold_standard_file,
-        sep="\t",
-        index_col=0
-    )
+    if gold_standard_file is not None:
+        print(f"Loading gold standard from {gold_standard_file}")
+        gs = pd.read_csv(
+            gold_standard_file,
+            sep="\t",
+            index_col=0
+        )
+    else:
+        gs = None
 
     return (
         data,
