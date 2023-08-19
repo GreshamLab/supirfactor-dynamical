@@ -146,12 +146,6 @@ class SupirFactorBiophysical(
             hidden_dropout_rate
         )
 
-        if self.has_decay:
-            self._decay_model.set_dropouts(
-                input_dropout_rate,
-                hidden_dropout_rate
-            )
-
         return super().set_dropouts(
             input_dropout_rate,
             hidden_dropout_rate
