@@ -109,9 +109,11 @@ def _get_perturbed_velocities(
             **kwargs
         )
 
-        x_rev = torch.multiply(
-            data,
-            decay_rates
+        x_rev = model.rescale_velocity(
+            torch.multiply(
+                data,
+                decay_rates
+            )
         )
 
     if return_submodels:
