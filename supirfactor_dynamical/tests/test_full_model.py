@@ -630,7 +630,7 @@ class TestDynamicalModel(unittest.TestCase):
             else:
                 self.assertEqual(
                     len(optimizer[1].param_groups[0]['params']),
-                    6
+                    5
                 )
 
             return 1

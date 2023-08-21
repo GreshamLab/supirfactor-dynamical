@@ -59,7 +59,8 @@ class DecayModule(
         self._decoder = torch.nn.Sequential(
             torch.nn.Linear(
                 k,
-                g
+                g,
+                bias=False
             ),
             torch.nn.Softplus()
         )
