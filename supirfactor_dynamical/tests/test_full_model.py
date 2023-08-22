@@ -515,8 +515,11 @@ class TestDynamicalModel(unittest.TestCase):
         self.assertAlmostEqual(
             v_mse,
             self.dynamical_model._calculate_loss(
-                XTVD_tensor,
-                torch.nn.MSELoss()
+                self.dynamical_model(
+                    self.dynamical_model.input_data(XTVD_tensor)
+                ),
+                torch.nn.MSELoss(),
+                self.dynamical_model.output_data(XTVD_tensor)
             ).item(),
             places=5
         )

@@ -162,6 +162,7 @@ class _TrainingMixin:
         train_x,
         optimizer,
         loss_function,
+        retain_graph=False,
         **kwargs
     ):
         mse = self._calculate_loss(
@@ -170,7 +171,7 @@ class _TrainingMixin:
             **kwargs
         )
 
-        mse.backward()
+        mse.backward(retain_graph=retain_graph)
         optimizer.step()
         optimizer.zero_grad()
 
@@ -433,6 +434,11 @@ class _TrainingMixin:
         :return: _description_
         :rtype: _type_
         """
+
+        if x.ndim < 3:
+            raise RuntimeError(
+                f"Training data must have at least 3 dims; {x.ndim} provided"
+            )
 
         if loss_offset_only:
             _t_plus_one = False
