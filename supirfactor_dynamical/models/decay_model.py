@@ -37,6 +37,7 @@ class DecayModule(
         )
 
         self._encoder = torch.nn.Sequential(
+            torch.nn.Dropout(0.0),
             torch.nn.Linear(
                 g,
                 k,
