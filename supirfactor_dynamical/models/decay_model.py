@@ -31,15 +31,19 @@ class DecayModule(
     ):
         super().__init__()
 
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
+
         self._encoder = torch.nn.Sequential(
-            torch.nn.Dropout(input_dropout_rate),
             torch.nn.Linear(
                 g,
                 k,
                 bias=False
             ),
             torch.nn.Tanh(),
-            torch.nn.Dropout(hidden_dropout_rate),
+            self.hidden_dropout,
             torch.nn.Linear(
                 k,
                 k,
@@ -75,6 +79,21 @@ class DecayModule(
         return_decay_constants=False
     ):
 
+        x = self.input_dropout(x)
+
+        return self.forward_model(
+            x,
+            hidden_state=hidden_state,
+            return_decay_constants=return_decay_constants
+        )
+
+    def forward_model(
+        self,
+        x,
+        hidden_state=False,
+        return_decay_constants=False
+    ):
+
         # Encode into latent layer
         # and then take the mean over the batch axis (0)
         _x = self._encoder(x)
@@ -97,7 +116,7 @@ class DecayModule(
         )
 
         if return_decay_constants:
-            return _v, _x
+            return _v, self.rescale_counts(_x)
         else:
             return _v
 
@@ -149,7 +168,7 @@ class DecayModuleSimple(DecayModule):
             hidden_dropout_rate
         )
 
-    def forward(
+    def forward_model(
         self,
         x,
         hidden_state=False,

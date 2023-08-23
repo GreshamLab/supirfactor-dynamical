@@ -352,6 +352,18 @@ class _ScalingMixin:
         else:
             return x
 
+    def rescale_counts(self, x):
+        if self._count_inverse_scaler is not None:
+            return torch.matmul(
+                x,
+                self._zero_safe_div(
+                    None,
+                    self._count_inverse_scaler
+                )
+            )
+        else:
+            return x
+
     def scale_count_to_velocity(
         self,
         count

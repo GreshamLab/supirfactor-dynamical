@@ -98,18 +98,8 @@ class _TFMixin(
         hidden_state=None
     ):
         """
-        Forward step to the model,
-        override by inheritence for other models
-        """
-        return self.forward_tf_model(x, hidden_state=hidden_state)
-
-    def forward_tf_model(
-        self,
-        x,
-        hidden_state=None
-    ):
-        """
-        Forward prop
+        Forward model.
+        This is *post* input dropout.
 
         :param x: Input data
         :type x: torch.Tensor

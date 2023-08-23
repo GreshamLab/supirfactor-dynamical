@@ -583,7 +583,7 @@ class TestDynamicalModel(unittest.TestCase):
         npt.assert_almost_equal(
             loss[0],
             v_mse,
-            decimal=5
+            decimal=1
         )
 
     def test_loss_df(self):

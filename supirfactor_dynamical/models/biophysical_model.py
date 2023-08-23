@@ -227,6 +227,8 @@ class SupirFactorBiophysical(
         :rtype: torch.Tensor or tuple(torch.Tensor)
         """
 
+        x = self.input_dropout(x)
+
         # Calculate model predictions for the data provided
         counts, v, d = self.forward_time_step(
             x,
@@ -363,7 +365,7 @@ class SupirFactorBiophysical(
         else:
             _hidden = None
 
-        return self._transcription_model(
+        return self._transcription_model.forward_model(
             x,
             hidden_state=_hidden
         )
@@ -380,7 +382,7 @@ class SupirFactorBiophysical(
         elif not self.has_decay:
             return None
 
-        return self._decay_model(
+        return self._decay_model.forward_model(
             x,
             hidden_state=hidden_state,
             return_decay_constants=return_decay_constants
@@ -441,14 +443,6 @@ class SupirFactorBiophysical(
         :rtype: float, float, float
         """
 
-        # Get model output for training data
-        positive_loss = self._training_step_transcription(
-            epoch_num,
-            train_x,
-            optimizer[0],
-            loss_function
-        )
-
         negative_loss = self._training_step_decay(
             epoch_num,
             train_x,
@@ -466,6 +460,13 @@ class SupirFactorBiophysical(
             )
         else:
             decay_loss = 0.
+
+        positive_loss = self._training_step_transcription(
+            epoch_num,
+            train_x,
+            optimizer[0],
+            loss_function
+        )
 
         return positive_loss, negative_loss, decay_loss
 
