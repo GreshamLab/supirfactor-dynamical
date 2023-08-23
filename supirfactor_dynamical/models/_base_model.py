@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 
 from .._utils import (
     _calculate_erv,
-    _calculate_rss
+    _calculate_rss,
+    _unsqueeze
 )
 
 from ._model_mixins import (
@@ -47,12 +48,12 @@ class _TFMixin(
         self,
         x,
         hidden_state=None,
-        n_time_steps=0
+        n_time_steps=0,
+        return_tfa=False
     ):
         """
         Forward pass for data X with prediction if n_time_steps > 0.
         Calls forward_model and _forward_loop.
-
 
         :param x: Input data
         :type x: torch.Tensor
@@ -65,29 +66,33 @@ class _TFMixin(
         :rtype: torch.Tensor
         """
 
+        if x.ndim == 1:
+            x = _unsqueeze(x, 0)
+
         x = self.input_dropout(x)
-        x = self.forward_model(x, hidden_state)
+        x = self.forward_model(x, hidden_state, return_tfa)
 
         if n_time_steps > 0:
 
-            # Force 1D data into 2D
-            if x.ndim == 1:
-                x = torch.unsqueeze(x, dim=0)
+            # Add a new dimension for sequence length
+            if return_tfa and x[0].ndim == 2:
+                x = _unsqueeze(x, 1)
+            elif not return_tfa and x.ndim == 2:
+                x = _unsqueeze(x, 1)
 
             # Feed it into the start of the forward loop
-            forward_x = self._forward_loop(x, n_time_steps)
-
-            # Add a new dimension for sequence length
-            if x.ndim == 2:
-                x = torch.unsqueeze(x, dim=1)
+            forward_x = self._forward_loop(
+                x if not return_tfa else x[0],
+                n_time_steps,
+                return_tfa
+            )
 
             # Cat together on time dimension 1
-            x = torch.cat(
-                (
+            x = self._forward_loop_merge(
+                [
                     x,
                     forward_x
-                ),
-                dim=1
+                ]
             )
 
         return x
@@ -95,7 +100,8 @@ class _TFMixin(
     def forward_model(
         self,
         x,
-        hidden_state=None
+        hidden_state=None,
+        return_tfa=False
     ):
         """
         Forward model.
@@ -112,17 +118,24 @@ class _TFMixin(
 
         x = self.drop_encoder(x)
 
+        if return_tfa:
+            _tfa = torch.clone(x.detach())
+
         if hidden_state is not None:
             x = self.decoder(x, hidden_state)
         else:
             x = self.decoder(x)
+
+        if return_tfa:
+            return x, _tfa
 
         return x
 
     def _forward_loop(
         self,
         x_tensor,
-        n_time_steps
+        n_time_steps,
+        return_tfa=False
     ):
         """
         Forward prop recursively to predict future states.
@@ -142,13 +155,23 @@ class _TFMixin(
 
         for _ in range(n_time_steps):
 
-            x_tensor = self.forward_model(x_tensor, self.hidden_final)
-            output_state.append(x_tensor)
+            if return_tfa:
+                x_tensor, tfa_tensor = self.forward_model(
+                    x_tensor,
+                    self.hidden_final,
+                    return_tfa=return_tfa
+                )
+                output_state.append((x_tensor, tfa_tensor))
+            else:
+                x_tensor = self.forward_model(
+                    x_tensor,
+                    self.hidden_final
+                )
+                output_state.append(x_tensor)
 
         return self._forward_loop_merge(output_state)
 
-    @staticmethod
-    def _forward_loop_merge(tensor_list):
+    def _forward_loop_merge(self, tensor_list):
         """
         Merge data that does not have a sequence length dimension
         by adding a new dimension
@@ -161,6 +184,14 @@ class _TFMixin(
         :return: Stacked tensor
         :rtype: torch.Tensor
         """
+        if isinstance(tensor_list[0], tuple):
+            return tuple(
+                self._forward_loop_merge([
+                    t[i] for t in tensor_list
+                ])
+                for i in range(2)
+            )
+
         if tensor_list[0].ndim < 3:
             return torch.stack(
                 tensor_list,
@@ -251,7 +282,7 @@ class _TFMixin(
         return out_weights
 
     @torch.inference_mode()
-    def latent_layer(self, x, layer=0, hidden_state=None):
+    def latent_layer(self, x):
         """
         Get detached tensor representing the latent layer values
         for some data X
@@ -266,45 +297,16 @@ class _TFMixin(
             if isinstance(x, DataLoader):
                 return torch.cat(
                     [
-                        self._latent_layer_values(
-                            batch,
-                            layer=layer,
-                            hidden_state=hidden_state
-                        )
+                        self.drop_encoder(batch).detach()
                         for batch in x
                     ],
                     dim=0
                 )
 
             else:
-                return self._latent_layer_values(
-                    x,
-                    layer=layer,
-                    hidden_state=hidden_state
+                return torch.clone(
+                    self.drop_encoder(x).detach()
                 )
-
-    @torch.inference_mode()
-    def _latent_layer_values(
-        self,
-        x,
-        layer=0,
-        hidden_state=None
-    ):
-
-        if layer == 0:
-            return self.drop_encoder(x).detach()
-        elif layer == 1:
-            x = self.drop_encoder(x)
-
-            if hidden_state is not None:
-                x = self._intermediate(x, hidden_state)
-            else:
-                x = self._intermediate(x)
-
-            if isinstance(x, tuple):
-                return [xobj.detach() for xobj in x]
-            else:
-                return x.detach()
 
     @torch.inference_mode()
     def erv(
@@ -340,20 +342,11 @@ class _TFMixin(
             for data_x in data_loader:
 
                 # Get TFA
-                if self.n_additional_predictions > 0:
-
-                    # Need to run the predictions to get values for TFA
-                    hidden_x = self.latent_layer(
-                        self(
-                            self.input_data(data_x),
-                            n_time_steps=self.n_additional_predictions
-                        )
-                    )
-
-                else:
-                    hidden_x = self.latent_layer(
-                        self.input_data(data_x)
-                    )
+                _, hidden_x = self(
+                    self.input_data(data_x),
+                    n_time_steps=self.n_additional_predictions,
+                    return_tfa=True
+                )
 
                 if output_data_loader is not None:
                     data_x = next(output_data_loader)

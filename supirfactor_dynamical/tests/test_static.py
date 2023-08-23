@@ -137,6 +137,23 @@ class TestTFAutoencoder(unittest.TestCase):
         npt.assert_equal(in_weights == 0, A.T == 0)
         npt.assert_equal(out_weights != 0, expected_nz)
 
+    def test_forward_tfa(self):
+
+        data = next(iter(DataLoader(
+            X_tensor,
+            batch_size=2
+        )))
+
+        p, tfa = self.ae(
+            data,
+            return_tfa=True
+        )
+
+        torch.testing.assert_close(
+            tfa,
+            self.ae.drop_encoder(p)
+        )
+
     def test_train_loop_with_validation(self):
 
         loader = DataLoader(
@@ -199,12 +216,6 @@ class TestTFAutoencoder(unittest.TestCase):
                 h = h @ self.ae.intermediate_weights.numpy().T
                 h[h < 0] = 0
 
-            npt.assert_almost_equal(
-                self.ae.latent_layer(X_tensor, layer=1).numpy(),
-                h,
-                decimal=3
-            )
-
         y = h @ out_weights.T
         y[y < 0] = 0
 
@@ -225,7 +236,10 @@ class TestTFAutoencoder(unittest.TestCase):
 
             if self.ae.intermediate_weights is not None:
                 with torch.no_grad():
-                    h_partial = h_partial @ self.ae.intermediate_weights.numpy().T
+                    h_partial = np.matmul(
+                        h_partial,
+                        self.ae.intermediate_weights.numpy().T
+                    )
                     h_partial[h_partial < 0] = 0
 
             y_partial = h_partial @ out_weights.T

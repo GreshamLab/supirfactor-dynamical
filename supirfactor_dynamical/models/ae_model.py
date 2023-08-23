@@ -68,13 +68,15 @@ class TFAutoencoder(
         self,
         x,
         hidden_state=None,
-        n_time_steps=0
+        n_time_steps=0,
+        return_tfa=False
     ):
 
         return self._forward(
             x,
             hidden_state,
-            n_time_steps
+            n_time_steps,
+            return_tfa
         )
 
 
@@ -154,25 +156,24 @@ class TFMetaAutoencoder(
         self,
         x,
         hidden_state=None,
-        n_time_steps=0
+        n_time_steps=0,
+        return_tfa=False
     ):
 
         return self._forward(
             x,
             hidden_state,
-            n_time_steps
+            n_time_steps,
+            return_tfa
         )
 
     def decoder(
         self,
         x,
-        hidden_state=None,
-        intermediate_only=False
+        hidden_state=None
     ):
 
         x = self._intermediate(x)
-
-        if not intermediate_only:
-            x = self._decoder(x)
+        x = self._decoder(x)
 
         return x

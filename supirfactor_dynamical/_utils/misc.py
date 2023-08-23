@@ -29,3 +29,17 @@ def _add(x, y):
         return x
     else:
         return torch.add(x, y)
+
+
+def _unsqueeze(x, dim):
+    if isinstance(x, (tuple, list)):
+        return tuple(
+            _unsqueeze([d[i] for d in x], dim)
+            for i in range(len(x[0]))
+        )
+
+    elif x is None or all(d is None for d in x):
+        return None
+
+    else:
+        return torch.unsqueeze(x, dim)

@@ -114,12 +114,14 @@ class _TF_RNN_mixin(
 
         return self.training_r2_over_time, self.validation_r2_over_time
 
-    def decoder(self, x, hidden_state=None, intermediate_only=False):
+    def decoder(
+        self,
+        x,
+        hidden_state=None
+    ):
 
         x, self.hidden_final = self._intermediate(x, hidden_state)
-
-        if not intermediate_only:
-            x = self._decoder(x)
+        x = self._decoder(x)
 
         return x
 
@@ -127,7 +129,8 @@ class _TF_RNN_mixin(
         self,
         x,
         hidden_state=None,
-        n_time_steps=0
+        n_time_steps=0,
+        return_tfa=False
     ):
         """
         Forward pass for data X with prediction if n_time_steps > 0.
@@ -146,27 +149,33 @@ class _TF_RNN_mixin(
         """
 
         x = self.input_dropout(x)
-        x = self.forward_model(x, hidden_state)
+        x = self.forward_model(x, hidden_state, return_tfa)
 
         if n_time_steps > 0:
 
+            _initial_x = x[0] if return_tfa else x
+
+            if _initial_x.ndim == 3:
+                _initial_x = _initial_x[:, [-1], :]
+            else:
+                _initial_x = _initial_x[[-1], :]
+
             # Feed the last sequence value into the start of the forward loop
             # and glue it onto the earlier data
-            x = torch.cat(
-                (
+            x = self._forward_loop_merge(
+                [
                     x,
                     self._forward_loop(
-                        x[:, [-1], :] if x.ndim == 3 else x[[-1], :],
-                        n_time_steps
+                        _initial_x,
+                        n_time_steps,
+                        return_tfa
                     )
-                ),
-                dim=x.ndim - 2
+                ]
             )
 
         return x
 
-    @staticmethod
-    def _forward_loop_merge(tensor_list):
+    def _forward_loop_merge(self, tensor_list):
         """
         Merge data that does have a sequence length dimension
         by concatenating on that dimension
@@ -176,6 +185,13 @@ class _TF_RNN_mixin(
         :return: Concatenated tensor
         :rtype: torch.Tensor
         """
+        if isinstance(tensor_list[0], tuple):
+            return tuple(
+                self._forward_loop_merge([
+                    t[i] for t in tensor_list
+                ])
+                for i in range(2)
+            )
 
         return torch.cat(
             tensor_list,

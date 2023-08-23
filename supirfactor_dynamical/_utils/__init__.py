@@ -16,9 +16,14 @@ from ._trunc_robust_scaler import (
 
 from .misc import (
     _add,
-    _cat
+    _cat,
+    _unsqueeze
 )
 
 from .time_dataset import (
     TimeDataset
+)
+
+from ._dropout import (
+    ConsistentDropout
 )
