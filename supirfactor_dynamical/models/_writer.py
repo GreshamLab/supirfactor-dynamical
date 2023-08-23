@@ -35,7 +35,8 @@ _ENCODE_ACTIVATIONS = {
     None: 0,
     'relu': 1,
     'softplus': 2,
-    'sigmoid': 3
+    'sigmoid': 3,
+    'tanh': 4
 }
 
 

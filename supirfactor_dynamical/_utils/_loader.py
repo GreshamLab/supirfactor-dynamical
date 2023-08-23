@@ -51,7 +51,8 @@ _DECODE_ACTIVATIONS = {
     0: None,
     1: 'relu',
     2: 'softplus',
-    3: 'sigmoid'
+    3: 'sigmoid',
+    4: 'tanh'
 }
 
 

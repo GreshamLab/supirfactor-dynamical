@@ -53,12 +53,11 @@ class _SetupMixin:
         module1_state = module1.state_dict()
         module2_state = module2.state_dict()
 
-        with torch.no_grad():
-            for k, v in module1_state.items():
-                npt.assert_almost_equal(
-                    v.numpy(),
-                    module2_state[k].numpy()
-                )
+        for k, v in module1_state.items():
+            torch.testing.assert_close(
+                v,
+                module2_state[k]
+            )
 
 
 class TestSerializer(_SetupMixin, unittest.TestCase):
@@ -357,6 +356,8 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
         biophysical = get_model('biophysical')(
             A,
+            activation='tanh',
+            output_activation='softplus'
         )
 
         biophysical._training_loss = [(1., 1., 1.), (1., 1., 1.)]
@@ -388,21 +389,33 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             biophysical._validation_loss
         )
 
+        self.assertEqual(
+            loaded_biophysical.activation,
+            'tanh'
+        )
+
+        self.assertEqual(
+            loaded_biophysical.output_activation,
+            'softplus'
+        )
+
         with torch.no_grad():
-            npt.assert_almost_equal(
+            torch.testing.assert_close(
                 biophysical(
                     biophysical.input_data(XTV_tensor)
-                ).numpy(),
+                ),
                 loaded_biophysical(
                     loaded_biophysical.input_data(XTV_tensor)
-                ).numpy()
+                )
             )
 
     def test_serialize_biophysical_nodecay(self):
 
         biophysical = get_model('biophysical')(
             A,
-            decay_model=False
+            decay_model=False,
+            activation='tanh',
+            output_activation='softplus'
         )
 
         biophysical.save(self.temp_file_name)
@@ -419,14 +432,24 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         self.assertIsNone(biophysical._decay_model)
         self.assertIsNone(loaded_biophysical._decay_model)
 
+        self.assertEqual(
+            loaded_biophysical.activation,
+            'tanh'
+        )
+
+        self.assertEqual(
+            loaded_biophysical.output_activation,
+            'softplus'
+        )
+
         with torch.no_grad():
-            npt.assert_almost_equal(
+            torch.testing.assert_close(
                 biophysical(
                     biophysical.input_data(XTV_tensor)
-                ).numpy(),
+                ),
                 loaded_biophysical(
                     loaded_biophysical.input_data(XTV_tensor)
-                ).numpy()
+                )
             )
 
     def test_serialize_biophysical_diffk(self):

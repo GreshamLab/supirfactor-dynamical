@@ -241,18 +241,21 @@ class _PriorMixin:
     @staticmethod
     def append_activation_function(
         module,
-        activation
+        activation,
+        **kwargs
     ):
 
         # Build the encoder module
         if activation is None:
             pass
         elif activation.lower() == 'sigmoid':
-            module.append(torch.nn.Sigmoid())
+            module.append(torch.nn.Sigmoid(**kwargs))
         elif activation.lower() == 'softplus':
-            module.append(torch.nn.Softplus())
+            module.append(torch.nn.Softplus(**kwargs))
         elif activation.lower() == 'relu':
-            module.append(torch.nn.ReLU())
+            module.append(torch.nn.ReLU(**kwargs))
+        elif activation.lower() == 'tanh':
+            module.append(torch.nn.Tanh(**kwargs))
         else:
             raise ValueError(
                 f"Activation {activation} unknown"

@@ -22,8 +22,7 @@ class SupirFactorBiophysical(
     type_name = 'biophysical'
 
     _loss_type_names = [
-        'biophysical_transcription',
-        'biophysical_decay_velocity',
+        'biophysical_velocity',
         'biophysical_decay_rate'
     ]
 
@@ -88,6 +87,12 @@ class SupirFactorBiophysical(
 
         self.prior_network = self.process_prior(prior_network)
 
+        self.activation = activation
+        self.output_activation = output_activation
+
+        self.decay_epoch_delay = decay_epoch_delay
+        self.separately_optimize_decay_model = separately_optimize_decay_model
+
         if decay_model is False:
             output_activation = None
 
@@ -131,9 +136,6 @@ class SupirFactorBiophysical(
             input_dropout_rate,
             hidden_dropout_rate
         )
-
-        self.decay_epoch_delay = decay_epoch_delay
-        self.separately_optimize_decay_model = separately_optimize_decay_model
 
     def set_dropouts(
         self,
@@ -398,7 +400,7 @@ class SupirFactorBiophysical(
     ):
 
         # Create separate optimizers for the decay and transcription
-        # models and pass them as tuples
+        # models and pass them as tuple
         optimizer = (
             self._transcription_model.process_optimizer(
                 optimizer
@@ -437,7 +439,8 @@ class SupirFactorBiophysical(
         :type train_x: torch.Tensor
         :param optimizer: Tuple of optimizers where
             optimizer[0] is for transcription model and
-            optimizer[1] is for decay model
+            optimizer[1] is for decay model and
+            optimizer[2] is for both combined
         :type optimizer: torch.optim, torch.optim
         :param loss_function: Loss function
         :type loss_function: torch.nn.Loss
@@ -448,13 +451,6 @@ class SupirFactorBiophysical(
 
         if self.separately_optimize_decay_model:
 
-            negative_loss = self._training_step_decay(
-                epoch_num,
-                train_x,
-                optimizer[1],
-                loss_function
-            )
-
             decay_loss = self._training_step_decay(
                 epoch_num,
                 train_x,
@@ -463,24 +459,19 @@ class SupirFactorBiophysical(
                 compare_decay_data=True
             )
 
-            positive_loss = self._training_step_transcription(
-                epoch_num,
-                train_x,
-                optimizer[0],
-                loss_function
-            )
         else:
-            positive_loss = self._training_step_joint(
+
+            decay_loss = 0.
+
+        loss = self._training_step_joint(
                 epoch_num,
                 train_x,
                 optimizer[2] if self._decay_optimize(epoch_num) else
                 optimizer[0],
                 loss_function
             )
-            negative_loss = 0.
-            decay_loss = 0.
 
-        return positive_loss, negative_loss, decay_loss
+        return loss, decay_loss
 
     def _training_step_joint(
         self,
@@ -499,40 +490,6 @@ class SupirFactorBiophysical(
             loss_function,
             compare_x=self.output_data(train_x)
         )
-
-    def _training_step_transcription(
-        self,
-        epoch_num,
-        train_x,
-        optimizer,
-        loss_function
-    ):
-
-        # Get model output for training data
-        pos, neg = self._slice_data_and_forward(
-            train_x,
-            return_submodels=True
-        )
-
-        if neg is not None:
-            return super()._training_step(
-                epoch_num,
-                pos,
-                optimizer,
-                loss_function,
-                compare_x=torch.sub(
-                    self.output_data(train_x),
-                    neg.detach()
-                )
-            )
-        else:
-            return super()._training_step(
-                epoch_num,
-                pos,
-                optimizer,
-                loss_function,
-                compare_x=self.output_data(train_x)
-            )
 
     def _training_step_decay(
         self,
@@ -553,7 +510,10 @@ class SupirFactorBiophysical(
         )
 
         if compare_decay_data:
-            _compare_x = self.output_data(train_x, decay=True)
+            _compare_x = self.output_data(
+                train_x,
+                decay=True
+            )
         else:
             _compare_x = torch.sub(
                 self.output_data(train_x),
@@ -581,26 +541,12 @@ class SupirFactorBiophysical(
         )
 
         loss = self._calculate_loss(
-            pos,
+            self._slice_data_and_forward(
+                x
+            ),
             loss_function,
-            torch.sub(
-                self.output_data(x),
-                neg
-            ) if neg is not None else
             self.output_data(x)
         ).item()
-
-        if self.has_decay:
-            decay_loss = self._calculate_loss(
-                neg,
-                loss_function,
-                torch.sub(
-                    self.output_data(x),
-                    pos
-                )
-            ).item()
-        else:
-            decay_loss = 0
 
         if (
             self.has_decay and
@@ -614,7 +560,7 @@ class SupirFactorBiophysical(
         else:
             decay_rate_loss = 0
 
-        return loss, decay_loss, decay_rate_loss
+        return loss, decay_rate_loss
 
     def _calculate_loss(
         self,

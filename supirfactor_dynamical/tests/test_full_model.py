@@ -596,7 +596,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model.training_loss_df.shape,
-            (3, 11)
+            (2, 11)
         )
 
         self.assertEqual(
@@ -606,7 +606,7 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertEqual(
             self.dynamical_model.validation_loss_df.shape,
-            (3, 11)
+            (2, 11)
         )
 
         self.assertEqual(
