@@ -405,7 +405,10 @@ class SupirFactorBiophysical(
             ),
             self._decay_model.process_optimizer(
                 optimizer
-            ) if self.has_decay else False
+            ) if self.has_decay else False,
+            self.process_optimizer(
+                optimizer
+            )
         )
 
         return super().train_model(
@@ -443,14 +446,15 @@ class SupirFactorBiophysical(
         :rtype: float, float, float
         """
 
-        negative_loss = self._training_step_decay(
-            epoch_num,
-            train_x,
-            optimizer[1],
-            loss_function
-        )
-
         if self.separately_optimize_decay_model:
+
+            negative_loss = self._training_step_decay(
+                epoch_num,
+                train_x,
+                optimizer[1],
+                loss_function
+            )
+
             decay_loss = self._training_step_decay(
                 epoch_num,
                 train_x,
@@ -458,17 +462,43 @@ class SupirFactorBiophysical(
                 loss_function,
                 compare_decay_data=True
             )
+
+            positive_loss = self._training_step_transcription(
+                epoch_num,
+                train_x,
+                optimizer[0],
+                loss_function
+            )
         else:
+            positive_loss = self._training_step_joint(
+                epoch_num,
+                train_x,
+                optimizer[2] if self._decay_optimize(epoch_num) else
+                optimizer[0],
+                loss_function
+            )
+            negative_loss = 0.
             decay_loss = 0.
 
-        positive_loss = self._training_step_transcription(
-            epoch_num,
-            train_x,
-            optimizer[0],
-            loss_function
-        )
-
         return positive_loss, negative_loss, decay_loss
+
+    def _training_step_joint(
+        self,
+        epoch_num,
+        train_x,
+        optimizer,
+        loss_function
+    ):
+
+        return super()._training_step(
+            epoch_num,
+            self._slice_data_and_forward(
+                train_x
+            ),
+            optimizer,
+            loss_function,
+            compare_x=self.output_data(train_x)
+        )
 
     def _training_step_transcription(
         self,
