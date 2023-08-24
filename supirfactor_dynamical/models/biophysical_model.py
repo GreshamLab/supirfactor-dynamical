@@ -384,7 +384,7 @@ class SupirFactorBiophysical(
         elif not self.has_decay:
             return None
 
-        return self._decay_model.forward_model(
+        return self._decay_model(
             x,
             hidden_state=hidden_state,
             return_decay_constants=return_decay_constants
