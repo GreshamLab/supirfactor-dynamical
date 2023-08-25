@@ -11,8 +11,6 @@ from supirfactor_dynamical._utils import (
     _aggregate_r2
 )
 
-from supirfactor_dynamical._utils._dropout import ConsistentDropout
-
 from scipy.linalg import pinv
 
 from ._stubs import (
@@ -122,33 +120,3 @@ class TestMathUtils(unittest.TestCase):
             0.75,
             _aggregate_r2(r2)
         )
-
-
-class TestDropout(unittest.TestCase):
-
-    def test_repeated_dropouts(self):
-
-        torch.manual_seed(10)
-        t = torch.Tensor(np.arange(100))
-        do = ConsistentDropout(0.5)
-
-        self.assertIsNone(do._dropout)
-
-        t_1 = do(t)
-
-        self.assertIsNotNone(do._dropout)
-
-        for _ in range(20):
-            t_2 = do(t)
-            torch.testing.assert_close(
-                t_1,
-                t_2
-            )
-
-        do.reset()
-
-        with self.assertRaises(AssertionError):
-            torch.testing.assert_close(
-                t_1,
-                do(t)
-            )

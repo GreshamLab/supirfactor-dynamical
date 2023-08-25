@@ -23,7 +23,3 @@ from .misc import (
 from .time_dataset import (
     TimeDataset
 )
-
-from ._dropout import (
-    ConsistentDropout
-)

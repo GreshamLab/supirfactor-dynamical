@@ -229,8 +229,6 @@ class SupirFactorBiophysical(
         :rtype: torch.Tensor or tuple(torch.Tensor)
         """
 
-        x = self.input_dropout(x)
-
         # Calculate model predictions for the data provided
         counts, v, d = self.forward_time_step(
             x,
@@ -367,7 +365,7 @@ class SupirFactorBiophysical(
         else:
             _hidden = None
 
-        return self._transcription_model.forward_model(
+        return self._transcription_model(
             x,
             hidden_state=_hidden
         )
