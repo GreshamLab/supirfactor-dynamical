@@ -620,8 +620,8 @@ for j, params in enumerate(
         m
     )
 
-    _write(results, outfile_results, _header)
-    _write(losses, outfile_loss, _header)
-    _write(time_loss, outfile_time_loss, _header)
+    _write(results, outfile_results, _header, both_cols)
+    _write(losses, outfile_loss, _header, both_cols)
+    _write(time_loss, outfile_time_loss, _header, both_cols)
 
     _header = False

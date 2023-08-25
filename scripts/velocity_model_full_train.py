@@ -1,12 +1,8 @@
 import argparse
-import gc
 import os
 import sys
 
-import anndata as ad
 import numpy as np
-import pandas as pd
-import scanpy as sc
 
 from sklearn.model_selection import train_test_split
 
@@ -14,12 +10,16 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    TruncRobustScaler,
     model_training,
     get_model
 )
 
 from supirfactor_dynamical.train import pretrain_and_tune_dynamic_model
+
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data
+)
+
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -97,56 +97,21 @@ hidden_dropout = (0.0, 0.5)
 validation_size = 0.25
 random_seed = 1800
 
-count_scaling = TruncRobustScaler(with_centering=False)
-velo_scaling = TruncRobustScaler(with_centering=False)
-
-print(f"Loading and processing data from {data_file}")
-adata = ad.read(data_file)
-
-adata.X = adata.X.astype(np.float32)
-sc.pp.normalize_per_cell(adata, min_counts=0)
-data = np.stack(
-    (
-        count_scaling.fit_transform(
-            adata.X
-        ).A,
-        velo_scaling.fit_transform(
-            adata.layers['rapamycin_velocity'] +
-            adata.layers['cell_cycle_velocity']
-        )
-    ),
-    axis=-1
-)
-
-time_vector = adata.obs['program_rapa_time'].values
-
-print(f"Loading and processing priors from {prior_file}")
-prior = pd.read_csv(
+data, time_lookup, prior, gs, count_scaling, velo_scaling = load_data(
+    data_file,
     prior_file,
-    sep="\t",
-    index_col=0
-).reindex(
-    adata.var_names,
-    axis=0
-).fillna(
-    0
-).astype(int)
-
-print(f"Loading and processing gold standard from {gs_file}")
-gs = pd.read_csv(
     gs_file,
-    sep="\t",
-    index_col=0
+    counts=True,
+    velocity=True
 )
-
-del adata
-gc.collect()
 
 train_idx, test_idx = train_test_split(
     np.arange(data.shape[0]),
     test_size=validation_size,
     random_state=random_seed
 )
+
+time_vector = time_lookup['rapa'][0]
 
 _train = data[train_idx, ...]
 _test = data[test_idx, ...]
@@ -247,9 +212,9 @@ dyn_obj, pre_res, post_results = pretrain_and_tune_dynamic_model(
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,
-    hidden_dropout_rate=hidden_dropout,
+    hidden_dropout_rate=(0.0, 0.5),
     prediction_length=10,
-    prediction_loss_offset=10,
+    prediction_loss_offset=9,
     count_scaling=count_scaling.scale_,
     velocity_scaling=velo_scaling.scale_,
     model_type='biophysical',
@@ -272,12 +237,11 @@ static_obj, static_results = model_training(
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,
-    hidden_dropout_rate=hidden_dropout[0],
+    hidden_dropout_rate=0.5,
     model_type=get_model(
         'static_meta',
         velocity=True
-    ),
-    output_relu=False
+    )
 )
 
 static_obj.save(static_outfile)

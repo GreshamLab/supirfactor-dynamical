@@ -1,15 +1,11 @@
 import argparse
-import gc
 import sys
 import itertools
 import os
 
-import anndata as ad
 import numpy as np
 import pandas as pd
-import scanpy as sc
 
-from pandas.api.types import is_float_dtype
 from sklearn.model_selection import train_test_split
 
 import torch
@@ -17,13 +13,17 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    TruncRobustScaler,
-    pretrain_and_tune_dynamic_model
+    pretrain_and_tune_dynamic_model,
+    process_results_to_dataframes,
+    process_combined_results
+)
+
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data,
+    _write
 )
 
 from inferelator.preprocessing import ManagePriors
-from inferelator.postprocessing.model_metrics import MetricHandler
-from inferelator.postprocessing import ResultsProcessor
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -105,13 +105,32 @@ ap.add_argument(
 )
 
 ap.add_argument(
-    "--full_length",
-    dest="full_len",
-    help="Train on full-length trajectories",
+    "--shuffle",
+    dest="shuffle",
+    help="Shuffle prior labels",
     action='store_const',
     const=True,
     default=False
 )
+
+ap.add_argument(
+    "--shuffle_data",
+    dest="shuffle_data",
+    help="Shuffle counts to noise data",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
+    "--shuffle_times",
+    dest="shuffle_time",
+    help="Shuffle time labels on cells",
+    action='store_const',
+    const=True,
+    default=False
+)
+
 
 args = ap.parse_args()
 
@@ -119,13 +138,16 @@ data_file = args.datafile
 prior_file = args.priorfile
 gs_file = args.gsfile
 
-full_length = args.full_len
-
 n_epochs = args.epochs
 
 outfile_loss = args.outfile + "_LOSSES.tsv"
 outfile_results = args.outfile + "_RESULTS.tsv"
 outfile_time_loss = args.outfile + "_FINAL_LOSSES_OVER_TIME.tsv"
+
+if args.shuffle:
+    shuffle = 'Prior'
+else:
+    shuffle = 'False'
 
 if args.lr:
     learning_rates = [
@@ -151,83 +173,21 @@ offsets = [
 
 seeds = list(range(111, 121))
 
-validation_size = 0.25
-
-count_scaling = TruncRobustScaler(with_centering=False)
-velo_scaling = TruncRobustScaler(with_centering=False)
-
-print(f"Loading and processing data from {data_file}")
-adata = ad.read(data_file)
-
-adata.X = adata.X.astype(np.float32)
-sc.pp.normalize_per_cell(adata, min_counts=0)
-data = np.stack(
-    (
-        count_scaling.fit_transform(
-            adata.X
-        ).A,
-        velo_scaling.fit_transform(
-            adata.layers['rapamycin_velocity'] +
-            adata.layers['cell_cycle_velocity']
-        )
-    ),
-    axis=-1
-)
-
-time_lookup = {
-    'rapa': (adata.obs['program_rapa_time'].values, -10, 60, [-10, 0]),
-    'cc': (adata.obs['program_cc_time'].values, 0, 88, None)
-}
-
-print(f"Loading and processing priors from {prior_file}")
-prior = pd.read_csv(
+data, time_lookup, prior, gs, count_scaling, velo_scaling = load_data(
+    data_file,
     prior_file,
-    sep="\t",
-    index_col=0
-).reindex(
-    adata.var_names,
-    axis=0
-).fillna(
-    0
-).astype(int)
-
-del adata
-gc.collect()
-
-prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
-g, k = prior.shape
-
-print(f"Loading and processing gold standard from {gs_file}")
-gs = pd.read_csv(
     gs_file,
-    sep="\t",
-    index_col=0
+    counts=True,
+    velocity=True
 )
 
+validation_size = 0.25
 print(f"Splitting {validation_size} of data into validation")
 train_idx, test_idx = train_test_split(
     np.arange(data.shape[0]),
     test_size=validation_size,
     random_state=100
 )
-
-both_cols = [
-    "Pretrained_Model",
-    "Decay_Model",
-    "Learning_Rate",
-    "Weight_Decay",
-    "Seed",
-    "Sequence_Length",
-    "Output_Layer_Time_Offset",
-    "Epochs",
-    "Model_Type",
-    "Time_Axis"
-]
-
-df_cols = both_cols + MetricHandler.get_metric('combined').all_names() + [
-    "R2_training", "R2_validation"
-]
-loss_cols = both_cols + ["Loss_Type"]
 
 
 def prep_loaders(random_seed, time_type):
@@ -237,10 +197,7 @@ def prep_loaders(random_seed, time_type):
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
-    if full_length:
-        slen = tmax - tmin
-    else:
-        slen = 20
+    slen = 20
 
     dynamic_pretrain = DataLoader(
         TimeDataset(
@@ -305,117 +262,18 @@ def prep_loaders(random_seed, time_type):
     return dynamic_pretrain, dynamic_preval, dynamic_tdl, dynamic_vdl, slen
 
 
-def _results(
-    result_leader,
-    results,
-    obj,
-    model_name,
-    tt
-):
-
-    _t_lead = [model_name, tt, "training"]
-    _v_lead = [model_name, tt, "validation"]
-
-    if obj is not None:
-
-        result_line = [model_name, tt] + [
-            results.all_scores[n]
-            for n in results.all_names
-        ] + [
-            obj.training_r2,
-            obj.validation_r2
-        ]
-
-        training_loss = _t_lead + obj.training_loss
-        validation_loss = _v_lead + obj.validation_loss
-
-        loss_lines = [
-            result_leader + training_loss,
-            result_leader + validation_loss
-        ]
-
-    else:
-        result_line = [model_name, tt] + [
-            results.all_scores[n]
-            for n in results.all_names
-        ] + [
-            None,
-            None
-        ]
-
-        loss_lines = None
-
-    results = [result_leader + result_line]
-
-    try:
-        if obj is not None and hasattr(obj, "training_r2_over_time"):
-
-            _n = len(obj.training_r2_over_time)
-            _cols = both_cols + ["Loss_Type"] + list(range(0, _n))
-
-            time_dependent_loss = pd.DataFrame(
-                [
-                    result_leader + _t_lead + obj.training_r2_over_time,
-                    result_leader + _v_lead + obj.validation_r2_over_time
-                ],
-                columns=_cols
-            )
-
-        else:
-            time_dependent_loss = None
-
-    except TypeError:
-        time_dependent_loss = None
-
-    return results, loss_lines, time_dependent_loss
-
-
-def _combine_weights(*args):
-
-    weights = args[0].copy()
-
-    for a in args:
-        weights += a
-
-    weights /= len(args)
-
-    return weights
-
-
-def _process_combined(
-    result_leader,
-    inf_results,
-    gs,
-    pr,
-    model_name
-):
-
-    _combined_weights = _combine_weights(
-        inf_results['rapa'][0].betas[0],
-        inf_results['cc'][0].betas[0]
-    )
-
-    r, _, _ = _results(
-        result_leader,
-        ResultsProcessor(
-            [_combined_weights],
-            [np.maximum(
-                inf_results['rapa'][1],
-                inf_results['cc'][1]
-            )],
-            metric="combined"
-        ).summarize_network(
-            None,
-            gs,
-            pr,
-            full_model_betas=None
-        ),
-        None,
-        model_name,
-        'combined'
-    )
-
-    return r
+both_cols = [
+    "Shuffle",
+    "Pretrained_Model",
+    "Decay_Model",
+    "Learning_Rate",
+    "Weight_Decay",
+    "Seed",
+    "Sequence_Length",
+    "Output_Layer_Time_Offset",
+    "Epochs",
+    "Time_Axis"
+]
 
 
 def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
@@ -428,19 +286,35 @@ def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
 
     torch.manual_seed(seed)
 
-    result_leader = [True, False, lr, wd, seed, None, offset, n_epochs]
+    result_leader = [
+        shuffle,
+        True,
+        False,
+        lr,
+        wd,
+        seed,
+        20,
+        offset,
+        n_epochs,
+        None
+    ]
+
+    if shuffle == 'Prior':
+        prior_cv = ManagePriors.shuffle_priors(
+            prior_cv,
+            -1,
+            seed
+        )
 
     results = []
     loss_lines = []
     time_loss_lines = []
 
-    inf_results = {}
+    inf_results = []
 
     for tt in ['rapa', 'cc']:
+        result_leader[-1] = tt
         pre_tdl, pre_vdl, tdl, vdl, _tlen = prep_loaders(seed, tt)
-
-        if tt == 'rapa':
-            result_leader[5] = _tlen
 
         dyn_obj, pre_res, post_results, _erv = pretrain_and_tune_dynamic_model(
             pre_tdl,
@@ -460,50 +334,38 @@ def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
             return_erv=True
         )
 
-        inf_results[tt] = (post_results, _erv)
+        inf_results.append((post_results, _erv))
 
-        r, ll, time_loss = _results(
-            result_leader,
-            pre_res,
+        r, ll, time_loss = process_results_to_dataframes(
             dyn_obj,
-            "pretrained",
-            tt
-        )
-
-        results.extend(r)
-        loss_lines.extend(ll)
-        time_loss_lines.append(None)
-
-        r, ll, time_loss = _results(
-            result_leader,
             post_results,
-            dyn_obj,
-            "tuned",
-            tt
+            model_type='rnn',
+            leader_columns=both_cols,
+            leader_values=result_leader
         )
 
-        results.extend(r)
-        loss_lines.extend(ll)
-        time_loss_lines.append(None)
+        results.append(r)
+        loss_lines.append(ll)
+        time_loss_lines.append(time_loss)
 
-    results.extend(
-        _process_combined(
-            result_leader,
+    result_leader[-1] = 'combined'
+    results.append(
+        process_combined_results(
             inf_results,
-            gs_cv,
-            prior_cv,
-            'rnn'
+            gold_standard=gs_cv,
+            prior_network=prior_cv,
+            model_type='rnn',
+            leader_columns=both_cols,
+            leader_values=result_leader
         )
     )
 
-    results = pd.DataFrame(
-        results,
-        columns=df_cols
+    results = pd.concat(
+        results
     )
 
-    losses = pd.DataFrame(
-        loss_lines,
-        columns=loss_cols + list(range(1, len(dyn_obj.training_loss) + 1))
+    losses = pd.concat(
+        loss_lines
     )
 
     try:
@@ -511,25 +373,7 @@ def _train_cv(lr, wd, offset, seed, prior_cv, gs_cv):
     except ValueError:
         time_loss_lines = None
 
-    return results, losses, time_loss
-
-
-def _write(df, filename, _header):
-    if df is None:
-        return
-
-    # Float precision
-    for col in df.columns[~df.columns.isin(both_cols)]:
-        if is_float_dtype(df[col]):
-            df[col] = df[col].map(lambda x: f"{x:.6f}")
-
-    df.to_csv(
-        filename,
-        sep="\t",
-        index=False,
-        header=_header,
-        mode="a"
-    )
+    return results, losses, time_loss_lines
 
 
 _header = True
@@ -569,8 +413,8 @@ for j, params in enumerate(
         gs_cv
     )
 
-    _write(results, outfile_results, _header)
-    _write(losses, outfile_loss, _header)
-    _write(time_loss, outfile_time_loss, _header)
+    _write(results, outfile_results, _header, both_cols)
+    _write(losses, outfile_loss, _header, both_cols)
+    _write(time_loss, outfile_time_loss, _header, both_cols)
 
     _header = False

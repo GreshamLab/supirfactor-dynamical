@@ -3,12 +3,9 @@ import sys
 import itertools
 import os
 
-import anndata as ad
 import numpy as np
 import pandas as pd
-import scanpy as sc
 
-from pandas.api.types import is_float_dtype
 from sklearn.model_selection import train_test_split
 
 import torch
@@ -16,11 +13,15 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    TruncRobustScaler
+    process_results_to_dataframes
 )
 
 from supirfactor_dynamical.models.decay_model import DecayModule
 
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data,
+    _write
+)
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -80,6 +81,15 @@ ap.add_argument(
 )
 
 ap.add_argument(
+    "--model_width",
+    dest="mw",
+    help="Search Hidden Layer Widths",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
     "--epochs",
     dest="epochs",
     help="NUM Epochs",
@@ -122,49 +132,24 @@ else:
         1e-7
     ]
 
-batch_sizes = (250, 20)
-sequence_lengths = [
-    20
-]
+if args.mw:
+    model_widths = [
+        100, 50, 25, 20, 15, 10, 5, 4, 3, 2, 1
+    ]
+else:
+    model_widths = [50]
 
 seeds = list(range(111, 121))
 
 validation_size = 0.25
 
-count_scaling = TruncRobustScaler(with_centering=False)
-velo_scaling = TruncRobustScaler(with_centering=False)
-
-print(f"Loading and processing data from {data_file}")
-adata = ad.read(data_file)
-
-adata.X = adata.X.astype(np.float32)
-sc.pp.normalize_per_cell(adata, min_counts=0)
-data = np.stack(
-    (
-        count_scaling.fit_transform(
-            adata.X
-        ).A,
-        velo_scaling.fit_transform(
-            adata.layers['rapamycin_velocity'] +
-            adata.layers['cell_cycle_velocity']
-        ),
-        adata.layers['decay_constants']
-    ),
-    axis=-1
+data, time_lookup, _, _, count_scaling, velo_scaling = load_data(
+    data_file,
+    None,
+    None,
+    counts=True,
+    decay_velocity=True
 )
-
-_shuffle_times = ([-10, 0], None)
-
-time_lookup = {
-    'rapa': (
-        adata.obs['program_rapa_time'].values,
-        -10, 60, _shuffle_times[0]
-    ),
-    'cc': (
-        adata.obs['program_cc_time'].values,
-        0, 88, _shuffle_times[1]
-    )
-}
 
 print(f"Splitting {validation_size} of data into validation")
 train_idx, test_idx = train_test_split(
@@ -173,24 +158,9 @@ train_idx, test_idx = train_test_split(
     random_state=100
 )
 
-both_cols = [
-    "Learning_Rate",
-    "Weight_Decay",
-    "Seed",
-    "Epochs",
-    "Model_Type",
-    "Time_Axis"
-]
-
-df_cols = both_cols + [
-    "R2_training", "R2_validation"
-]
-loss_cols = both_cols + ["Loss_Type"] + list(range(1, n_epochs + 1))
-
 
 def prep_loaders(
     random_seed,
-    dynamic_sequence_length,
     time_type='rapa'
 ):
 
@@ -212,11 +182,11 @@ def prep_loaders(
             tmin,
             tmax,
             1,
-            sequence_length=dynamic_sequence_length,
+            sequence_length=10,
             shuffle_time_vector=shuffle_times,
             random_seed=random_seed + 200
         ),
-        batch_size=batch_sizes[1],
+        batch_size=20,
         drop_last=True
     )
 
@@ -228,78 +198,42 @@ def prep_loaders(
             tmax,
             1,
             shuffle_time_vector=shuffle_times,
-            sequence_length=dynamic_sequence_length,
+            sequence_length=10,
             random_seed=random_seed + 300
         ),
-        batch_size=batch_sizes[1],
+        batch_size=20,
         drop_last=True
     )
 
     return dyn_tdl, dyn_vdl
 
 
-def _results(
-    result_leader,
-    obj,
-    model_name,
-    tt
-):
-
-    _t_lead = [model_name, tt, "training"]
-    _v_lead = [model_name, tt, "validation"]
-
-    result_line = [model_name, tt] + [
-        obj.training_r2,
-        obj.validation_r2
-    ]
-
-    training_loss = _t_lead + obj.training_loss
-    validation_loss = _v_lead + obj.validation_loss
-
-    loss_lines = [
-        result_leader + training_loss,
-        result_leader + validation_loss
-    ]
-
-    results = [result_leader + result_line]
-
-    try:
-        if obj is not None and hasattr(obj, "training_r2_over_time"):
-
-            _n = len(obj.training_r2_over_time)
-            _cols = both_cols + ["Loss_Type"] + list(range(0, _n))
-
-            time_dependent_loss = pd.DataFrame(
-                [
-                    result_leader + _t_lead + obj.training_r2_over_time,
-                    result_leader + _v_lead + obj.validation_r2_over_time
-                ],
-                columns=_cols
-            )
-
-        else:
-            time_dependent_loss = None
-
-    except TypeError:
-        time_dependent_loss = None
-
-    return results, loss_lines, time_dependent_loss
+both_cols = [
+    "Learning_Rate",
+    "Weight_Decay",
+    "Decay_Model_Width",
+    "Seed",
+    "Epochs",
+    "Time_Axis"
+]
 
 
 def _train_cv(
-    lr, wd, seed, slen
+    lr, wd, seed, mw
 ):
 
     print(
         f"Training model (epochs: {n_epochs}, lr: {lr}, seed: {seed}, "
-        f"weight_decay: {wd}, sequence_length: {slen})"
+        f"weight_decay: {wd}, model_width: {mw})"
     )
 
     result_leader = [
         lr,
         wd,
+        mw,
         seed,
-        n_epochs
+        n_epochs,
+        None
     ]
 
     results = []
@@ -307,50 +241,52 @@ def _train_cv(
     time_loss_lines = []
 
     for tt in ['rapa', 'cc']:
+        result_leader[-1] = tt
 
         dyn_tdl, dyn_vdl = prep_loaders(
             seed,
-            slen,
             time_type=tt
         )
 
         torch.manual_seed(seed)
 
         model_obj = DecayModule(
-            data.shape[1]
+            data.shape[1],
+            k=mw,
+            input_dropout_rate=0.5,
+            hidden_dropout_rate=0
         )
 
         model_obj.set_scaling(
             count_scaling=count_scaling.scale_,
-            velocity_scaling=velo_scaling.scale_,
+            velocity_scaling=velo_scaling.scale_
         )
 
         model_obj.train_model(
             dyn_tdl,
             n_epochs,
             validation_dataloader=dyn_vdl,
-            optimizer={'lr': lr, 'weight_decay': wd},
+            optimizer={'lr': lr, 'weight_decay': wd}
         )
 
-        r, ll, time_loss = _results(
-            result_leader,
+        r, ll, time_loss = process_results_to_dataframes(
             model_obj,
-            'decay',
-            tt
+            None,
+            model_type='decay',
+            leader_columns=both_cols,
+            leader_values=result_leader
         )
 
+        results.append(r)
+        loss_lines.append(ll)
         time_loss_lines.append(time_loss)
-        results.extend(r)
-        loss_lines.extend(ll)
 
-    results = pd.DataFrame(
-        results,
-        columns=df_cols
+    results = pd.concat(
+        results
     )
 
-    losses = pd.DataFrame(
-        loss_lines,
-        columns=loss_cols
+    losses = pd.concat(
+        loss_lines
     )
 
     try:
@@ -358,35 +294,17 @@ def _train_cv(
     except ValueError:
         time_loss_lines = None
 
-    return results, losses, time_loss
-
-
-def _write(df, filename, _header):
-    if df is None:
-        return
-
-    # Float precision
-    for col in df.columns[~df.columns.isin(both_cols)]:
-        if is_float_dtype(df[col]):
-            df[col] = df[col].map(lambda x: f"{x:.6f}")
-
-    df.to_csv(
-        filename,
-        sep="\t",
-        index=False,
-        header=_header,
-        mode="a"
-    )
+    return results, losses, time_loss_lines
 
 
 _header = True
 
-for j, (wd, lr, i, slen) in enumerate(
+for j, (wd, lr, i, mw) in enumerate(
     itertools.product(
         weight_decays,
         learning_rates,
         seeds,
-        sequence_lengths
+        model_widths
     )
 ):
 
@@ -399,11 +317,11 @@ for j, (wd, lr, i, slen) in enumerate(
         lr,
         wd,
         i,
-        slen
+        mw
     )
 
-    _write(results, outfile_results, _header)
-    _write(losses, outfile_loss, _header)
-    _write(time_loss, outfile_time_loss, _header)
+    _write(results, outfile_results, _header, both_cols)
+    _write(losses, outfile_loss, _header, both_cols)
+    _write(time_loss, outfile_time_loss, _header, both_cols)
 
     _header = False

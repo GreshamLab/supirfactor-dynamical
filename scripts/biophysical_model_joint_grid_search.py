@@ -1,15 +1,11 @@
 import argparse
-import gc
 import sys
 import itertools
 import os
 
-import anndata as ad
 import numpy as np
 import pandas as pd
-import scanpy as sc
 
-from pandas.api.types import is_float_dtype
 from sklearn.model_selection import train_test_split
 
 import torch
@@ -18,12 +14,17 @@ from torch.utils.data import DataLoader
 from supirfactor_dynamical import (
     TimeDataset,
     model_training,
-    TruncRobustScaler
+    SupirFactorBiophysical,
+    process_results_to_dataframes,
+    process_combined_results
 )
 
 from inferelator.preprocessing import ManagePriors
-from inferelator.postprocessing.model_metrics import MetricHandler
-from inferelator.postprocessing import ResultsProcessor
+
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data,
+    _write
+)
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -40,7 +41,7 @@ DEFAULT_DATA = os.path.join(
 )
 TRAINED_DECAY = os.path.join(
     "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
-    "RAPA_FULL_DECAY_MODEL.h5"
+    "RAPA_DECAY_MODEL.h5"
 )
 
 SLURM_ID = os.environ.get('SLURM_ARRAY_TASK_ID', None)
@@ -112,9 +113,9 @@ ap.add_argument(
 )
 
 ap.add_argument(
-    "--decay_scales",
-    dest="decay_scales",
-    help="Search Decay Loss Scales",
+    "--tune_decay",
+    dest="tuned_decay",
+    help="Tune decay model",
     action='store_const',
     const=True,
     default=False
@@ -137,19 +138,6 @@ gs_file = args.gsfile
 _outfile = args.outfile
 
 n_epochs = args.epochs
-
-if args.decay_scales:
-    decay_loss_scales = [
-        1,
-        10,
-        50,
-        100,
-        200
-    ]
-else:
-    decay_loss_scales = [
-        200
-    ]
 
 static_meta = True
 
@@ -192,60 +180,19 @@ seqlens = [
     20
 ]
 
+tuned_delay = 100 if args.tuned_decay else n_epochs
+
 seeds = list(range(111, 121))
 
 validation_size = 0.25
 
-count_scaling = TruncRobustScaler(with_centering=False)
-velo_scaling = TruncRobustScaler(with_centering=False)
-
-print(f"Loading and processing data from {data_file}")
-adata = ad.read(data_file)
-
-adata.X = adata.X.astype(np.float32)
-sc.pp.normalize_per_cell(adata, min_counts=0)
-data = np.stack(
-    (
-        count_scaling.fit_transform(
-            adata.X
-        ).A,
-        velo_scaling.fit_transform(
-            adata.layers['rapamycin_velocity'] +
-            adata.layers['cell_cycle_velocity']
-        ),
-        adata.layers['decay_constants']
-    ),
-    axis=-1
-)
-
-time_lookup = {
-    'rapa': (adata.obs['program_rapa_time'].values, -10, 60, [-10, 0]),
-    'cc': (adata.obs['program_cc_time'].values, 0, 88, None)
-}
-
-print(f"Loading and processing priors from {prior_file}")
-prior = pd.read_csv(
+data, time_lookup, prior, gs, count_scaling, velo_scaling = load_data(
+    data_file,
     prior_file,
-    sep="\t",
-    index_col=0
-).reindex(
-    adata.var_names,
-    axis=0
-).fillna(
-    0
-).astype(int)
-
-del adata
-gc.collect()
-
-prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
-g, k = prior.shape
-
-print(f"Loading and processing gold standard from {gs_file}")
-gs = pd.read_csv(
     gs_file,
-    sep="\t",
-    index_col=0
+    counts=True,
+    velocity=True,
+    decay_velocity=True
 )
 
 print(f"Splitting {validation_size} of data into validation")
@@ -254,28 +201,6 @@ train_idx, test_idx = train_test_split(
     test_size=validation_size,
     random_state=100
 )
-
-both_cols = [
-    "Decay_Model",
-    "Decay_Loss_Scaler",
-    "Learning_Rate",
-    "Weight_Decay",
-    "Seed",
-    "Static_Batch_Size",
-    "Dynamic_Batch_Size",
-    "Sequence_Length",
-    "Input_Dropout",
-    "Hidden_Layer_Dropout",
-    "Output_Layer_Time_Offset",
-    "Epochs",
-    "Model_Type",
-    "Time_Axis"
-]
-
-df_cols = both_cols + MetricHandler.get_metric('combined').all_names() + [
-    "R2_training", "R2_validation"
-]
-loss_cols = both_cols + ["Loss_Type"] + list(range(1, n_epochs + 1))
 
 
 def prep_loaders(
@@ -288,7 +213,7 @@ def prep_loaders(
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
-    seq_len = 20
+    seq_len = 11
     batch_size = 25
 
     dyn_tdl = DataLoader(
@@ -324,119 +249,33 @@ def prep_loaders(
     return dyn_tdl, dyn_vdl
 
 
-def _results(
-    result_leader,
-    results,
-    obj,
-    model_name,
-    tt
-):
+model_name = "Joint"
+if args.pretrained_decay:
+    model_name = model_name + "_Pretrained"
 
-    _t_lead = [model_name, tt, "training"]
-    _v_lead = [model_name, tt, "validation"]
-
-    if obj is not None:
-
-        result_line = [model_name, tt] + [
-            results.all_scores[n]
-            for n in results.all_names
-        ] + [
-            obj.training_r2,
-            obj.validation_r2
-        ]
-
-        training_loss = _t_lead + obj.training_loss
-        validation_loss = _v_lead + obj.validation_loss
-
-        loss_lines = [
-            result_leader + training_loss,
-            result_leader + validation_loss
-        ]
-
-    else:
-        result_line = [model_name, tt] + [
-            results.all_scores[n]
-            for n in results.all_names
-        ] + [
-            None,
-            None
-        ]
-
-        loss_lines = None
-
-    results = [result_leader + result_line]
-
-    if obj is not None and hasattr(obj, "training_r2_over_time"):
-
-        _n = len(obj.training_r2_over_time)
-        _cols = both_cols + ["Loss_Type"] + list(range(0, _n))
-
-        time_dependent_loss = pd.DataFrame(
-            [
-                result_leader + _t_lead + obj.training_r2_over_time,
-                result_leader + _v_lead + obj.validation_r2_over_time
-            ],
-            columns=_cols
-        )
-
-    else:
-
-        time_dependent_loss = None
-
-    return results, loss_lines, time_dependent_loss
+if args.tuned_decay:
+    model_name = model_name + "_Tuned"
 
 
-def _combine_weights(*args):
-
-    weights = args[0].copy()
-
-    for a in args:
-        weights += a
-
-    weights /= len(args)
-
-    return weights
-
-
-def _process_combined(
-    result_leader,
-    inf_results,
-    gs,
-    pr,
-    model_name
-):
-
-    _combined_weights = _combine_weights(
-        inf_results['rapa'][0].betas[0],
-        inf_results['cc'][0].betas[0]
-    )
-
-    r, _, _ = _results(
-        result_leader,
-        ResultsProcessor(
-            [_combined_weights],
-            [np.maximum(
-                inf_results['rapa'][1],
-                inf_results['cc'][1]
-            )],
-            metric="combined"
-        ).summarize_network(
-            None,
-            gs,
-            pr,
-            full_model_betas=None
-        ),
-        None,
-        model_name,
-        'combined'
-    )
-
-    return r
+both_cols = [
+    "Decay_Model",
+    "Learning_Rate",
+    "Weight_Decay",
+    "Seed",
+    "Static_Batch_Size",
+    "Dynamic_Batch_Size",
+    "Sequence_Length",
+    "Input_Dropout",
+    "Hidden_Layer_Dropout",
+    "Output_Layer_Time_Offset",
+    "Epochs",
+    "Time_Axis"
+]
 
 
 def _train_cv(
     lr, wd, sb, db, in_drop, hl_drop,
-    seed, prior_cv, gs_cv, slen, loss_scaler
+    seed, prior_cv, gs_cv, slen
 ):
 
     print(
@@ -447,8 +286,7 @@ def _train_cv(
     )
 
     result_leader = [
-        "Joint_Pretrained" if args.pretrained_decay else "Joint",
-        loss_scaler,
+        model_name,
         lr,
         wd,
         seed,
@@ -458,16 +296,19 @@ def _train_cv(
         in_drop,
         hl_drop,
         0,
-        n_epochs
+        n_epochs,
+        None
     ]
 
     results = []
     loss_lines = []
     time_loss_lines = []
 
-    inf_results = {}
+    inf_results = []
 
     for tt in ['rapa', 'cc']:
+
+        result_leader[-1] = tt
 
         dyn_tdl, dyn_vdl = prep_loaders(
             seed,
@@ -476,6 +317,15 @@ def _train_cv(
 
         torch.manual_seed(seed)
 
+        dyn_obj = SupirFactorBiophysical(
+            prior_cv,
+            decay_model=TRAINED_DECAY if args.pretrained_decay else None,
+            input_dropout_rate=in_drop,
+            hidden_dropout_rate=hl_drop,
+            decay_epoch_delay=tuned_delay if args.pretrained_decay else 0,
+            output_activation='softplus'
+        )
+
         dyn_obj, dynamic_results, _erv = model_training(
             dyn_tdl,
             prior_cv,
@@ -483,50 +333,44 @@ def _train_cv(
             validation_dataloader=dyn_vdl,
             optimizer_params={'lr': lr, 'weight_decay': wd},
             gold_standard=gs_cv,
-            input_dropout_rate=in_drop,
-            hidden_dropout_rate=hl_drop,
-            prediction_length=False,
-            decay_model=TRAINED_DECAY if args.pretrained_decay else None,
-            model_type='biophysical',
+            model_type=dyn_obj,
             return_erv=True,
             count_scaling=count_scaling.scale_,
-            velocity_scaling=velo_scaling.scale_,
-            joint_optimize_decay_model=True,
-            decay_model_loss_scaler=loss_scaler
+            velocity_scaling=velo_scaling.scale_
         )
 
-        r, ll, time_loss = _results(
-            result_leader,
-            dynamic_results,
+        inf_results.append((dynamic_results, _erv))
+
+        r, ll, time_loss = process_results_to_dataframes(
             dyn_obj,
-            'decay',
-            tt
+            dynamic_results,
+            model_type='biophysical',
+            leader_columns=both_cols,
+            leader_values=result_leader
         )
 
-        inf_results[tt] = (dynamic_results, _erv)
-
+        results.append(r)
+        loss_lines.append(ll)
         time_loss_lines.append(time_loss)
-        results.extend(r)
-        loss_lines.extend(ll)
 
-    results.extend(
-        _process_combined(
-            result_leader,
+    result_leader[-1] = 'combined'
+    results.append(
+        process_combined_results(
             inf_results,
-            gs_cv,
-            prior_cv,
-            'decay'
+            gold_standard=gs_cv,
+            prior_network=prior_cv,
+            model_type='biophysical',
+            leader_columns=both_cols,
+            leader_values=result_leader
         )
     )
 
-    results = pd.DataFrame(
-        results,
-        columns=df_cols
+    results = pd.concat(
+        results
     )
 
-    losses = pd.DataFrame(
-        loss_lines,
-        columns=loss_cols
+    losses = pd.concat(
+        loss_lines
     )
 
     try:
@@ -534,25 +378,7 @@ def _train_cv(
     except ValueError:
         time_loss_lines = None
 
-    return results, losses, time_loss
-
-
-def _write(df, filename, _header):
-    if df is None:
-        return
-
-    # Float precision
-    for col in df.columns[~df.columns.isin(both_cols)]:
-        if is_float_dtype(df[col]):
-            df[col] = df[col].map(lambda x: f"{x:.6f}")
-
-    df.to_csv(
-        filename,
-        sep="\t",
-        index=False,
-        header=_header,
-        mode="a"
-    )
+    return results, losses, time_loss_lines
 
 
 _header = True
@@ -564,8 +390,7 @@ for j, params in enumerate(
         batch_sizes,
         dropouts,
         seqlens,
-        seeds,
-        decay_loss_scales
+        seeds
     )
 ):
 
@@ -574,7 +399,7 @@ for j, params in enumerate(
         if _j != SLURM_ID:
             continue
 
-    wd, lr, (s_batch, d_batch), (in_drop, hl_drop), slen, i, ls = params
+    wd, lr, (s_batch, d_batch), (in_drop, hl_drop), slen, i = params
 
     prior_cv, gs_cv = ManagePriors.cross_validate_gold_standard(
         prior,
@@ -601,12 +426,11 @@ for j, params in enumerate(
         i,
         prior_cv,
         gs_cv,
-        slen,
-        ls
+        slen
     )
 
-    _write(results, outfile_results, _header)
-    _write(losses, outfile_loss, _header)
-    _write(time_loss, outfile_time_loss, _header)
+    _write(results, outfile_results, _header, both_cols)
+    _write(losses, outfile_loss, _header, both_cols)
+    _write(time_loss, outfile_time_loss, _header, both_cols)
 
     _header = False

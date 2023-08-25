@@ -2,9 +2,7 @@ import argparse
 import sys
 import os
 
-import anndata as ad
 import numpy as np
-import scanpy as sc
 
 from sklearn.model_selection import train_test_split
 
@@ -12,12 +10,14 @@ import torch
 from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
-    TimeDataset,
-    TruncRobustScaler
+    TimeDataset
 )
 
 from supirfactor_dynamical.models.decay_model import DecayModule
 
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data
+)
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -74,22 +74,15 @@ n_epochs = args.epochs
 random_seed = 1800
 validation_size = 0.25
 
-print(f"Loading and processing data from {data_file}")
-adata = ad.read(data_file)
-
-adata.X = adata.X.astype(np.float32)
-sc.pp.normalize_per_cell(adata, min_counts=0)
-data = np.stack(
-    (
-        TruncRobustScaler(with_centering=False).fit_transform(
-            adata.X
-        ).A,
-        adata.layers['decay_constants']
-    ),
-    axis=-1
+data, time_lookup, _, _, count_scaling, velo_scaling = load_data(
+    data_file,
+    None,
+    None,
+    counts=True,
+    decay_velocity=True
 )
 
-time_vector = adata.obs['program_rapa_time'].values
+time_vector = time_lookup['rapa'][0]
 
 train_idx, test_idx = train_test_split(
     np.arange(data.shape[0]),
@@ -133,7 +126,15 @@ dyn_vdl = DataLoader(
 torch.manual_seed(random_seed)
 
 model_obj = DecayModule(
-    data.shape[1]
+    data.shape[1],
+    k=50,
+    input_dropout_rate=0.5,
+    hidden_dropout_rate=0.5
+)
+
+model_obj.set_scaling(
+    count_scaling=count_scaling.scale_,
+    velocity_scaling=velo_scaling.scale_
 )
 
 model_obj.train_model(

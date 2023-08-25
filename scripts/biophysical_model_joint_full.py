@@ -1,12 +1,9 @@
 import argparse
-import gc
 import os
 import sys
+import torch
 
-import anndata as ad
 import numpy as np
-import pandas as pd
-import scanpy as sc
 
 from sklearn.model_selection import train_test_split
 
@@ -14,11 +11,14 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    TruncRobustScaler
+    SupirFactorBiophysical
+)
+
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data,
 )
 
 from supirfactor_dynamical import (
-    pretrain_and_tune_dynamic_model,
     model_training
 )
 
@@ -33,7 +33,7 @@ DEFAULT_DATA = os.path.join(
 )
 TRAINED_DECAY = os.path.join(
     "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
-    "RAPA_FULL_DECAY_MODEL.h5"
+    "RAPA_DECAY_MODEL.h5"
 )
 
 
@@ -81,7 +81,7 @@ ap.add_argument(
     help="NUM Epochs",
     metavar="NUM",
     type=int,
-    default=2000
+    default=500
 )
 
 ap.add_argument(
@@ -93,6 +93,25 @@ ap.add_argument(
     default=False
 )
 
+ap.add_argument(
+    "--tune_decay",
+    dest="tuned_decay",
+    help="Tune decay model",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
+    "--constrain_decay",
+    dest="constrain_decay",
+    help="Constrain Decay with Real Data",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+
 args = ap.parse_args()
 
 data_file = args.datafile
@@ -103,57 +122,23 @@ dynamic_outfile = args.outfile + "_BIOPHYSICAL_MODEL.h5"
 dynamic_result_dir = args.outfile
 
 n_epochs = args.epochs
-
-hidden_dropout = (0.0, 0.5)
+tuned_delay = 100 if args.tuned_decay else n_epochs
 
 validation_size = 0.25
 random_seed = 1800
 
-count_scaling = TruncRobustScaler(with_centering=False)
-velo_scaling = TruncRobustScaler(with_centering=False)
+torch.manual_seed(random_seed)
 
-print(f"Loading and processing data from {data_file}")
-adata = ad.read(data_file)
-
-adata.X = adata.X.astype(np.float32)
-sc.pp.normalize_per_cell(adata, min_counts=0)
-data = np.stack(
-    (
-        count_scaling.fit_transform(
-            adata.X
-        ).A,
-        velo_scaling.fit_transform(
-            adata.layers['rapamycin_velocity'] +
-            adata.layers['cell_cycle_velocity']
-        ),
-        adata.layers['decay_constants']
-    ),
-    axis=-1
-)
-
-time_vector = adata.obs['program_rapa_time'].values
-
-print(f"Loading and processing priors from {prior_file}")
-prior = pd.read_csv(
+data, time_lookup, prior, gs, count_scaling, velo_scaling = load_data(
+    data_file,
     prior_file,
-    sep="\t",
-    index_col=0
-).reindex(
-    adata.var_names,
-    axis=0
-).fillna(
-    0
-).astype(int)
-
-print(f"Loading and processing gold standard from {gs_file}")
-gs = pd.read_csv(
     gs_file,
-    sep="\t",
-    index_col=0
+    counts=True,
+    velocity=True,
+    decay_velocity=True
 )
 
-del adata
-gc.collect()
+time_vector = time_lookup['rapa'][0]
 
 train_idx, test_idx = train_test_split(
     np.arange(data.shape[0]),
@@ -166,36 +151,6 @@ _test = data[test_idx, ...]
 
 print(f"Training on {_train.shape} and validating on {_test.shape}")
 
-pre_tdl = DataLoader(
-    TimeDataset(
-        _train,
-        time_vector[train_idx],
-        -10,
-        60,
-        1,
-        sequence_length=11,
-        random_seed=random_seed + 200,
-        shuffle_time_vector=[-10, 0]
-    ),
-    batch_size=20,
-    drop_last=True
-)
-
-pre_vdl = DataLoader(
-    TimeDataset(
-        _test,
-        time_vector[test_idx],
-        -10,
-        60,
-        1,
-        sequence_length=11,
-        random_seed=random_seed + 300,
-        shuffle_time_vector=[-10, 0]
-    ),
-    batch_size=20,
-    drop_last=True
-)
-
 dyn_tdl = DataLoader(
     TimeDataset(
         _train,
@@ -207,7 +162,7 @@ dyn_tdl = DataLoader(
         random_seed=random_seed + 200,
         shuffle_time_vector=[-10, 0]
     ),
-    batch_size=20,
+    batch_size=25,
     drop_last=True
 )
 
@@ -222,47 +177,38 @@ dyn_vdl = DataLoader(
         random_seed=random_seed + 300,
         shuffle_time_vector=[-10, 0]
     ),
-    batch_size=20,
+    batch_size=25,
     drop_last=True
 )
 
 
-bio_model, bio_result, _ = pretrain_and_tune_dynamic_model(
-    pre_tdl,
-    dyn_tdl,
+dyn_obj = SupirFactorBiophysical(
     prior,
-    n_epochs,
-    pretraining_validation_dataloader=pre_vdl,
-    prediction_tuning_validation_dataloader=dyn_vdl,
-    optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
-    gold_standard=gs,
-    input_dropout_rate=0.5,
     decay_model=TRAINED_DECAY if args.pretrained_decay else None,
-    hidden_dropout_rate=hidden_dropout,
-    prediction_length=10,
-    prediction_loss_offset=10,
-    count_scaling=count_scaling.scale_,
-    velocity_scaling=velo_scaling.scale_,
-    model_type='biophysical',
-    joint_optimize_decay_model=True,
-    decay_model_loss_scaler=100
+    input_dropout_rate=0.5,
+    hidden_dropout_rate=0.5,
+    decay_epoch_delay=tuned_delay if args.pretrained_decay else 0,
+    output_activation='softplus',
+    separately_optimize_decay_model=args.constrain_decay
 )
-"""
-bio_model, bio_result = model_training(
+
+dyn_obj.set_time_parameters(
+    n_additional_predictions=10
+)
+
+bio_model, bio_result, _erv = model_training(
     dyn_tdl,
     prior,
     n_epochs,
     validation_dataloader=dyn_vdl,
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
-    input_dropout_rate=0.5,
-    hidden_dropout_rate=0.5,
+    model_type=dyn_obj,
+    return_erv=True,
     count_scaling=count_scaling.scale_,
-    velocity_scaling=velo_scaling.scale_,
-    model_type='biophysical',
-    joint_optimize_decay_model=True
+    velocity_scaling=velo_scaling.scale_
 )
-"""
+
 bio_model.save(dynamic_outfile)
 
 os.makedirs(dynamic_result_dir, exist_ok=True)

@@ -76,15 +76,6 @@ ap.add_argument(
     default=2000
 )
 
-ap.add_argument(
-    "--layer",
-    dest="layer",
-    help="Layer",
-    metavar="LAYER",
-    type=str,
-    default="X"
-)
-
 args = ap.parse_args()
 
 data_file = args.datafile
@@ -99,20 +90,17 @@ dynamic_result_dir = args.outfile + "_RNN"
 
 n_epochs = args.epochs
 
-hidden_dropout = (0.0, 0.5)
-
 validation_size = 0.25
 random_seed = 1800
 
 print(f"Loading and processing data from {data_file}")
 adata = ad.read(data_file)
 
-if args.layer == "X":
-    data = adata.X
-else:
-    data = adata.layers[args.layer]
+count_scaling = TruncRobustScaler(with_centering=False)
 
-data = TruncRobustScaler(with_centering=False).fit_transform(data)
+data = count_scaling.fit_transform(
+    adata.X
+).A
 
 time_vector = adata.obs['program_rapa_time'].values
 
@@ -127,16 +115,6 @@ prior = pd.read_csv(
 ).fillna(
     0
 ).astype(int)
-
-try:
-    _gene_has_counts = data.sum(axis=0) > 0
-    _gene_has_counts = _gene_has_counts.A1
-except AttributeError:
-    pass
-
-if not np.all(_gene_has_counts):
-    data = data[:, _gene_has_counts]
-    prior = prior.loc[_gene_has_counts, :].copy()
 
 print(f"Loading and processing gold standard from {gs_file}")
 gs = pd.read_csv(
@@ -156,12 +134,6 @@ train_idx, test_idx = train_test_split(
 
 _train = data[train_idx, :]
 _test = data[test_idx, :]
-
-try:
-    _train = _train.A
-    _test = _test.A
-except AttributeError:
-    pass
 
 print(f"Training on {_train.shape} and validating on {_test.shape}")
 
@@ -263,7 +235,7 @@ static_obj, static_results = model_training(
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,
-    hidden_dropout_rate=hidden_dropout[0],
+    hidden_dropout_rate=0.5,
     prediction_length=0,
     model_type="static_meta"
 )
@@ -285,7 +257,7 @@ dyn_obj, _, post_results = pretrain_and_tune_dynamic_model(
     optimizer_params={'lr': 5e-5, 'weight_decay': 1e-7},
     gold_standard=gs,
     input_dropout_rate=0.5,
-    hidden_dropout_rate=hidden_dropout,
+    hidden_dropout_rate=(0.0, 0.5),
     prediction_length=10,
     prediction_loss_offset=9,
     model_type="rnn"

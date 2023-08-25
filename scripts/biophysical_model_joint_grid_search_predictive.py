@@ -14,16 +14,17 @@ from torch.utils.data import DataLoader
 from supirfactor_dynamical import (
     TimeDataset,
     model_training,
+    SupirFactorBiophysical,
     process_results_to_dataframes,
-    get_model
+    process_combined_results
 )
+
+from inferelator.preprocessing import ManagePriors
 
 from supirfactor_dynamical._utils._adata_load import (
     load_data_files_jtb_2023 as load_data,
     _write
 )
-
-from inferelator.preprocessing import ManagePriors
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -37,6 +38,10 @@ DEFAULT_GS = os.path.join(
 DEFAULT_DATA = os.path.join(
     DEFAULT_PATH,
     "2021_INFERELATOR_DATA.h5ad"
+)
+TRAINED_DECAY = os.path.join(
+    "/mnt/ceph/users/cjackson/supirfactor_trs_decay",
+    "RAPA_DECAY_MODEL.h5"
 )
 
 SLURM_ID = os.environ.get('SLURM_ARRAY_TASK_ID', None)
@@ -99,6 +104,24 @@ ap.add_argument(
 )
 
 ap.add_argument(
+    "--pretrain_decay",
+    dest="pretrained_decay",
+    help="Use pretrained decay",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
+    "--tune_decay",
+    dest="tuned_decay",
+    help="Tune decay model",
+    action='store_const',
+    const=True,
+    default=False
+)
+
+ap.add_argument(
     "--epochs",
     dest="epochs",
     help="NUM Epochs",
@@ -106,34 +129,6 @@ ap.add_argument(
     type=int,
     default=200
 )
-
-ap.add_argument(
-    "--shuffle",
-    dest="shuffle",
-    help="Shuffle prior labels",
-    action='store_const',
-    const=True,
-    default=False
-)
-
-ap.add_argument(
-    "--shuffle_data",
-    dest="shuffle_data",
-    help="Shuffle counts to noise data",
-    action='store_const',
-    const=True,
-    default=False
-)
-
-ap.add_argument(
-    "--shuffle_times",
-    dest="shuffle_time",
-    help="Shuffle time labels on cells",
-    action='store_const',
-    const=True,
-    default=False
-)
-
 
 args = ap.parse_args()
 
@@ -145,11 +140,6 @@ _outfile = args.outfile
 n_epochs = args.epochs
 
 static_meta = True
-
-if args.shuffle:
-    shuffle = 'Prior'
-else:
-    shuffle = 'False'
 
 if SLURM_ID is None:
     outfile_loss = _outfile + "_LOSSES.tsv"
@@ -187,20 +177,24 @@ dropouts = [
 ]
 
 seqlens = [
-    None
+    20
 ]
 
+tuned_delay = 100 if args.tuned_decay else n_epochs
+
 seeds = list(range(111, 121))
+
+validation_size = 0.25
 
 data, time_lookup, prior, gs, count_scaling, velo_scaling = load_data(
     data_file,
     prior_file,
     gs_file,
     counts=True,
-    velocity=True
+    velocity=True,
+    decay_velocity=True
 )
 
-validation_size = 0.25
 print(f"Splitting {validation_size} of data into validation")
 train_idx, test_idx = train_test_split(
     np.arange(data.shape[0]),
@@ -219,15 +213,21 @@ def prep_loaders(
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
+    seq_len = 20
+    batch_size = 25
+
     dyn_tdl = DataLoader(
         TimeDataset(
             _train,
             time_vector[train_idx],
             tmin,
             tmax,
+            1,
+            sequence_length=seq_len,
+            shuffle_time_vector=shuffle_times,
             random_seed=random_seed + 200
         ),
-        batch_size=batch_sizes[0][0],
+        batch_size=batch_size,
         drop_last=True
     )
 
@@ -237,17 +237,27 @@ def prep_loaders(
             time_vector[test_idx],
             tmin,
             tmax,
+            1,
+            shuffle_time_vector=shuffle_times,
+            sequence_length=seq_len,
             random_seed=random_seed + 300
         ),
-        batch_size=batch_sizes[0][0],
+        batch_size=batch_size,
         drop_last=True
     )
 
     return dyn_tdl, dyn_vdl
 
 
+model_name = "Joint"
+if args.pretrained_decay:
+    model_name = model_name + "_Pretrained"
+
+if args.tuned_decay:
+    model_name = model_name + "_Tuned"
+
+
 both_cols = [
-    "Shuffle",
     "Decay_Model",
     "Learning_Rate",
     "Weight_Decay",
@@ -276,8 +286,7 @@ def _train_cv(
     )
 
     result_leader = [
-        shuffle,
-        False,
+        model_name,
         lr,
         wd,
         seed,
@@ -287,49 +296,59 @@ def _train_cv(
         in_drop,
         hl_drop,
         0,
-        n_epochs
+        n_epochs,
+        None
     ]
-
-    if shuffle == 'Prior':
-        prior_cv = ManagePriors.shuffle_priors(
-            prior_cv,
-            -1,
-            seed
-        )
 
     results = []
     loss_lines = []
     time_loss_lines = []
 
+    inf_results = []
+
     for tt in ['rapa', 'cc']:
 
         result_leader[-1] = tt
-        static_dl, static_vdl = prep_loaders(
+
+        dyn_tdl, dyn_vdl = prep_loaders(
             seed,
             time_type=tt
         )
 
         torch.manual_seed(seed)
 
-        dyn_obj, dynamic_results, _erv = model_training(
-            static_dl,
+        dyn_obj = SupirFactorBiophysical(
             prior_cv,
-            n_epochs,
-            validation_dataloader=static_vdl,
-            optimizer_params={'lr': lr, 'weight_decay': wd},
-            gold_standard=gs_cv,
+            decay_model=TRAINED_DECAY if args.pretrained_decay else None,
             input_dropout_rate=in_drop,
             hidden_dropout_rate=hl_drop,
-            prediction_length=False,
-            model_type=get_model('static_meta', velocity=True),
-            return_erv=True,
-            output_relu=False
+            decay_epoch_delay=tuned_delay if args.pretrained_decay else 0,
+            output_activation='softplus'
         )
+
+        dyn_obj.set_time_parameters(
+            n_additional_predictions=10
+        )
+
+        dyn_obj, dynamic_results, _erv = model_training(
+            dyn_tdl,
+            prior_cv,
+            n_epochs,
+            validation_dataloader=dyn_vdl,
+            optimizer_params={'lr': lr, 'weight_decay': wd},
+            gold_standard=gs_cv,
+            model_type=dyn_obj,
+            return_erv=True,
+            count_scaling=count_scaling.scale_,
+            velocity_scaling=velo_scaling.scale_
+        )
+
+        inf_results.append((dynamic_results, _erv))
 
         r, ll, time_loss = process_results_to_dataframes(
             dyn_obj,
             dynamic_results,
-            model_type='rnn',
+            model_type='biophysical',
             leader_columns=both_cols,
             leader_values=result_leader
         )
@@ -337,6 +356,18 @@ def _train_cv(
         results.append(r)
         loss_lines.append(ll)
         time_loss_lines.append(time_loss)
+
+    result_leader[-1] = 'combined'
+    results.append(
+        process_combined_results(
+            inf_results,
+            gold_standard=gs_cv,
+            prior_network=prior_cv,
+            model_type='biophysical',
+            leader_columns=both_cols,
+            leader_values=result_leader
+        )
+    )
 
     results = pd.concat(
         results

@@ -7,7 +7,6 @@ import os
 import anndata as ad
 import numpy as np
 import pandas as pd
-import scanpy as sc
 
 from pandas.api.types import is_float_dtype
 from sklearn.model_selection import train_test_split
@@ -24,6 +23,13 @@ from supirfactor_dynamical import (
 from inferelator.preprocessing import ManagePriors
 from inferelator.postprocessing.model_metrics import MetricHandler
 from inferelator.postprocessing import ResultsProcessor
+
+from supirfactor_dynamical._utils._adata_load import (
+    load_data_files_jtb_2023 as load_data,
+    _shuffle_data,
+    _shuffle_prior,
+    _write
+)
 
 DEFAULT_PATH = "/mnt/ceph/users/cjackson/inferelator/data/RAPA/"
 DEFAULT_PRIOR = os.path.join(
@@ -266,9 +272,9 @@ if args.shuffle_data:
     shuffle = 'Data'
 
 if layer == "X":
-    adata.X = adata.X.astype(np.float32)
-    sc.pp.normalize_per_cell(adata, min_counts=0)
-    data = TruncRobustScaler(with_centering=False).fit_transform(adata.X)
+    data = TruncRobustScaler(with_centering=False).fit_transform(
+        adata.X
+    )
 else:
     data = TruncRobustScaler(with_centering=False).fit_transform(
         adata.layers[layer]
@@ -344,7 +350,7 @@ both_cols = [
 df_cols = both_cols + MetricHandler.get_metric('combined').all_names() + [
     "R2_training", "R2_validation"
 ]
-loss_cols = both_cols + ["Loss_Type"] + list(range(1, n_epochs + 1))
+loss_cols = both_cols + ["Loss_Type"]
 
 
 def prep_loaders(
@@ -471,8 +477,23 @@ def _results(
     tt
 ):
 
-    _t_lead = [model_name, tt, "training"]
-    _v_lead = [model_name, tt, "validation"]
+    if obj:
+        _n = obj.training_loss_df.shape[0]
+    else:
+        _n = 1
+
+    _t_lead = pd.concat([pd.DataFrame(
+        [result_leader + [model_name, tt, "training"]],
+        columns=loss_cols
+        )] * _n,
+        ignore_index=True
+    )
+    _v_lead = pd.concat([pd.DataFrame(
+        [result_leader + [model_name, tt, "validation"]],
+        columns=loss_cols
+        )] * _n,
+        ignore_index=True
+    )
 
     if obj is not None:
 
@@ -484,13 +505,16 @@ def _results(
             obj.validation_r2
         ]
 
-        training_loss = _t_lead + obj.training_loss
-        validation_loss = _v_lead + obj.validation_loss
-
-        loss_lines = [
-            result_leader + training_loss,
-            result_leader + validation_loss
-        ]
+        loss_df = pd.concat((
+            pd.concat(
+                (_t_lead, obj.training_loss_df),
+                axis=1
+            ),
+            pd.concat(
+                (_v_lead, obj.validation_loss_df),
+                axis=1
+            )
+        ))
 
     else:
         result_line = [model_name, tt] + [
@@ -501,31 +525,28 @@ def _results(
             None
         ]
 
-        loss_lines = None
+        loss_df = None
 
     results = [result_leader + result_line]
 
-    try:
-        if obj is not None and hasattr(obj, "training_r2_over_time"):
+    if obj is not None and hasattr(obj, "training_r2_over_time") and obj.training_r2_over_time is not None:
 
-            _n = len(obj.training_r2_over_time)
-            _cols = both_cols + ["Loss_Type"] + list(range(0, _n))
+        _n = len(obj.training_r2_over_time)
+        _cols = both_cols + ["Loss_Type"] + list(range(1, _n + 1))
 
-            time_dependent_loss = pd.DataFrame(
-                [
-                    result_leader + _t_lead + obj.training_r2_over_time,
-                    result_leader + _v_lead + obj.validation_r2_over_time
-                ],
-                columns=_cols
-            )
+        time_dependent_loss = pd.DataFrame(
+            [
+                result_leader + _t_lead + obj.training_r2_over_time,
+                result_leader + _v_lead + obj.validation_r2_over_time
+            ],
+            columns=_cols
+        )
 
-        else:
-            time_dependent_loss = None
+    else:
 
-    except TypeError:
         time_dependent_loss = None
 
-    return results, loss_lines, time_dependent_loss
+    return results, loss_df, time_dependent_loss
 
 
 def _combine_weights(*args):
@@ -645,7 +666,8 @@ def _train_cv(
                 hidden_dropout_rate=hl_drop,
                 model_type=s_model,
                 return_erv=True,
-                output_relu=True
+                activation='softplus',
+                output_activation='softplus'
             )
 
             r, ll, _ = _results(
@@ -657,7 +679,7 @@ def _train_cv(
             )
 
             results.extend(r)
-            loss_lines.extend(ll)
+            loss_lines.append(ll)
             time_loss_lines.append(None)
 
         if not static_only:
@@ -673,7 +695,8 @@ def _train_cv(
                 prediction_length=False,
                 model_type=model,
                 return_erv=True,
-                output_relu=True,
+                activation='softplus',
+                output_activation='softplus'
             )
 
             r, ll, time_loss = _results(
@@ -688,7 +711,7 @@ def _train_cv(
 
             time_loss_lines.append(time_loss)
             results.extend(r)
-            loss_lines.extend(ll)
+            loss_lines.append(ll)
 
         else:
             time_loss = None
@@ -709,9 +732,8 @@ def _train_cv(
         columns=df_cols
     )
 
-    losses = pd.DataFrame(
-        loss_lines,
-        columns=loss_cols
+    losses = pd.concat(
+        loss_lines
     )
 
     try:
@@ -793,8 +815,8 @@ for j, params in enumerate(
         slen
     )
 
-    _write(results, outfile_results, _header)
-    _write(losses, outfile_loss, _header)
-    _write(time_loss, outfile_time_loss, _header)
+    _write(results, outfile_results, _header, both_cols)
+    _write(losses, outfile_loss, _header, both_cols)
+    _write(time_loss, outfile_time_loss, _header, both_cols)
 
     _header = False
