@@ -2,6 +2,17 @@ import torch
 
 
 def _cat(_data, dim):
+    """
+    Concatenate list of tensors or list of tensor tuples
+    If a list of tuples, returns a tuple of concatenated tensors
+
+    :param _data: Data
+    :type _data: torch.Tensor, list, tuple
+    :param dim: Dimension to concatenate
+    :type dim: int
+    :return: Concatenated data
+    :rtype: torch.Tensor, tuple
+    """
 
     if isinstance(_data[0], (tuple, list)):
         return tuple(

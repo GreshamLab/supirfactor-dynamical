@@ -27,6 +27,7 @@ from .train import (
 
 from ._utils._loader import read
 
-from .perturbation.predict import (
-    predict_perturbation
+from .perturbation import (
+    predict_perturbation,
+    perturbation_tfa_gradient
 )

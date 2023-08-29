@@ -7,8 +7,12 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    predict_perturbation,
     SupirFactorBiophysical
+)
+
+from supirfactor_dynamical.perturbation import (
+    predict_perturbation,
+    perturbation_tfa_gradient
 )
 
 from supirfactor_dynamical.perturbation.predict import (
@@ -23,7 +27,7 @@ from ._stubs import (
 )
 
 
-class TestPerturbBiophysical(unittest.TestCase):
+class _SetupMixin(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -83,6 +87,9 @@ class TestPerturbBiophysical(unittest.TestCase):
         super().setUp()
 
         self.dynamical_model.set_drop_tfs(None)
+
+
+class TestPerturbBiophysical(_SetupMixin):
 
     def test_x_decay(self):
 
@@ -328,3 +335,17 @@ class TestPerturbBiophysical(unittest.TestCase):
                 perturbation="Q",
                 n_time_steps=5
             )
+
+
+class TestPerturbGradients(_SetupMixin):
+
+    def test_unperturbed(self):
+
+        in_data = self.dynamical_model.input_data(XTV_tensor)
+
+        perturb_grad = perturbation_tfa_gradient(
+            self.dynamical_model,
+            in_data[:, [0], :],
+            in_data[:, [2], :],
+            observed_data_delta_t=2
+        )
