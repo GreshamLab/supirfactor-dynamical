@@ -1,6 +1,7 @@
 import torch
 
 from .predict import predict_perturbation
+from .._utils.misc import _cat
 
 
 def perturbation_tfa_gradient(
@@ -36,4 +37,4 @@ def perturbation_tfa_gradient(
 
     _handle.remove()
 
-    return loss, _grads[0]
+    return loss, _cat(_grads, 1)
