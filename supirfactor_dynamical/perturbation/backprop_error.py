@@ -8,6 +8,7 @@ def perturbation_tfa_gradient(
     model,
     input_data,
     observed_data,
+    observed_data_type='count',
     perturbation=None,
     observed_data_delta_t=0,
     loss_function=torch.nn.MSELoss()
@@ -18,18 +19,25 @@ def perturbation_tfa_gradient(
         lambda m, gi, go: _grads.append(torch.clone(go[0]))
     )
 
-    predicted_data = predict_perturbation(
+    predicts = predict_perturbation(
         model,
         input_data,
         perturbation,
         observed_data_delta_t
-    )[1]
+    )
+
+    if observed_data_type == 'count':
+        _predict = predicts[1]
+    elif observed_data_type == 'velocity':
+        _predict = predicts[0]
+    elif observed_data_type == 'decay_rate':
+        _predict = predicts[2]
 
     if observed_data_delta_t is not None:
-        predicted_data = predicted_data[:, [-1], :]
+        _predict = _predict[:, [-1], :]
 
     loss = loss_function(
-        predicted_data,
+        _predict,
         observed_data
     )
 
@@ -37,4 +45,4 @@ def perturbation_tfa_gradient(
 
     _handle.remove()
 
-    return loss, _cat(_grads, 1)
+    return loss, _cat(_grads, 1), predicts[3]
