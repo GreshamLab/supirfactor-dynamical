@@ -341,35 +341,14 @@ class _TFMixin(
 
             for data_x in data_loader:
 
-                # Get TFA
-                _, hidden_x = self(
+                _full, _partial = self._calculate_error(
                     self.input_data(data_x),
-                    n_time_steps=self.n_additional_predictions,
-                    return_tfa=True
+                    self.output_data(data_x, no_loss_offset=True),
+                    self.n_additional_predictions
                 )
 
-                if output_data_loader is not None:
-                    data_x = next(output_data_loader)
-                else:
-                    data_x = self.output_data(data_x, no_loss_offset=True)
-
-                full_rss += _calculate_rss(
-                    self.decoder(hidden_x),
-                    data_x
-                )
-
-                # For each node in the latent layer,
-                # zero all values in the data and then
-                # decode to full expression data
-                for ik in range(self.k):
-                    latent_dropout = torch.clone(hidden_x)
-
-                    latent_dropout[..., ik] = 0.
-
-                    rss[:, ik] += _calculate_rss(
-                        self.decoder(latent_dropout),
-                        data_x
-                    )
+                full_rss += _full
+                rss += _partial
 
             # Calculate explained variance from the
             # full model RSS and the reduced model RSS
@@ -393,3 +372,40 @@ class _TFMixin(
 
         else:
             return erv
+
+    def _calculate_error(
+        self,
+        input_data,
+        output_data,
+        n_additional_predictions
+    ):
+
+        # Get TFA
+        with torch.no_grad():
+            _, hidden_x = self(
+                input_data,
+                n_time_steps=n_additional_predictions,
+                return_tfa=True
+            )
+
+        full_rss = _calculate_rss(
+            self.decoder(hidden_x),
+            output_data
+        )
+
+        rss = torch.zeros((self.g, self.k))
+        # For each node in the latent layer,
+        # zero all values in the data and then
+        # decode to full expression data
+        for ik in range(self.k):
+            latent_dropout = torch.clone(hidden_x)
+
+            latent_dropout[..., ik] = 0.
+
+            with torch.no_grad():
+                rss[:, ik] = _calculate_rss(
+                    self.decoder(latent_dropout),
+                    output_data
+                )
+
+        return full_rss, rss

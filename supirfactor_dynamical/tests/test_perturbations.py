@@ -15,10 +15,6 @@ from supirfactor_dynamical.perturbation import (
     perturbation_tfa_gradient
 )
 
-from supirfactor_dynamical.perturbation.predict import (
-    _get_perturbed_velocities
-)
-
 from ._stubs import (
     A,
     T,
@@ -125,8 +121,7 @@ class TestPerturbBiophysical(_SetupMixin):
             unmodified_counts=True
         )
 
-        pos_velocity, neg_velocity = _get_perturbed_velocities(
-            self.dynamical_model,
+        (pos_velocity, neg_velocity), _ = self.dynamical_model._perturbed_velocities(
             in_data,
             dr,
             return_submodels=True

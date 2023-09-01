@@ -299,7 +299,10 @@ class TestDynamicalModel(unittest.TestCase):
         def _test_erv(x, output_data_loader):
 
             for _x, _y in zip(x, output_data_loader):
-                self.assertEqual(_x.shape, _y.shape)
+                self.assertEqual(
+                    _x[..., 0].shape,
+                    _y.shape
+                )
 
         self.dynamical_model._transcription_model.erv = _test_erv
         _ = self.dynamical_model.erv(self.velocity_data)
@@ -315,7 +318,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         def forward_model(x, **kwargs):
-            return torch.full_like(x, 0.1), None
+            return torch.full_like(x, 0.1), None, None
 
         dynamical_model.forward_model = forward_model
 
@@ -348,7 +351,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         def forward_model(x, **kwargs):
-            return torch.full_like(x, 0.1), None
+            return torch.full_like(x, 0.1), None, None
 
         dynamical_model.forward_model = forward_model
 
@@ -393,7 +396,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         def forward_model(x, **kwargs):
-            return torch.full_like(x, 1), None
+            return torch.full_like(x, 1), None, None
 
         dynamical_model.forward_model = forward_model
 

@@ -9,6 +9,7 @@ from ._base_trainer import (
 from ._base_velocity_model import _VelocityMixin
 from .decay_model import DecayModule
 from .._utils.misc import (_cat, _add)
+from .._utils._math import _calculate_rss
 
 
 class SupirFactorBiophysical(
@@ -196,6 +197,7 @@ class SupirFactorBiophysical(
         return_submodels=False,
         return_counts=False,
         return_decays=False,
+        return_tfa=False,
         unmodified_counts=False,
         hidden_state=False
     ):
@@ -230,7 +232,7 @@ class SupirFactorBiophysical(
         """
 
         # Calculate model predictions for the data provided
-        counts, v, d = self.forward_time_step(
+        counts, v, d, tfa = self.forward_time_step(
             x,
             return_submodels=return_submodels,
             hidden_state=hidden_state,
@@ -240,6 +242,7 @@ class SupirFactorBiophysical(
         _output_velo = [v]
         _output_count = [counts]
         _output_decay = [d]
+        _output_tfa = [tfa]
 
         # Do forward predictions starting from the last value in the
         # data provided for n_time_steps time units
@@ -250,7 +253,7 @@ class SupirFactorBiophysical(
 
             # Call the model on a single time point to get velocity
             # and update the counts by adding velocity
-            _x, _v, _d = self.forward_time_step(
+            _x, _v, _d, _tfa = self.forward_time_step(
                 _x,
                 hidden_state=True,
                 return_submodels=return_submodels,
@@ -260,6 +263,7 @@ class SupirFactorBiophysical(
             _output_velo.append(_v)
             _output_count.append(_x)
             _output_decay.append(_d)
+            _output_tfa.append(_tfa)
 
         # Backwards compatibility; only returning velocities if
         # return_velocities=True or no other return flag is set
@@ -267,10 +271,12 @@ class SupirFactorBiophysical(
         # of returning velocities & counts
         if return_submodels:
             return_velocities = True
-        if return_velocities is None and (return_counts or return_decays):
-            return_velocities = False
-        elif return_velocities is None:
-            return_velocities = True
+
+        if return_velocities is None:
+            if any((return_counts, return_decays, return_tfa)):
+                return_velocities = False
+            else:
+                return_velocities = True
 
         # Decide which model predictions to return
         # based on flags provided
@@ -279,7 +285,8 @@ class SupirFactorBiophysical(
             for output, output_flag, output_dim in (
                 (_output_velo, return_velocities, 1),
                 (_output_count, return_counts, 1),
-                (_output_decay, return_decays, 1)
+                (_output_decay, return_decays, 1),
+                (_output_tfa, return_tfa, 1)
             ) if output_flag
         )
 
@@ -298,7 +305,7 @@ class SupirFactorBiophysical(
         return_unmodified_counts=False
     ):
 
-        _v, _d = self.forward_model(
+        _v, _d, _tfa = self.forward_model(
             x,
             hidden_state=hidden_state,
             return_submodels=return_submodels
@@ -310,7 +317,7 @@ class SupirFactorBiophysical(
                 _v
             )
 
-        return x, _v, _d
+        return x, _v, _d, _tfa
 
     def forward_model(
         self,
@@ -333,7 +340,7 @@ class SupirFactorBiophysical(
         """
 
         # Run the transcriptional model
-        x_positive = self.forward_transcription_model(
+        x_positive, tfa_positive = self.forward_transcription_model(
             x,
             hidden_state
         )
@@ -346,13 +353,13 @@ class SupirFactorBiophysical(
         )
 
         if return_submodels:
-            return (x_positive, x_negative), x_decay_rate
+            return (x_positive, x_negative), x_decay_rate, tfa_positive
 
         elif x_negative is None:
-            return x_positive, x_decay_rate
+            return x_positive, x_decay_rate, tfa_positive
 
         else:
-            return _add(x_positive, x_negative), x_decay_rate
+            return _add(x_positive, x_negative), x_decay_rate, tfa_positive
 
     def forward_transcription_model(
         self,
@@ -367,7 +374,8 @@ class SupirFactorBiophysical(
 
         return self._transcription_model(
             x,
-            hidden_state=_hidden
+            hidden_state=_hidden,
+            return_tfa=True
         )
 
     def forward_decay_model(
@@ -573,63 +581,165 @@ class SupirFactorBiophysical(
             compare_x
         )
 
-    @torch.inference_mode()
-    def erv(
+    def _calculate_error(
         self,
-        data_loader,
+        input_data,
+        output_data,
+        n_additional_predictions
+    ):
+
+        if self._decay_model is None:
+            return self._transcription_model._calculate_error(
+                input_data,
+                output_data,
+                n_additional_predictions
+            )
+
+        self.set_drop_tfs(None)
+
+        # Get TFA
+        with torch.no_grad():
+            predict_velo, decay_rates = self(
+                input_data,
+                n_time_steps=n_additional_predictions,
+                return_velocities=True,
+                return_decays=True
+            )
+
+        full_rss = _calculate_rss(
+            predict_velo,
+            output_data
+        )
+
+        del predict_velo
+
+        rss = torch.zeros((self.g, self.k))
+        # For each node in the latent layer,
+        # zero all values in the data and then
+        # decode to full expression data
+        for ik in range(self.k):
+
+            self.set_drop_tfs(self.prior_network_labels[1][ik])
+
+            with torch.no_grad():
+                latent_dropout = self._perturbed_model_forward(
+                    input_data,
+                    decay_rates,
+                    n_time_steps=self.n_additional_predictions
+                )[0]
+
+            rss[:, ik] = _calculate_rss(
+                latent_dropout,
+                output_data
+            )
+
+        self.set_drop_tfs(None)
+
+        return full_rss, rss
+
+    def _perturbed_model_forward(
+        self,
+        data,
+        decay_rates,
+        n_time_steps=0,
+        unmodified_counts=False,
+        return_submodels=False
+    ):
+
+        _L = data.shape[1]
+
+        # Perturbed transcription
+        _v, _tfa = self._perturbed_velocities(
+            data,
+            decay_rates[:, 0:_L, :]
+        )
+
+        if unmodified_counts:
+            counts = data
+        else:
+            counts = self.next_count_from_velocity(
+                data,
+                _v
+            )
+
+        # Do forward predictions
+        _output_velo = [_v]
+        _output_count = [counts]
+        _output_tfa = [_tfa]
+
+        _x = counts[:, [-1], :]
+
+        # Iterate through the number of steps for prediction
+        for i in range(n_time_steps):
+
+            _offset = _L + i
+
+            _v, _tfa = self._perturbed_velocities(
+                _x,
+                decay_rates[:, _offset:_offset + 1, :],
+                hidden_state=True
+            )
+
+            _x = self.next_count_from_velocity(
+                _x,
+                _v
+            )
+
+            _output_velo.append(_v)
+            _output_count.append(_x)
+            _output_tfa.append(_tfa)
+
+        self.set_drop_tfs(None)
+
+        if n_time_steps > 0:
+            _output_velo = _cat(_output_velo, 1)
+            _output_count = _cat(_output_count, 1)
+            _output_tfa = _cat(_output_tfa, 1)
+        else:
+            _output_velo = _output_velo[0]
+            _output_count = _output_count[0]
+            _output_tfa = _output_tfa[0]
+
+        if not return_submodels:
+            _output_velo = _add(
+                _output_velo[0],
+                _output_velo[1]
+            )
+
+        return (
+            _output_velo,
+            _output_count,
+            decay_rates,
+            _output_tfa
+        )
+
+    def _perturbed_velocities(
+        self,
+        data,
+        decay_rates,
+        return_submodels=True,
         **kwargs
     ):
 
-        self.eval()
-
-        def _erv_input_wrapper(dl):
-
-            for data in dl:
-
-                yield self(
-                    self.input_data(data),
-                    n_time_steps=self.n_additional_predictions,
-                    return_counts=True
-                )
-
-        def _erv_output_wrapper(dl):
-
-            for data in dl:
-
-                _data = self.output_data(
-                    data,
-                    no_loss_offset=True
-                )
-
-                # If there's a decay model included, run it and subtract it
-                # from the output for the ERV model
-                if not self.has_decay:
-                    yield _data
-
-                else:
-
-                    _decay = self(
-                        self.input_data(data),
-                        n_time_steps=self.n_additional_predictions,
-                        return_submodels=True
-                    )[1]
-
-                    yield torch.subtract(
-                        _data,
-                        self.output_data(
-                            _decay,
-                            no_loss_offset=True,
-                            keep_all_dims=True
-                        )
-                    )
-
-        return self._transcription_model.erv(
-            _erv_input_wrapper(data_loader),
-            output_data_loader=_erv_output_wrapper(
-                data_loader
-            ),
+        # Perturbed transcription
+        (x_fwd, _), fwd_tfa = self(
+            data,
+            return_submodels=True,
+            return_tfa=True,
             **kwargs
         )
+
+        x_rev = self.rescale_velocity(
+            torch.multiply(
+                data,
+                decay_rates
+            )
+        )
+
+        if return_submodels:
+            return (x_fwd, x_rev), fwd_tfa
+        else:
+            return _add(x_fwd, x_rev), fwd_tfa
 
     def output_weights(self, *args, **kwargs):
         return self._transcription_model.output_weights(*args, **kwargs)
