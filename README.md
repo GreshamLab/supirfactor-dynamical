@@ -7,6 +7,14 @@
 This is a PyTorch model package for creating dynamical, biophysical models of
 transcriptional output and regulation.
 
+### Installation
+
+Install this package using the standard python package manager `python -m pip install supirfactor_dynamical`.
+It depends on [PyTorch](https://pytorch.org/get-started/locally/) and the standard python scientific computing
+packages (e.g. scipy, numpy, pandas).
+
+### Usage
+
 ```
 from supirfactor_dynamical import (
     SupirFactorBiophysical
@@ -32,3 +40,5 @@ model.train_model(
 # Save model
 model.save("supirfactor_dynamical.h5")
 ```
+
+Examples containing data loading, hyperparameter searching, and result testing are located in `./scripts/`
