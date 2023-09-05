@@ -130,6 +130,15 @@ ap.add_argument(
     default=200
 )
 
+ap.add_argument(
+    "--constrain_decay",
+    dest="constrain_decay",
+    help="Constrain Decay with Real Data",
+    action='store_const',
+    const=True,
+    default=False
+)
+
 args = ap.parse_args()
 
 data_file = args.datafile
@@ -138,8 +147,6 @@ gs_file = args.gsfile
 _outfile = args.outfile
 
 n_epochs = args.epochs
-
-static_meta = True
 
 if SLURM_ID is None:
     outfile_loss = _outfile + "_LOSSES.tsv"
@@ -169,7 +176,7 @@ else:
     ]
 
 batch_sizes = [
-    (250, 20)
+    20
 ]
 
 dropouts = [
@@ -213,7 +220,7 @@ def prep_loaders(
     _train = data[train_idx, ...]
     _test = data[test_idx, ...]
 
-    seq_len = 11
+    seq_len = 20
     batch_size = 25
 
     dyn_tdl = DataLoader(
@@ -256,13 +263,15 @@ if args.pretrained_decay:
 if args.tuned_decay:
     model_name = model_name + "_Tuned"
 
+if args.constrain_decay:
+    model_name = model_name + "_Constrained"
+
 
 both_cols = [
     "Decay_Model",
     "Learning_Rate",
     "Weight_Decay",
     "Seed",
-    "Static_Batch_Size",
     "Dynamic_Batch_Size",
     "Sequence_Length",
     "Input_Dropout",
@@ -274,14 +283,14 @@ both_cols = [
 
 
 def _train_cv(
-    lr, wd, sb, db, in_drop, hl_drop,
+    lr, wd, db, in_drop, hl_drop,
     seed, prior_cv, gs_cv, slen
 ):
 
     print(
         f"Training Velocity model (epochs: {n_epochs}, lr: {lr}, "
         f"seed: {seed}, weight_decay: {wd}, input_dropout: {in_drop}, "
-        f"hidden_dropout: {hl_drop}, static_batch_size: {s_batch}, "
+        f"hidden_dropout: {hl_drop}, "
         f"dynamic_batch_size: {d_batch}, sequence length {slen})"
     )
 
@@ -290,7 +299,6 @@ def _train_cv(
         lr,
         wd,
         seed,
-        sb,
         db,
         slen,
         in_drop,
@@ -323,7 +331,8 @@ def _train_cv(
             input_dropout_rate=in_drop,
             hidden_dropout_rate=hl_drop,
             decay_epoch_delay=tuned_delay if args.pretrained_decay else 0,
-            output_activation='softplus'
+            output_activation='softplus',
+            separately_optimize_decay_model=args.constrain_decay
         )
 
         dyn_obj, dynamic_results, _erv = model_training(
@@ -399,7 +408,7 @@ for j, params in enumerate(
         if _j != SLURM_ID:
             continue
 
-    wd, lr, (s_batch, d_batch), (in_drop, hl_drop), slen, i = params
+    wd, lr, d_batch, (in_drop, hl_drop), slen, i = params
 
     prior_cv, gs_cv = ManagePriors.cross_validate_gold_standard(
         prior,
@@ -419,7 +428,6 @@ for j, params in enumerate(
     results, losses, time_loss = _train_cv(
         lr,
         wd,
-        s_batch,
         d_batch,
         in_drop,
         hl_drop,

@@ -81,7 +81,7 @@ ap.add_argument(
     help="NUM Epochs",
     metavar="NUM",
     type=int,
-    default=500
+    default=2000
 )
 
 ap.add_argument(

@@ -1,0 +1,4 @@
+codecov:
+  branch: main
+ignore:
+  - "*/tests/*”

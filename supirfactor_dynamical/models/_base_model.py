@@ -312,7 +312,6 @@ class _TFMixin(
     def erv(
         self,
         data_loader,
-        output_data_loader=None,
         return_rss=False,
         as_data_frame=False
     ):
