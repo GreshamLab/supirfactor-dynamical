@@ -1,5 +1,4 @@
 import torch
-import tqdm
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
@@ -618,7 +617,7 @@ class SupirFactorBiophysical(
         # For each node in the latent layer,
         # zero all values in the data and then
         # decode to full expression data
-        for ik in tqdm.trange(self.k, unit="TF"):
+        for ik in range(self.k):
 
             self.set_drop_tfs(self.prior_network_labels[1][ik])
 
