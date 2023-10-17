@@ -56,7 +56,8 @@ _DECODE_ACTIVATIONS = {
 }
 
 _FORCE_UNIT = {
-    'decay_k': int
+    'decay_k': int,
+    'k': int
 }
 
 
