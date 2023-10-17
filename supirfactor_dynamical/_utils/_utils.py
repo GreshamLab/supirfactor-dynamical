@@ -36,7 +36,8 @@ def _process_weights_to_tensor(
     elif isinstance(prior_network, ad.AnnData):
         labels = (prior_network.obs_names, prior_network.var_names)
         data = _process_weights_to_tensor(
-            prior_network.X
+            prior_network.X,
+            transpose=False
         )[0]
 
     else:
