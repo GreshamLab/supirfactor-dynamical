@@ -54,7 +54,7 @@ class ChromatinAwareModel(
 
         self.mask_input_weights(
             gene_peak_mask,
-            module=self.peak_encoder[1],
+            module=self.peak_encoder[0],
             layer_name='weight'
         )
 
@@ -70,7 +70,7 @@ class ChromatinAwareModel(
 
         self.mask_input_weights(
             peak_tf_mask,
-            module=self.tf_encoder[0],
+            module=self.tf_encoder[1],
             layer_name='weight'
         )
 
