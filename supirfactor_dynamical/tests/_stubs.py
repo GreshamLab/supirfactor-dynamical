@@ -24,6 +24,9 @@ X_SP = csr_matrix(X)
 PEAKS = _rng.choice([0, 1], size=(100, 25), p=[0.95, 0.05])
 PEAKS_SP = csr_matrix(PEAKS)
 
+G_TO_PEAK_PRIOR = _rng.choice([0, 1], size=(4, 25), p=[0.75, 0.25])
+PEAK_TO_TF_PRIOR = _rng.choice([0, 1], size=(25, 3), p=[0.75, 0.25])
+
 X_tensor = torch.Tensor(X)
 
 _V_BASE = np.diff(np.vstack((

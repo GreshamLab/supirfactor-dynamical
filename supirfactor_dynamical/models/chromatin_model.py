@@ -1,7 +1,8 @@
 import torch
 
 from ._base_trainer import (
-    _TrainingMixin
+    _TrainingMixin,
+    _TimeOffsetMixinStatic
 )
 
 from ._base_model import (
@@ -12,6 +13,8 @@ from .._utils import _process_weights_to_tensor
 
 
 class ChromatinAwareModel(
+    torch.nn.Module,
+    _TimeOffsetMixinStatic,
     _TFMixin,
     _TrainingMixin
 ):
@@ -22,10 +25,6 @@ class ChromatinAwareModel(
     k = None
     p = None
 
-    peak_encoder = None
-    tf_encoder = None
-    chromatin_encoder = None
-
     def __init__(
         self,
         gene_peak_mask,
@@ -35,8 +34,10 @@ class ChromatinAwareModel(
         hidden_dropout_rate=0.0
     ):
 
+        super().__init__()
+
         self.g, self.p = gene_peak_mask.shape
-        self.k, _ = peak_tf_mask.shape
+        _, self.k = peak_tf_mask.shape
 
         self.set_dropouts(
             input_dropout_rate,
@@ -100,7 +101,7 @@ class ChromatinAwareModel(
                 hidden_dropout_rate=hidden_dropout_rate,
             )
 
-    def forward(self, x, return_tfa=False):
+    def forward(self, x, return_tfa=False, n_time_steps=None):
 
         peak_state = self.chromatin_model(x)
 
