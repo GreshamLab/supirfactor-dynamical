@@ -2,22 +2,136 @@ import unittest
 import torch
 import numpy.testing as npt
 import numpy as np
+import pandas as pd
+import anndata as ad
 
 from supirfactor_dynamical._utils import (
     _calculate_erv,
     _calculate_rss,
     _calculate_tss,
     _calculate_r2,
-    _aggregate_r2
+    _aggregate_r2,
+    _process_weights_to_tensor
 )
 
 from scipy.linalg import pinv
 
 from ._stubs import (
     X,
+    X_SP,
     A,
     X_tensor
 )
+
+
+class TestTensorUtils(unittest.TestCase):
+
+    def test_array_to_tensor(self):
+
+        x_t, (a, b) = _process_weights_to_tensor(
+            X
+        )
+
+        torch.testing.assert_close(x_t, torch.transpose(X_tensor, 0, 1))
+        self.assertIsNone(a)
+        self.assertIsNone(b)
+
+        x_t, (a, b) = _process_weights_to_tensor(
+            X,
+            transpose=False
+        )
+
+        torch.testing.assert_close(x_t, X_tensor)
+        self.assertIsNone(a)
+        self.assertIsNone(b)
+
+    def test_dataframe_to_tensor(self):
+
+        x = pd.DataFrame(X)
+
+        x_t, _ = _process_weights_to_tensor(
+            x
+        )
+
+        torch.testing.assert_close(x_t, torch.transpose(X_tensor, 0, 1))
+
+        x_t, _ = _process_weights_to_tensor(
+            x,
+            transpose=False
+        )
+
+        torch.testing.assert_close(x_t, X_tensor)
+
+    def test_sparse_to_tensor(self):
+
+        x_t, (a, b) = _process_weights_to_tensor(
+            X_SP
+        )
+
+        torch.testing.assert_close(
+            x_t.to_dense(),
+            torch.transpose(X_tensor, 0, 1)
+        )
+        self.assertIsNone(a)
+        self.assertIsNone(b)
+
+        x_t, (a, b) = _process_weights_to_tensor(
+            X_SP,
+            transpose=False
+        )
+
+        torch.testing.assert_close(
+            x_t.to_dense(),
+            X_tensor
+        )
+        self.assertIsNone(a)
+        self.assertIsNone(b)
+
+    def adata_to_tensor(self):
+
+        adata = ad.AnnData(X)
+
+        x_t, _ = _process_weights_to_tensor(
+            adata
+        )
+
+        torch.testing.assert_close(
+            x_t.to_dense(),
+            torch.transpose(X_tensor, 0, 1)
+        )
+
+        x_t, _ = _process_weights_to_tensor(
+            adata,
+            transpose=False
+        )
+
+        torch.testing.assert_close(
+            x_t.to_dense(),
+            X_tensor
+        )
+
+    def adata_sparse_to_tensor(self):
+
+        adata = ad.AnnData(X_SP)
+
+        x_t, _ = _process_weights_to_tensor(
+            adata
+        )
+
+        torch.testing.assert_close(
+            x_t.to_dense(),
+            torch.transpose(X_tensor, 0, 1)
+        )
+
+        x_t, _ = _process_weights_to_tensor(
+            adata,
+            transpose=False
+        )
+
+        torch.testing.assert_close(
+            x_t.to_dense(),
+            X_tensor
+        )
 
 
 class TestMathUtils(unittest.TestCase):

@@ -5,6 +5,7 @@ from .models import (
     TFLSTMDecoder,
     TFGRUDecoder,
     SupirFactorBiophysical,
+    ChromatinAwareModel,
     get_model
 )
 

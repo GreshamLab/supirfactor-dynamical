@@ -118,12 +118,36 @@ class _PriorMixin:
     def mask_input_weights(
         self,
         mask,
+        module=None,
         use_mask_weights=False,
-        layer_name='weight_ih_l0',
+        layer_name='weight',
         weight_vstack=None
     ):
+        """
+        Apply a mask to layer weights
 
-        if isinstance(self.encoder, torch.nn.Sequential):
+        :param mask: Mask tensor. Non-zero values will be retained,
+            and zero values will be masked to zero in the layer weights
+        :type mask: torch.Tensor
+        :param encoder: Module to mask, use self.encoder if this is None,
+            defaults to None
+        :type encoder: torch.nn.Module, optional
+        :param use_mask_weights: Set the weights equal to values in mask,
+            defaults to False
+        :type use_mask_weights: bool, optional
+        :param layer_name: Module weight name,
+            defaults to 'weight'
+        :type layer_name: str, optional
+        :param weight_vstack: Number of times to stack the mask, for cases
+            where the layer weights are also stacked, defaults to None
+        :type weight_vstack: _type_, optional
+        :raises ValueError: Raise error if the mask and module weights are
+            different sizes
+        """
+
+        if module is not None:
+            encoder = module
+        elif isinstance(self.encoder, torch.nn.Sequential):
             encoder = self.encoder[0]
         else:
             encoder = self.encoder
