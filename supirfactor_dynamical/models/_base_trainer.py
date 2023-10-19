@@ -654,6 +654,29 @@ class _TrainingMixin:
             **kwargs
         )
 
+    @torch.inference_mode()
+    def score(
+        self,
+        dataloader,
+        loss_function=torch.nn.MSELoss(),
+        **kwargs
+    ):
+
+        if dataloader is None:
+            return None
+
+        _score = 0
+
+        with torch.no_grad():
+            for data in dataloader:
+                _score += loss_function(
+                    self._slice_data_and_forward(data),
+                    self.output_data(data),
+                    **kwargs
+                )
+
+        return _score
+
 
 def _shuffle_time_data(dl):
     try:

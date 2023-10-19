@@ -11,7 +11,10 @@ from .recurrent_models import (
 
 from .biophysical_model import SupirFactorBiophysical
 from .decay_model import DecayModule
-from .chromatin_model import ChromatinAwareModel
+from .chromatin_model import (
+    ChromatinModule,
+    ChromatinAwareModel
+)
 
 # Standard mixins
 from ._base_velocity_model import (
@@ -29,7 +32,8 @@ _CLASS_DICT = {
     TFLSTMDecoder.type_name: TFLSTMDecoder,
     SupirFactorBiophysical.type_name: SupirFactorBiophysical,
     DecayModule.type_name: DecayModule,
-    ChromatinAwareModel.type_name: ChromatinAwareModel
+    ChromatinAwareModel.type_name: ChromatinAwareModel,
+    ChromatinModule.type_name: ChromatinModule
 }
 
 _not_velocity = [

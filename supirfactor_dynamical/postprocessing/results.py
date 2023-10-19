@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import torcheval.metrics
+import torch
 
 from inferelator.postprocessing import ResultsProcessor
 
@@ -141,6 +143,42 @@ def process_results_to_dataframes(
         time_dependent_loss = None
 
     return results, loss_df, time_dependent_loss
+
+
+def add_classification_metrics_to_dataframe(
+    result_df,
+    model_object,
+    training_dataloader,
+    validation_dataloader=None,
+    column_prefix=None
+):
+    if column_prefix is None:
+        column_prefix = "training_"
+
+    result_df[column_prefix + "accuracy"] = model_object.score(
+        training_dataloader,
+        loss_function=torcheval.metrics.functional.multilabel_accuracy
+    )
+
+    result_df[column_prefix + "auprc"] = model_object.score(
+        training_dataloader,
+        loss_function=torcheval.metrics.functional.multilabel_auprc
+    )
+
+    result_df[column_prefix + "cross_entropy"] = model_object.score(
+        training_dataloader,
+        loss_function=torch.nn.BCELoss()
+    )
+
+    if validation_dataloader is not None:
+        result_df = add_classification_metrics_to_dataframe(
+            result_df,
+            model_object,
+            validation_dataloader,
+            column_prefix="validation_"
+        )
+
+    return result_df
 
 
 def process_combined_results(

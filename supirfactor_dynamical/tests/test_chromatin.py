@@ -21,6 +21,11 @@ from supirfactor_dynamical.models.chromatin_model import (
     ChromatinAwareModel
 )
 
+from supirfactor_dynamical.postprocessing.results import (
+    process_results_to_dataframes,
+    add_classification_metrics_to_dataframe
+)
+
 
 class TestChromatinTraining(unittest.TestCase):
 
@@ -54,6 +59,43 @@ class TestChromatinTraining(unittest.TestCase):
         self.assertEqual(
             len(model.training_loss),
             10
+        )
+
+    def test_classification_results(self):
+
+        model = ChromatinModule(
+            4,
+            25,
+            k=10
+        )
+
+        model.train_model(
+            self.dataloader,
+            10
+        )
+
+        results, losses, _ = process_results_to_dataframes(
+            model,
+            None,
+            model_type='chromatin',
+            leader_columns=["Name"],
+            leader_values=["Value"]
+        )
+
+        self.assertEqual(
+            results.shape,
+            (1, 4)
+        )
+
+        results = add_classification_metrics_to_dataframe(
+            results,
+            model,
+            self.dataloader
+        )
+
+        self.assertEqual(
+            results.shape,
+            (1, 7)
         )
 
 
