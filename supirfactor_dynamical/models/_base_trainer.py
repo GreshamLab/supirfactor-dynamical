@@ -667,6 +667,7 @@ class _TrainingMixin:
             return None
 
         _score = []
+        _count = []
 
         with torch.no_grad():
             for data in dataloader:
@@ -677,11 +678,17 @@ class _TrainingMixin:
                         **kwargs
                     )
                 )
+                _count.append(
+                    self.input_data(data).shape[0]
+                )
 
         _score = torch.Tensor(_score)
+        _count = torch.Tensor(_count)
 
         if reduction == 'mean':
-            _score = torch.mean(_score)
+            _score = torch.sum(
+                torch.mul(_score, _count) / torch.sum(_count)
+            )
         elif reduction == 'sum':
             _score = torch.sum(_score)
         elif reduction is None:
