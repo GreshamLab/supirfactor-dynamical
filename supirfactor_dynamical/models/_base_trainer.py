@@ -659,21 +659,37 @@ class _TrainingMixin:
         self,
         dataloader,
         loss_function=torch.nn.MSELoss(),
+        reduction='sum',
         **kwargs
     ):
 
         if dataloader is None:
             return None
 
-        _score = 0
+        _score = []
 
         with torch.no_grad():
             for data in dataloader:
-                _score += loss_function(
-                    self._slice_data_and_forward(data),
-                    self.output_data(data),
-                    **kwargs
+                _score.append(
+                    loss_function(
+                        self._slice_data_and_forward(data),
+                        self.output_data(data),
+                        **kwargs
+                    )
                 )
+
+        _score = torch.Tensor(_score)
+
+        if reduction == 'mean':
+            _score = torch.mean(_score)
+        elif reduction == 'sum':
+            _score = torch.sum(_score)
+        elif reduction is None:
+            pass
+        else:
+            raise ValueError(
+                f'reduction must be `mean`, `sum` or None; {reduction} passed'
+            )
 
         return _score
 

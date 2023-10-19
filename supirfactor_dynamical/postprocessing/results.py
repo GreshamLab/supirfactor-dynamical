@@ -158,12 +158,14 @@ def add_classification_metrics_to_dataframe(
     result_df[column_prefix + "accuracy"] = model_object.score(
         training_dataloader,
         loss_function=torcheval.metrics.functional.multilabel_accuracy,
-        criteria='hamming'
+        criteria='hamming',
+        reduction='mean'
     ).item()
 
     result_df[column_prefix + "auprc"] = model_object.score(
         training_dataloader,
-        loss_function=torcheval.metrics.functional.multilabel_auprc
+        loss_function=torcheval.metrics.functional.multilabel_auprc,
+        reduction='mean'
     ).item()
 
     result_df[column_prefix + "cross_entropy"] = model_object.score(
