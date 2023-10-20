@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 
 from ._stubs import (
     X,
@@ -95,7 +96,21 @@ class TestChromatinTraining(unittest.TestCase):
 
         self.assertEqual(
             results.shape,
-            (1, 7)
+            (1, 9)
+        )
+
+        print(results)
+        print(np.sum(PEAKS == 0))
+        print(np.sum(PEAKS == 1))
+
+        self.assertEqual(
+            results.iloc[0, 7],
+            np.sum(PEAKS == 0) / PEAKS.size
+        )
+
+        self.assertEqual(
+            results.iloc[0, 8],
+            np.sum(PEAKS == 1) / PEAKS.size
         )
 
 

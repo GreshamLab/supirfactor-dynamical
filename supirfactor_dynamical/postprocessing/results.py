@@ -170,8 +170,22 @@ def add_classification_metrics_to_dataframe(
 
     result_df[column_prefix + "cross_entropy"] = model_object.score(
         training_dataloader,
-        loss_function=torch.nn.BCELoss()
+        loss_function=torch.nn.BCELoss(),
+        reduction='mean'
     ).item()
+
+    _bincounts = 0
+    _total = 0
+    for data in training_dataloader:
+        _bincounts += torch.bincount(
+            model_object.output_data(data).int().view(-1),
+            minlength=2
+        )
+        _total += torch.numel(model_object.output_data(data))
+
+    # Add frequencies
+    for i, _bc in enumerate(_bincounts):
+        result_df[column_prefix + f"value_{i}_frequency"] = _bc.item() / _total
 
     if validation_dataloader is not None:
         result_df = add_classification_metrics_to_dataframe(
