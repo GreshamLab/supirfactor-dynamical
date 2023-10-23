@@ -19,13 +19,13 @@ class DecayModule(
 
     hidden_state = None
 
-    g = None
-    k = None
+    n_genes = None
+    hidden_layer_width = None
 
     def __init__(
         self,
-        g,
-        k=20,
+        n_genes=None,
+        hidden_layer_width=20,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0
     ):
@@ -39,23 +39,23 @@ class DecayModule(
         self._encoder = torch.nn.Sequential(
             torch.nn.Dropout(input_dropout_rate),
             torch.nn.Linear(
-                g,
-                k,
+                n_genes,
+                hidden_layer_width,
                 bias=False
             ),
             torch.nn.Tanh(),
             torch.nn.Dropout(hidden_dropout_rate),
             torch.nn.Linear(
-                k,
-                k,
+                hidden_layer_width,
+                hidden_layer_width,
                 bias=False
             ),
             torch.nn.Softplus(threshold=5)
         )
 
         self._intermediate = torch.nn.RNN(
-            k,
-            k,
+            hidden_layer_width,
+            hidden_layer_width,
             1,
             bias=False,
             batch_first=True
@@ -63,15 +63,15 @@ class DecayModule(
 
         self._decoder = torch.nn.Sequential(
             torch.nn.Linear(
-                k,
-                g,
+                hidden_layer_width,
+                n_genes,
                 bias=False
             ),
             torch.nn.Softplus(threshold=5)
         )
 
-        self.g = g
-        self.k = k
+        self.n_genes = n_genes
+        self.hidden_layer_width = hidden_layer_width
 
     def forward(
         self,

@@ -12,7 +12,7 @@ from .._utils import (
     _cat
 )
 
-from ._writer import write
+from .._io._writer import write
 
 from torch.utils.data import DataLoader
 

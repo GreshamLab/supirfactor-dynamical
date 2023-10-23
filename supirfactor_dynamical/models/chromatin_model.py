@@ -27,8 +27,8 @@ class ChromatinAwareModel(
 
     def __init__(
         self,
-        gene_peak_mask,
-        peak_tf_mask,
+        gene_peak_mask=None,
+        peak_tf_prior_network=None,
         chromatin_model=None,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0
@@ -36,8 +36,11 @@ class ChromatinAwareModel(
 
         super().__init__()
 
+        self.peak_tf_prior_network = peak_tf_prior_network
+        self.gene_peak_mask = gene_peak_mask
+
         self.g, self.p = gene_peak_mask.shape
-        _, self.k = peak_tf_mask.shape
+        _, self.k = peak_tf_prior_network.shape
 
         self.set_dropouts(
             input_dropout_rate,
@@ -59,18 +62,18 @@ class ChromatinAwareModel(
             layer_name='weight'
         )
 
-        peak_tf_mask, _ = _process_weights_to_tensor(
-            peak_tf_mask
-        )
-
         self.tf_encoder = torch.nn.Sequential(
             self.input_dropout,
             torch.nn.Linear(self.p, self.k, bias=False),
             torch.nn.Softplus(threshold=5)
         )
 
+        peak_tf_prior_network, _ = _process_weights_to_tensor(
+            peak_tf_prior_network
+        )
+
         self.mask_input_weights(
-            peak_tf_mask,
+            peak_tf_prior_network,
             module=self.tf_encoder[1],
             layer_name='weight'
         )
@@ -86,7 +89,7 @@ class ChromatinAwareModel(
         if chromatin_model is not None:
 
             if isinstance(chromatin_model, str):
-                from .._utils._loader import read
+                from .._io._loader import read
                 chromatin_model = read(chromatin_model)
 
             self.chromatin_model = chromatin_model
@@ -129,15 +132,15 @@ class ChromatinModule(
 
     hidden_state = None
 
-    g = None
-    k = None
-    p = None
+    n_genes = None
+    hidden_layer_width = None
+    n_peaks = None
 
     def __init__(
         self,
-        g,
-        p,
-        k=50,
+        n_genes=None,
+        n_peaks=None,
+        hidden_layer_width=50,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0
     ):
@@ -157,9 +160,9 @@ class ChromatinModule(
         """
         super().__init__()
 
-        self.g = g
-        self.k = k
-        self.p = p
+        self.n_genes = n_genes
+        self.hidden_layer_width = hidden_layer_width
+        self.n_peaks = n_peaks
 
         self.set_dropouts(
             input_dropout_rate,
@@ -169,21 +172,21 @@ class ChromatinModule(
         self.model = torch.nn.Sequential(
             torch.nn.Dropout(input_dropout_rate),
             torch.nn.Linear(
-                g,
-                k,
+                n_genes,
+                hidden_layer_width,
                 bias=False
             ),
             torch.nn.Tanh(),
             torch.nn.Dropout(hidden_dropout_rate),
             torch.nn.Linear(
-                k,
-                k,
+                hidden_layer_width,
+                hidden_layer_width,
                 bias=False
             ),
             torch.nn.Softplus(threshold=5),
             torch.nn.Linear(
-                k,
-                p,
+                hidden_layer_width,
+                n_peaks,
                 bias=False
             ),
             torch.nn.Sigmoid()

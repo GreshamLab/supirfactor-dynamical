@@ -13,8 +13,18 @@ class _PriorMixin:
 
     _drop_tf = None
 
-    prior_network = None
     prior_network_labels = (None, None)
+
+    @property
+    def prior_network_dataframe(self):
+        if self.prior_network is None:
+            return None
+
+        else:
+            return self._to_dataframe(
+                self.prior_network,
+                transpose=True
+            )
 
     def drop_encoder(
         self,
@@ -55,7 +65,6 @@ class _PriorMixin:
         )
 
         # Set prior instance variables
-        self.prior_network = prior_network
         self.prior_network_labels = prior_network_labels
         self.k, self.g = prior_network.shape
 
@@ -68,7 +77,7 @@ class _PriorMixin:
         activation='softplus'
     ):
 
-        prior_network = self.process_prior(
+        self.prior_network = self.process_prior(
             prior_network
         )
 
@@ -85,7 +94,7 @@ class _PriorMixin:
 
         # Replace initialized encoder weights with prior weights
         self.mask_input_weights(
-            prior_network,
+            self.prior_network,
             use_mask_weights=use_prior_weights,
             layer_name='weight'
         )

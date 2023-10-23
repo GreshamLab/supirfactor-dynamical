@@ -47,9 +47,9 @@ class TestChromatinTraining(unittest.TestCase):
     def test_train(self):
 
         model = ChromatinModule(
-            4,
-            25,
-            k=10
+            n_genes=4,
+            n_peaks=25,
+            hidden_layer_width=10
         )
 
         model.train_model(
@@ -65,9 +65,9 @@ class TestChromatinTraining(unittest.TestCase):
     def test_classification_results(self):
 
         model = ChromatinModule(
-            4,
-            25,
-            k=10
+            n_genes=4,
+            n_peaks=25,
+            hidden_layer_width=10
         )
 
         model.train_model(
@@ -98,10 +98,6 @@ class TestChromatinTraining(unittest.TestCase):
             results.shape,
             (1, 9)
         )
-
-        print(results)
-        print(np.sum(PEAKS == 0))
-        print(np.sum(PEAKS == 1))
 
         self.assertEqual(
             results.iloc[0, 7],

@@ -1,7 +1,8 @@
 import h5py
 import collections
 import torch
-import pandas as pd
+
+from ._network import read_network
 
 from ..models import (
     get_model
@@ -32,6 +33,12 @@ DEPRECATED_ARGS = [
     '_pretrained_count',
     '_pretrained_decay',
     'time_dependent_decay'
+]
+
+NETWORK_ARGS = [
+    'prior_network',
+    'peak_tf_prior_network',
+    'gene_peak_mask'
 ]
 
 INFO_KWARGS = [
@@ -112,21 +119,15 @@ def read(
         if k in kwargs:
             kwargs[k] = func(kwargs[k])
 
-    # Get the prior and pop out the prior
-    # size variables
-    try:
-        with pd.HDFStore(file_name, mode='r') as f:
-            prior = pd.read_hdf(
-                f,
-                prefix + 'prior_network'
-            )
+    # Get the network information
+    for net_arg in NETWORK_ARGS:
+        _net = read_network(
+            file_name,
+            prefix + net_arg
+        )
 
-        kwargs.pop('g', None)
-        kwargs.pop('k', None)
-
-    # Or get g out of the kwargs for decay model
-    except KeyError:
-        prior = kwargs.pop('g', None)
+        if _net is not None:
+            kwargs[net_arg] = _net
 
     time_kwargs = {
         k: kwargs.pop(k, None) for k in TIME_KWARGS
@@ -169,12 +170,10 @@ def read(
             _state_model,
             velocity=model_type_kwargs['_velocity_model']
         )(
-            prior,
             **kwargs
         )
     else:
         model = model_class(
-            prior,
             **kwargs
         )
 

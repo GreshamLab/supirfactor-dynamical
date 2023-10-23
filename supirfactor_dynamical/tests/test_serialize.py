@@ -16,7 +16,9 @@ from supirfactor_dynamical import (
 from ._stubs import (
     X_tensor,
     XTV_tensor,
-    A
+    A,
+    G_TO_PEAK_PRIOR,
+    PEAK_TO_TF_PRIOR
 )
 
 
@@ -25,6 +27,8 @@ class _ModelStub:
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
+
+        self.prior_network = kwargs.pop('prior_network', None)
 
     def load_state_dict(self, x):
         self.state_dict = x
@@ -84,7 +88,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
 
         npt.assert_almost_equal(
             A,
-            stub.args[0].values
+            stub.prior_network.values
         )
 
         self.assertDictEqual(
@@ -133,7 +137,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
 
         npt.assert_almost_equal(
             A,
-            stub.args[0].values
+            stub.prior_network.values
         )
 
         self.assertDictEqual(
@@ -186,7 +190,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
 
         npt.assert_almost_equal(
             A,
-            stub.args[0].values
+            stub.prior_network.values
         )
 
         self.assertDictEqual(
@@ -550,8 +554,8 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
     def test_serialize_decay_module_diffk(self):
 
         decay = get_model('decay')(
-            3,
-            k=10
+            n_genes=3,
+            hidden_layer_width=10
         )
 
         decay.save(self.temp_file_name)
@@ -563,6 +567,47 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         self._compare_module(
             decay,
             loaded_decay
+        )
+
+
+class TestChromatin(_SetupMixin, unittest.TestCase):
+
+    def test_h5_chromatin(self):
+
+        model = get_model(
+            'chromatin',
+        )(
+            4,
+            25
+        )
+
+        model.save(self.temp_file_name)
+
+        loaded_model = read(self.temp_file_name)
+        loaded_model.eval()
+
+        self._compare_module(
+            model,
+            loaded_model
+        )
+
+    def test_h5_chromatin_aware(self):
+
+        model = get_model(
+            'chromatin_aware',
+        )(
+            G_TO_PEAK_PRIOR,
+            PEAK_TO_TF_PRIOR
+        )
+
+        model.save(self.temp_file_name)
+
+        loaded_model = read(self.temp_file_name)
+        loaded_model.eval()
+
+        self._compare_module(
+            model,
+            loaded_model
         )
 
 

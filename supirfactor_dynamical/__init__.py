@@ -26,7 +26,7 @@ from .train import (
     pretrain_and_tune_dynamic_model
 )
 
-from ._utils._loader import read
+from ._io._loader import read
 
 from .perturbation import (
     predict_perturbation,

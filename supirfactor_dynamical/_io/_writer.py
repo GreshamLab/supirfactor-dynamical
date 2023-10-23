@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
-import pandas as pd
+
+from ._network import write_network
+
 
 _SERIALIZE_ARGS = [
     'input_dropout_rate',
@@ -19,8 +21,9 @@ _SERIALIZE_ARGS = [
     'training_time',
     'training_r2',
     'validation_r2',
-    'g',
-    'k',
+    'n_genes',
+    'hidden_layer_width',
+    'n_peaks',
     'output_activation',
     'activation'
 ]
@@ -30,6 +33,11 @@ _SERIALIZE_ENCODED_ARGS = [
     'activation'
 ]
 
+_SERIALIZE_NETWORKS = [
+    'prior_network',
+    'peak_tf_prior_network',
+    'gene_peak_mask'
+]
 
 _ENCODE_ACTIVATIONS = {
     None: 0,
@@ -50,28 +58,20 @@ def write(
     with h5py.File(file_name, mode) as f:
         _write_state(f, model_object, prefix)
 
-    if hasattr(model_object, 'prior_network'):
-        _write_df(
-            file_name,
-            model_object._to_dataframe(
-                model_object.prior_network,
-                transpose=True
-            ),
-            'prior_network'
-        )
+    for net_attr in _SERIALIZE_NETWORKS:
+        if hasattr(model_object, net_attr) and net_attr == "prior_network":
+            write_network(
+                file_name,
+                model_object.prior_network_dataframe,
+                prefix + 'prior_network'
+            )
 
-
-def _write_df(
-    file_name,
-    df,
-    key
-):
-
-    with pd.HDFStore(file_name, mode="a") as f:
-        df.to_hdf(
-            f,
-            key
-        )
+        elif hasattr(model_object, net_attr):
+            write_network(
+                file_name,
+                getattr(model_object, net_attr),
+                prefix + net_attr
+            )
 
 
 def _write_state(

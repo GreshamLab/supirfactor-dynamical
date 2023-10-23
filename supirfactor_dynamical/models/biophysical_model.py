@@ -37,7 +37,7 @@ class SupirFactorBiophysical(
 
     def __init__(
         self,
-        prior_network,
+        prior_network=None,
         decay_model=None,
         decay_epoch_delay=None,
         decay_k=20,
@@ -116,17 +116,17 @@ class SupirFactorBiophysical(
         elif decay_model is not None:
 
             if isinstance(decay_model, str):
-                from .._utils._loader import read
+                from .._io._loader import read
                 decay_model = read(decay_model)
 
             self._decay_model = decay_model
-            self.decay_k = self._decay_model.k
+            self.decay_k = self._decay_model.hidden_layer_width
 
         else:
 
             self._decay_model = DecayModule(
-                self.g,
-                decay_k,
+                n_genes=self.g,
+                hidden_layer_width=decay_k,
                 input_dropout_rate=input_dropout_rate,
                 hidden_dropout_rate=hidden_dropout_rate,
             )

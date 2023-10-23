@@ -18,7 +18,7 @@ class TFAutoencoder(
 
     def __init__(
         self,
-        prior_network,
+        prior_network=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
@@ -99,7 +99,7 @@ class TFMetaAutoencoder(
 
     def __init__(
         self,
-        prior_network,
+        prior_network=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
