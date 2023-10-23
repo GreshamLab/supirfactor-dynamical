@@ -64,7 +64,7 @@ _DECODE_ACTIVATIONS = {
 
 _FORCE_UNIT = {
     'decay_k': int,
-    'k': int
+    'hidden_layer_width': int
 }
 
 
