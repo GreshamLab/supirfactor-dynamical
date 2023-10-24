@@ -1,16 +1,30 @@
 import unittest
 import tempfile
 import os
+import h5py
 
 import numpy as np
 import numpy.testing as npt
+import pandas.testing as pdt
+import anndata as ad
+import pandas as pd
 
 import torch
 from scipy.linalg import pinv
+from scipy.sparse import csr_matrix
 
 from supirfactor_dynamical import (
     read,
     get_model
+)
+
+from supirfactor_dynamical._io._network import (
+    _read_index,
+    _write_index,
+    _read_df,
+    _write_df,
+    _read_ad,
+    _write_ad
 )
 
 from ._stubs import (
@@ -64,19 +78,112 @@ class _SetupMixin:
             )
 
 
+class TestSerializeHelpers(_SetupMixin, unittest.TestCase):
+
+    def test_index_strings(self):
+
+        idx = pd.Index([1, 2, 3, 4, 5]).astype(str)
+
+        with h5py.File(self.temp_file_name, "w") as f:
+
+            _write_index(
+                f,
+                idx,
+                "index"
+            )
+
+        with h5py.File(self.temp_file_name, "r") as f:
+
+            idx2 = _read_index(
+                f,
+                "index"
+            )
+
+        pdt.assert_index_equal(idx, idx2)
+
+    def test_index_ints(self):
+
+        idx = pd.Index([1, 2, 3, 4, 5])
+
+        with h5py.File(self.temp_file_name, "w") as f:
+
+            _write_index(
+                f,
+                idx,
+                "index"
+            )
+
+        with h5py.File(self.temp_file_name, "r") as f:
+
+            idx2 = _read_index(
+                f,
+                "index"
+            )
+
+        pdt.assert_index_equal(idx.astype(str), idx2)
+
+    def test_df_strings(self):
+
+        df = pd.DataFrame([["A", 1], ["B", 2]])
+
+        _write_df(self.temp_file_name, df, "df")
+
+        df2 = _read_df(self.temp_file_name, "df")
+
+        pdt.assert_frame_equal(df, df2)
+
+    def test_df_strings_indexes(self):
+
+        df = pd.DataFrame([["A", 1], ["B", 2]])
+        df.index = df.index.astype(str)
+        df.columns = df.columns.astype(str)
+
+        _write_df(self.temp_file_name, df, "df")
+
+        df2 = _read_df(self.temp_file_name, "df")
+
+        pdt.assert_frame_equal(df, df2)
+
+    def test_h5ad_dense(self):
+
+        adata = ad.AnnData(np.random.rand(5, 2))
+
+        _write_ad(self.temp_file_name, adata, "adata")
+
+        adata2 = _read_ad(self.temp_file_name, "adata")
+
+        npt.assert_almost_equal(adata.X, adata2.X)
+        pdt.assert_index_equal(adata.obs_names, adata2.obs_names)
+        pdt.assert_index_equal(adata.var_names, adata2.var_names)
+
+    def test_h5ad_sparse(self):
+
+        adata = ad.AnnData(csr_matrix(np.random.rand(5, 2)))
+
+        _write_ad(self.temp_file_name, adata, "adata")
+
+        adata2 = _read_ad(self.temp_file_name, "adata")
+
+        npt.assert_almost_equal(adata.X.A, adata2.X.A)
+        pdt.assert_index_equal(adata.obs_names, adata2.obs_names)
+        pdt.assert_index_equal(adata.var_names, adata2.var_names)
+
+
 class TestSerializer(_SetupMixin, unittest.TestCase):
 
     velocity = False
+    prior = A
+    inv_prior = pinv(A).T
 
     def test_h5_static(self):
 
         ae = get_model(
             'static',
             velocity=self.velocity
-        )(A, use_prior_weights=True)
+        )(self.prior, use_prior_weights=True)
 
         ae.decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A).T, dtype=torch.float32)
+            torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
         ae.save(self.temp_file_name)
@@ -123,9 +230,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         ae = get_model(
             'rnn',
             velocity=self.velocity
-        )(A, use_prior_weights=True)
+        )(self.prior, use_prior_weights=True)
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A).T, dtype=torch.float32)
+            torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
         ae.save(self.temp_file_name)
@@ -165,7 +272,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             'rnn',
             velocity=self.velocity
         )(
-            A,
+            self.prior,
             use_prior_weights=False,
             activation='softplus',
             output_activation='softplus'
@@ -178,7 +285,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )
 
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A).T, dtype=torch.float32)
+            torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
         ae.save(self.temp_file_name)
@@ -217,9 +324,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         ae = get_model(
             'static',
             velocity=self.velocity
-        )(A, use_prior_weights=True)
+        )(self.prior, use_prior_weights=True)
         ae.decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A).T, dtype=torch.float32)
+            torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
         ae._training_loss = [1., 1., 1.]
@@ -262,7 +369,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         ae = get_model(
             'rnn',
             velocity=self.velocity
-        )(A, use_prior_weights=True)
+        )(self.prior, use_prior_weights=True)
 
         ae.set_scaling(
             torch.ones(4),
@@ -320,10 +427,10 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         ae = get_model(
             'rnn',
             velocity=self.velocity
-        )(A, use_prior_weights=True)
+        )(self.prior, use_prior_weights=True)
 
         ae._decoder[0].weight = torch.nn.parameter.Parameter(
-            torch.tensor(pinv(A).T, dtype=torch.float32)
+            torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
         ae.save(self.temp_file_name)
@@ -354,12 +461,32 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             )
 
 
+class TestSerializeDF(TestSerializer):
+
+    prior = pd.DataFrame(A)
+    inv_prior = pd.DataFrame(pinv(A)).T.values
+
+
+class TestSerializeAD(TestSerializer):
+
+    prior = ad.AnnData(A)
+    inv_prior = pd.DataFrame(pinv(A)).T.values
+
+
+class TestSerializeADSparseCSR(TestSerializer):
+
+    prior = ad.AnnData(csr_matrix(A))
+    inv_prior = pd.DataFrame(pinv(A)).T.values
+
+
 class TestBiophysical(_SetupMixin, unittest.TestCase):
+
+    prior = A
 
     def test_serialize_biophysical(self):
 
         biophysical = get_model('biophysical')(
-            A,
+            self.prior,
             activation='tanh',
             output_activation='softplus'
         )
@@ -416,7 +543,7 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
     def test_serialize_biophysical_nodecay(self):
 
         biophysical = get_model('biophysical')(
-            A,
+            self.prior,
             decay_model=False,
             activation='tanh',
             output_activation='softplus'
@@ -459,7 +586,7 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
     def test_serialize_biophysical_diffk(self):
 
         biophysical = get_model('biophysical')(
-            A,
+            self.prior,
             decay_k=50
         )
 
@@ -598,6 +725,29 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
         )(
             G_TO_PEAK_PRIOR,
             PEAK_TO_TF_PRIOR
+        )
+
+        model.save(self.temp_file_name)
+
+        loaded_model = read(self.temp_file_name)
+        loaded_model.eval()
+
+        self._compare_module(
+            model,
+            loaded_model
+        )
+
+    def test_h5_chromatin_aware_ad(self):
+
+        model = get_model(
+            'chromatin_aware',
+        )(
+            ad.AnnData(
+                csr_matrix(G_TO_PEAK_PRIOR, shape=G_TO_PEAK_PRIOR.shape)
+            ),
+            ad.AnnData(
+                csr_matrix(PEAK_TO_TF_PRIOR, shape=PEAK_TO_TF_PRIOR.shape)
+            )
         )
 
         model.save(self.temp_file_name)

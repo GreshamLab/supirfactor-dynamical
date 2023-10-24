@@ -20,10 +20,13 @@ def sparse_type(x):
         if isinstance(x, str) and x.lower() == matrix_type:
             return classes[0], matrix_type
 
+        if bytearray(x).decode().lower() == matrix_type:
+            return classes[0], matrix_type
+
     else:
         raise ValueError(
-            "Sparse matrix must be CSR or CSC; "
-            "BSR and COO is not supported"
+            "Sparse matrix must be CSR or CSC, "
+            f"BSR and COO is not supported; {x} provided"
         )
 
 
@@ -45,14 +48,8 @@ def write_network(
             f"{type(data)} provided"
         )
 
-    elif not _spsparse.issparse(data.X):
-        _write_df(file_name, data.to_df(), key)
-
     else:
-        with h5py.File(file_name, "a") as f:
-            _write_sparse(f, data.X, key)
-            _write_index(f, data.var_names, key + "_var")
-            _write_index(f, data.obs_names, key + "_obs")
+        _write_ad(file_name, data, key)
 
 
 def read_network(
@@ -62,7 +59,7 @@ def read_network(
 
     try:
         return _read_df(file_name, key)
-    except KeyError:
+    except (KeyError, TypeError):
         return _read_ad(file_name, key)
 
 
@@ -76,14 +73,39 @@ def _read_ad(
         if key not in f.keys():
             return None
 
-        adata = ad.AnnData(
-            _read_sparse(f, key)
-        )
+        if key + "_indptr" in f.keys():
+            adata = ad.AnnData(
+                _read_sparse(f, key)
+            )
+        else:
+            adata = ad.AnnData(
+                f[key][()]
+            )
 
         adata.obs_names = _read_index(f, key + "_obs")
         adata.var_names = _read_index(f, key + "_var")
 
     return adata
+
+
+def _write_ad(
+    file_name,
+    data,
+    key
+):
+
+    with h5py.File(file_name, "a") as f:
+
+        if _spsparse.issparse(data.X):
+            _write_sparse(f, data.X, key)
+        else:
+            f.create_dataset(
+                key,
+                data=data.X
+            )
+
+        _write_index(f, data.var_names, key + "_var")
+        _write_index(f, data.obs_names, key + "_obs")
 
 
 def _write_sparse(
@@ -94,7 +116,7 @@ def _write_sparse(
 
     f.create_dataset(
         key,
-        data=sparse_type(matrix)[1]
+        data=bytearray(sparse_type(matrix)[1], 'utf8')
     )
 
     f.create_dataset(
@@ -112,6 +134,11 @@ def _write_sparse(
         data=matrix.data
     )
 
+    f.create_dataset(
+        key + "_shape",
+        data=np.array(matrix.shape)
+    )
+
 
 def _read_sparse(
     f,
@@ -124,11 +151,14 @@ def _read_sparse(
     else:
         stype = f[key][()]
 
-    return sparse_type(stype)[0]((
-        f[key + "_data"][()],
-        f[key + "_indices"][()],
-        f[key + "_indptr"][()]
-    ))
+    return sparse_type(stype)[0](
+        (
+            f[key + "_data"][()],
+            f[key + "_indices"][()],
+            f[key + "_indptr"][()]
+        ),
+        shape=f[key + "_shape"][()].tolist()
+    )
 
 
 def _write_index(
@@ -139,7 +169,7 @@ def _write_index(
 
     f.create_dataset(
         key,
-        data=idx.values.astype(str)
+        data=idx.values.astype(str).astype(bytearray)
     )
 
 

@@ -30,7 +30,8 @@ def _process_weights_to_tensor(
         data = torch.sparse_csr_tensor(
             prior_network.indptr,
             prior_network.indices,
-            prior_network.data.astype(np.float32)
+            prior_network.data.astype(np.float32),
+            size=prior_network.shape
         ).to_dense()
 
     elif isinstance(prior_network, ad.AnnData):
