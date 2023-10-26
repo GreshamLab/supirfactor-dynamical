@@ -38,7 +38,9 @@ _CLASS_DICT = {
 
 _not_velocity = [
     SupirFactorBiophysical,
-    DecayModule
+    DecayModule,
+    ChromatinModule,
+    ChromatinAwareModel
 ]
 
 

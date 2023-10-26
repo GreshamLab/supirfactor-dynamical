@@ -155,3 +155,35 @@ class TestChromatinAwareModel(unittest.TestCase):
             len(model.training_loss),
             10
         )
+
+    def test_train_but_not_chromatin(self):
+
+        with self.assertRaises(RuntimeError):
+            model = ChromatinAwareModel(
+                G_TO_PEAK_PRIOR,
+                PEAK_TO_TF_PRIOR,
+                train_chromatin_model=False
+            )
+
+        c_module = ChromatinModule(
+            n_genes=4,
+            n_peaks=25,
+            hidden_layer_width=10
+        )
+
+        model = ChromatinAwareModel(
+            G_TO_PEAK_PRIOR,
+            PEAK_TO_TF_PRIOR,
+            chromatin_model=c_module,
+            train_chromatin_model=False
+        )
+
+        model.train_model(
+            self.dataloader,
+            10
+        )
+
+        self.assertEqual(
+            len(model.training_loss),
+            10
+        )

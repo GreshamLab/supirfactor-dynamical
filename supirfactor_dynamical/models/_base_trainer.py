@@ -259,13 +259,17 @@ class _TrainingMixin:
 
     def process_optimizer(
         self,
-        optimizer
+        optimizer,
+        params=None
     ):
+
+        if params is None:
+            params = self.parameters()
 
         # If it's None, create a default Adam optimizer
         if optimizer is None:
             return torch.optim.Adam(
-                self.parameters(),
+                params,
                 **DEFAULT_OPTIMIZER_PARAMS
             )
 
@@ -288,7 +292,7 @@ class _TrainingMixin:
         # Otherwise assume it's a dict of Adam kwargs
         else:
             return torch.optim.Adam(
-                self.parameters(),
+                params,
                 **optimizer
             )
 

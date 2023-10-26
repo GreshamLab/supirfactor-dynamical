@@ -21,6 +21,8 @@ class ChromatinAwareModel(
 
     type_name = 'chromatin_aware'
 
+    train_chromatin_model = True
+
     g = None
     k = None
     p = None
@@ -31,7 +33,8 @@ class ChromatinAwareModel(
         peak_tf_prior_network=None,
         chromatin_model=None,
         input_dropout_rate=0.5,
-        hidden_dropout_rate=0.0
+        hidden_dropout_rate=0.0,
+        train_chromatin_model=True
     ):
 
         super().__init__()
@@ -41,6 +44,8 @@ class ChromatinAwareModel(
 
         self.g, self.p = gene_peak_mask.shape
         _, self.k = peak_tf_prior_network.shape
+
+        self.train_chromatin_model = train_chromatin_model
 
         self.set_dropouts(
             input_dropout_rate,
@@ -96,6 +101,12 @@ class ChromatinAwareModel(
 
         else:
 
+            if not train_chromatin_model:
+                raise RuntimeError(
+                    "`train_chromatin_model` cannot be False "
+                    "unless a pre-trained chromatin model is provided"
+                )
+
             self.chromatin_model = ChromatinModule(
                 self.g,
                 self.p,
@@ -121,6 +132,40 @@ class ChromatinAwareModel(
             return x_out, tfa
         else:
             return x_out
+
+    def train_model(
+        self,
+        training_dataloader,
+        epochs,
+        validation_dataloader=None,
+        loss_function=torch.nn.MSELoss(),
+        optimizer=None
+    ):
+
+        # Optimize entire module
+        if self.train_chromatin_model:
+            optimizer = self.process_optimizer(optimizer)
+
+        # Optimize all the modules except the chromatin module
+        else:
+            optimizer = self.process_optimizer(
+                optimizer,
+                params=[
+                    x for x in self.peak_encoder.parameters()
+                ] + [
+                    x for x in self.tf_encoder.parameters()
+                ] + [
+                    x for x in self.decoder.parameters()
+                ]
+            )
+
+        return super().train_model(
+            training_dataloader,
+            epochs,
+            validation_dataloader,
+            loss_function,
+            optimizer
+        )
 
 
 class ChromatinModule(
