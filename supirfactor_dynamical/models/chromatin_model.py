@@ -115,7 +115,12 @@ class ChromatinAwareModel(
                 hidden_dropout_rate=hidden_dropout_rate,
             )
 
-    def forward(self, x, return_tfa=False, n_time_steps=None):
+    def forward(
+        self,
+        x,
+        return_tfa=False,
+        n_time_steps=None
+    ):
 
         peak_state = self.chromatin_model(x)
 
@@ -166,6 +171,10 @@ class ChromatinAwareModel(
             loss_function,
             optimizer
         )
+
+    def decoder_weights(self):
+
+        return torch.ones(self.k, self.g)
 
 
 class ChromatinModule(
