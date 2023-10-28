@@ -172,9 +172,9 @@ class ChromatinAwareModel(
             optimizer
         )
 
+    @property
     def decoder_weights(self):
-
-        return torch.ones(self.k, self.g)
+        return self.decoder[3].weight
 
 
 class ChromatinModule(
