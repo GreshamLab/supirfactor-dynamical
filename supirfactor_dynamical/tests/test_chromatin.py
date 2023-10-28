@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import pandas as pd
 
 from ._stubs import (
     X,
@@ -142,8 +143,16 @@ class TestChromatinAwareModel(unittest.TestCase):
     def test_train(self):
 
         model = ChromatinAwareModel(
-            G_TO_PEAK_PRIOR,
-            PEAK_TO_TF_PRIOR
+            pd.DataFrame(
+                G_TO_PEAK_PRIOR,
+                index=['A', 'B', 'C', 'D'],
+                columns=[chr(65 + x) for x in range(25)]
+            ),
+            pd.DataFrame(
+                PEAK_TO_TF_PRIOR,
+                index=[chr(65 + x) for x in range(25)],
+                columns=['TF1', 'TF2', 'TF3']
+            )
         )
 
         model.train_model(
@@ -155,6 +164,18 @@ class TestChromatinAwareModel(unittest.TestCase):
             len(model.training_loss),
             10
         )
+
+        _erv, _rss, _full = model.erv(
+            self.dataloader,
+            return_rss=True,
+            as_data_frame=True
+        )
+
+        print(_erv)
+
+        self.assertEqual(_erv.shape, (4, 3))
+        self.assertEqual(_rss.shape, (4, 3))
+        self.assertEqual(_full.shape, (4, 1))
 
     def test_train_but_not_chromatin(self):
 

@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+import warnings
 
 from ._base_trainer import (
     _TrainingMixin,
@@ -53,38 +55,47 @@ class ChromatinAwareModel(
         )
 
         self.peak_encoder = torch.nn.Sequential(
+            self.input_dropout,
             torch.nn.Linear(self.g, self.p, bias=False),
             torch.nn.Softplus(threshold=5)
         )
 
-        gene_peak_mask, _ = _process_weights_to_tensor(
+        gene_peak_mask, gene_peak_labels = _process_weights_to_tensor(
             gene_peak_mask
         )
 
         self.mask_input_weights(
             gene_peak_mask,
-            module=self.peak_encoder[0],
+            module=self.peak_encoder[1],
             layer_name='weight'
         )
 
         self.tf_encoder = torch.nn.Sequential(
-            self.input_dropout,
             torch.nn.Linear(self.p, self.k, bias=False),
             torch.nn.Softplus(threshold=5)
         )
 
-        peak_tf_prior_network, _ = _process_weights_to_tensor(
+        peak_tf_prior_network, peak_tf_labels = _process_weights_to_tensor(
             peak_tf_prior_network
         )
 
+        self.prior_network_labels = (
+            gene_peak_labels[0],
+            peak_tf_labels[1]
+        )
+
+        if not np.all(gene_peak_labels[1] == peak_tf_labels[0]):
+            warnings.warn(
+                "Peak labels do not match"
+            )
+
         self.mask_input_weights(
             peak_tf_prior_network,
-            module=self.tf_encoder[1],
+            module=self.tf_encoder[0],
             layer_name='weight'
         )
 
         self.decoder = torch.nn.Sequential(
-            self.hidden_dropout,
             torch.nn.Linear(self.k, self.k, bias=False),
             torch.nn.Softplus(threshold=5),
             torch.nn.Linear(self.k, self.g, bias=False),
@@ -115,6 +126,15 @@ class ChromatinAwareModel(
                 hidden_dropout_rate=hidden_dropout_rate,
             )
 
+    def encoder(self, x):
+
+        peak_activity = torch.mul(
+            self.peak_encoder(x),
+            self.chromatin_model(x)
+        )
+
+        return self.tf_encoder(peak_activity)
+
     def forward(
         self,
         x,
@@ -122,15 +142,7 @@ class ChromatinAwareModel(
         n_time_steps=None
     ):
 
-        peak_state = self.chromatin_model(x)
-
-        peak_activity = self.peak_encoder(x)
-        peak_activity = torch.mul(
-            peak_activity,
-            peak_state
-        )
-
-        tfa = self.tf_encoder(peak_activity)
+        tfa = self.drop_encoder(x)
         x_out = self.decoder(tfa)
 
         if return_tfa:
@@ -174,7 +186,7 @@ class ChromatinAwareModel(
 
     @property
     def decoder_weights(self):
-        return self.decoder[3].weight
+        return self.decoder[2].weight
 
 
 class ChromatinModule(
