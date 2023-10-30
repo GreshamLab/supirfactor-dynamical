@@ -24,6 +24,7 @@ class ChromatinAwareModel(
     type_name = 'chromatin_aware'
 
     train_chromatin_model = True
+    chromatin_model_threshold = 0.5
 
     g = None
     k = None
@@ -36,7 +37,8 @@ class ChromatinAwareModel(
         chromatin_model=None,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
-        train_chromatin_model=True
+        train_chromatin_model=True,
+        chromatin_model_threshold=0.5
     ):
 
         super().__init__()
@@ -48,6 +50,7 @@ class ChromatinAwareModel(
         _, self.k = peak_tf_prior_network.shape
 
         self.train_chromatin_model = train_chromatin_model
+        self.chromatin_model_threshold = chromatin_model_threshold
 
         self.set_dropouts(
             input_dropout_rate,
@@ -128,9 +131,15 @@ class ChromatinAwareModel(
 
     def encoder(self, x):
 
+        peak_status = self.chromatin_model(x)
+
+        if self.chromatin_model_threshold is not None:
+            peak_status = peak_status > self.chromatin_model_threshold
+            peak_status = peak_status.float()
+
         peak_activity = torch.mul(
             self.peak_encoder(x),
-            self.chromatin_model(x)
+            peak_status
         )
 
         return self.tf_encoder(peak_activity)
