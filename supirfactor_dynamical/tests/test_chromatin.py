@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 import pandas as pd
+import torch
 
 from ._stubs import (
     X,
@@ -207,4 +208,12 @@ class TestChromatinAwareModel(unittest.TestCase):
         self.assertEqual(
             len(model.training_loss),
             10
+        )
+
+        x = next(iter(self.dataloader))
+
+        peaks = model.chromatin_encoder(x)
+        torch.testing.assert_close(
+            peaks,
+            (model.chromatin_model(x) > 0.5).float()
         )

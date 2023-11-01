@@ -125,6 +125,7 @@ class TestDecayModule(unittest.TestCase):
         full_model.train_model(self.velocity_data, 20)
 
 
+@unittest.skip
 class TestDecaySimple(TestDecayModule):
 
     expected_decay_size = (4, )

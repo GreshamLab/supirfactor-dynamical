@@ -129,7 +129,7 @@ class ChromatinAwareModel(
                 hidden_dropout_rate=hidden_dropout_rate,
             )
 
-    def encoder(self, x):
+    def chromatin_encoder(self, x):
 
         peak_status = self.chromatin_model(x)
 
@@ -137,9 +137,13 @@ class ChromatinAwareModel(
             peak_status = peak_status > self.chromatin_model_threshold
             peak_status = peak_status.float()
 
+        return peak_status
+
+    def encoder(self, x):
+
         peak_activity = torch.mul(
             self.peak_encoder(x),
-            peak_status
+            self.chromatin_encoder(x)
         )
 
         return self.tf_encoder(peak_activity)

@@ -193,11 +193,7 @@ class SupirFactorBiophysical(
         self,
         x,
         n_time_steps=0,
-        return_velocities=None,
         return_submodels=False,
-        return_counts=False,
-        return_decays=False,
-        return_tfa=False,
         unmodified_counts=False,
         hidden_state=False
     ):
@@ -210,15 +206,9 @@ class SupirFactorBiophysical(
         :param n_time_steps: Number of time steps to predict from, starting
             at the end of the input data, defaults to 0
         :type n_time_steps: int, optional
-        :param return_velocities: Return velocity predictions, defaults to None
-        :type return_velocities: bool, optional
         :param return_submodels: Return velocity positive & negative submodels
             as a tuple of velocities, defaults to False
         :type return_submodels: bool, optional
-        :param return_counts: Return count predictions, defaults to False
-        :type return_counts: bool, optional
-        :param return_decays: Return decay rate predictions, defaults to False
-        :type return_decays: bool, optional
         :param unmodified_counts: Return unmodified counts from input data x,
             instead of the next time step prediction within the input sequence,
             defaults to False
@@ -265,37 +255,15 @@ class SupirFactorBiophysical(
             _output_decay.append(_d)
             _output_tfa.append(_tfa)
 
-        # Backwards compatibility; only returning velocities if
-        # return_velocities=True or no other return flag is set
-        # because return_counts used to only return counts instead
-        # of returning velocities & counts
-        if return_submodels:
-            return_velocities = True
-
-        if return_velocities is None:
-            if any((return_counts, return_decays, return_tfa)):
-                return_velocities = False
-            else:
-                return_velocities = True
-
-        # Decide which model predictions to return
-        # based on flags provided
-        returns = tuple(
+        return tuple(
             _cat(output, output_dim) if n_time_steps > 0 else output[0]
-            for output, output_flag, output_dim in (
-                (_output_velo, return_velocities, 1),
-                (_output_count, return_counts, 1),
-                (_output_decay, return_decays, 1),
-                (_output_tfa, return_tfa, 1)
-            ) if output_flag
+            for output, output_dim in (
+                (_output_velo, 1),
+                (_output_count, 1),
+                (_output_decay, 1),
+                (_output_tfa, 1)
+            )
         )
-
-        if len(returns) == 0:
-            return None
-        elif len(returns) == 1:
-            return returns[0]
-        else:
-            return returns
 
     def forward_time_step(
         self,
@@ -348,8 +316,7 @@ class SupirFactorBiophysical(
         # Run the decay model
         x_negative, x_decay_rate = self.forward_decay_model(
             x,
-            hidden_state=hidden_state,
-            return_decay_constants=True
+            hidden_state=hidden_state
         )
 
         if return_submodels:
@@ -382,18 +349,15 @@ class SupirFactorBiophysical(
         self,
         x,
         hidden_state=False,
-        return_decay_constants=False
     ):
 
-        if not self.has_decay and return_decay_constants:
+        if not self.has_decay:
             return None, None
-        elif not self.has_decay:
-            return None
 
         return self._decay_model(
             x,
             hidden_state=hidden_state,
-            return_decay_constants=return_decay_constants
+            return_decay_constants=True
         )
 
     def train_model(
@@ -491,7 +455,8 @@ class SupirFactorBiophysical(
             epoch_num,
             train_x,
             optimizer,
-            loss_function
+            loss_function,
+            input_x=self._slice_data_and_forward(train_x)
         )
 
     def _training_step_decay(
@@ -539,13 +504,13 @@ class SupirFactorBiophysical(
     ):
 
         # Get model output for training data
-        pos, neg = self._slice_data_and_forward(
+        (pos, neg) = self._slice_data_and_forward(
             x,
             return_submodels=True
         )
 
         loss = loss_function(
-            self._slice_data_and_forward(x),
+            _add(pos, neg),
             self.output_data(x)
         ).item()
 
@@ -580,11 +545,9 @@ class SupirFactorBiophysical(
 
         # Get TFA
         with torch.no_grad():
-            predict_velo, decay_rates = self(
+            predict_velo, _, decay_rates, _ = self(
                 input_data,
-                n_time_steps=n_additional_predictions,
-                return_velocities=True,
-                return_decays=True
+                n_time_steps=n_additional_predictions
             )
 
         full_rss = _calculate_rss(
@@ -703,10 +666,9 @@ class SupirFactorBiophysical(
     ):
 
         # Perturbed transcription
-        (x_fwd, _), fwd_tfa = self(
+        (x_fwd, _), _, _, fwd_tfa = self(
             data,
             return_submodels=True,
-            return_tfa=True,
             **kwargs
         )
 
@@ -721,6 +683,20 @@ class SupirFactorBiophysical(
             return (x_fwd, x_rev), fwd_tfa
         else:
             return _add(x_fwd, x_rev), fwd_tfa
+
+    def _slice_data_and_forward(
+        self,
+        train_x,
+        **kwargs
+    ):
+
+        return self.output_model(
+            self(
+                self.input_data(train_x),
+                n_time_steps=self.n_additional_predictions,
+                **kwargs
+            )[0]
+        )
 
     def output_weights(self, *args, **kwargs):
         return self._transcription_model.output_weights(*args, **kwargs)

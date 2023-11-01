@@ -637,13 +637,13 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         )
 
         with torch.no_grad():
-            npt.assert_almost_equal(
+            torch.testing.assert_close(
                 biophysical(
                     biophysical.input_data(XTV_tensor)
-                ).numpy(),
+                ),
                 loaded_biophysical(
                     loaded_biophysical.input_data(XTV_tensor)
-                ).numpy()
+                )
             )
 
     def test_serialize_decay_module(self):

@@ -40,9 +40,8 @@ def predict_perturbation(
         decay_rates = model(
             data,
             n_time_steps=n_time_steps,
-            return_decays=True,
             unmodified_counts=unmodified_counts
-        )
+        )[2]
 
     model.set_drop_tfs(perturbation)
 
