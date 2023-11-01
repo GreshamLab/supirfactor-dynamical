@@ -489,12 +489,9 @@ class SupirFactorBiophysical(
 
         return super()._training_step(
             epoch_num,
-            self._slice_data_and_forward(
-                train_x
-            ),
+            train_x,
             optimizer,
-            loss_function,
-            compare_x=self.output_data(train_x)
+            loss_function
         )
 
     def _training_step_decay(
@@ -528,10 +525,11 @@ class SupirFactorBiophysical(
 
         return super()._training_step(
             epoch_num,
-            neg,
+            train_x,
             optimizer,
             loss_function,
-            compare_x=_compare_x
+            input_x=neg,
+            target_x=_compare_x
         )
 
     def _calculate_all_losses(
@@ -546,11 +544,8 @@ class SupirFactorBiophysical(
             return_submodels=True
         )
 
-        loss = self._calculate_loss(
-            self._slice_data_and_forward(
-                x
-            ),
-            loss_function,
+        loss = loss_function(
+            self._slice_data_and_forward(x),
             self.output_data(x)
         ).item()
 
@@ -558,28 +553,14 @@ class SupirFactorBiophysical(
             self.has_decay and
             self.separately_optimize_decay_model
         ):
-            decay_rate_loss = self._calculate_loss(
+            decay_rate_loss = loss_function(
                 neg,
-                loss_function,
                 self.output_data(x, decay=True)
             ).item()
         else:
             decay_rate_loss = 0
 
         return loss, decay_rate_loss
-
-    def _calculate_loss(
-        self,
-        model_x,
-        loss_function,
-        compare_x=None
-    ):
-
-        # Calculate loss
-        return loss_function(
-            model_x,
-            compare_x
-        )
 
     def _calculate_error(
         self,
