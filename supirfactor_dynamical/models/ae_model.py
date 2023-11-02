@@ -7,6 +7,7 @@ from ._base_trainer import (
     _TrainingMixin,
     _TimeOffsetMixinStatic
 )
+from .._utils import _process_weights_to_tensor
 
 
 class Autoencoder(
@@ -18,6 +19,7 @@ class Autoencoder(
 
     def __init__(
         self,
+        prior_network=None,
         n_genes=None,
         hidden_layer_width=50,
         n_hidden_layers=1,
@@ -49,10 +51,16 @@ class Autoencoder(
         self.k = hidden_layer_width
         self.n_hidden_layers = n_hidden_layers
 
-        self.prior_network_labels = (
-            pd.Index(np.arange(self.g)).astype(str),
-            pd.Index(np.arange(self.k)).astype(str)
-        )
+        if prior_network is None:
+            self.prior_network_labels = (
+                pd.Index(np.arange(self.g)).astype(str),
+                pd.Index(np.arange(self.k)).astype(str)
+            )
+        else:
+            _, self.prior_network_labels = _process_weights_to_tensor(
+                prior_network
+            )
+            self.prior_network = prior_network
 
         self.set_dropouts(
             input_dropout_rate,
