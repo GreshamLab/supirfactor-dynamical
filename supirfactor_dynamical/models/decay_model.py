@@ -24,7 +24,7 @@ class DecayModule(
 
     def __init__(
         self,
-        n_genes=None,
+        n_genes,
         hidden_layer_width=20,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0
@@ -135,18 +135,28 @@ class DecayModuleSimple(DecayModule):
 
     def __init__(
         self,
-        g,
-        k=20,
+        n_genes=None,
+        initial_values=None,
+        hidden_layer_width=20,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0
     ):
         torch.nn.Module.__init__(self)
 
-        self._decay_rates = torch.nn.Parameter(
-            self.to_tensor(g)
-        )
+        if initial_values is None:
+            _decay_rates = torch.rand(n_genes)
+            _decay_rates /= 1 / torch.sqrt(torch.Tensor(n_genes))
 
-        self._activation = torch.nn.Softplus(threshold=4)
+            self._decay_rates = torch.nn.Parameter(
+                _decay_rates
+            )
+
+        else:
+            self._decay_rates = torch.nn.Parameter(
+                self.to_tensor(initial_values)
+            )
+
+        self._activation = torch.nn.Softplus(threshold=5)
 
         self.set_dropouts(
             input_dropout_rate,
@@ -160,14 +170,29 @@ class DecayModuleSimple(DecayModule):
         return_decay_constants=False
     ):
 
-        _decay_rates = self.decay_rates
+        if x.ndim > 1:
+            _decay_rates = torch.unsqueeze(
+                self._decay_rates,
+                0
+            )
+        else:
+            _decay_rates = self._decay_rates
+
+        if x.ndim == 3:
+            _decay_rates = torch.unsqueeze(
+                _decay_rates,
+                0
+            )
+
+        _decay_rates = self._activation(_decay_rates)
+        _decay_rates = torch.mul(_decay_rates, -1)
 
         # Multiply decay rate by input counts to get
         # decay velocity
         _v = self.rescale_velocity(
             torch.mul(
                 x,
-                _decay_rates[None, ...]
+                _decay_rates
             )
         )
 

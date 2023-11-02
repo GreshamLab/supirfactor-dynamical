@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 from scipy.linalg import pinv
 
+from supirfactor_dynamical.models.ae_model import Autoencoder
 from supirfactor_dynamical import (
     TFAutoencoder,
     TFMetaAutoencoder,
@@ -655,6 +656,47 @@ class TestTFMetaAutoencoder(TestTFAutoencoder):
         self.ae._intermediate[0].weight = torch.nn.parameter.Parameter(
             torch.eye(3, dtype=torch.float32)
         )
+
+
+class TestAutoencoder(TestTFAutoencoder):
+
+    def setUp(self) -> None:
+        torch.manual_seed(55)
+        self.ae = Autoencoder(
+            n_genes=A.shape[0],
+            n_hidden_layers=2,
+            hidden_layer_width=A.shape[1]
+        )
+        self.ae.encoder[0].weight = torch.nn.parameter.Parameter(
+            torch.tensor(A.T, dtype=torch.float32)
+        )
+        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+            torch.tensor(pinv(A).T, dtype=torch.float32)
+        )
+        self.ae.encoder[2].weight = torch.nn.parameter.Parameter(
+            torch.eye(3, dtype=torch.float32)
+        )
+        self.ae.encoder[2].weight.requires_grad = False
+
+    def test_module_construction(self):
+
+        self.assertEqual(
+            len(self.ae.encoder),
+            4
+        )
+
+        self.assertEqual(
+            len(self.ae.decoder),
+            2
+        )
+
+    @unittest.skip
+    def test_train_loop(self):
+        pass
+
+    @unittest.skip
+    def test_train_loop_with_validation(self):
+        pass
 
 
 class TestTFMetaAutoencoderOffset(TestTFAutoencoderOffset):

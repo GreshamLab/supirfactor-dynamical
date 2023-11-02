@@ -1,10 +1,102 @@
 import torch
+import pandas as pd
+import numpy as np
 
 from ._base_model import _TFMixin
 from ._base_trainer import (
     _TrainingMixin,
     _TimeOffsetMixinStatic
 )
+
+
+class Autoencoder(
+    torch.nn.Module,
+    _TimeOffsetMixinStatic,
+    _TFMixin,
+    _TrainingMixin
+):
+
+    def __init__(
+        self,
+        n_genes=None,
+        hidden_layer_width=50,
+        n_hidden_layers=1,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
+        activation='relu',
+        output_activation='relu'
+    ):
+        """
+        Create a black-box Autoencoder module
+
+        :param use_prior_weights: Use values in the prior_network as the
+            initalization for encoder weights, defaults to False
+        :type use_prior_weights: bool, optional
+        :param input_dropout_rate: Training dropout for input genes,
+            defaults to 0.5
+        :type input_dropout_rate: float, optional
+        :param activation: Apply activation function to hidden
+            layer, defaults to ReLU
+        :type activation: bool, optional
+        :param output_activation: Apply activation function to output
+            layer, defaults to ReLU
+        :type output_activation: bool, optional
+        """
+
+        super().__init__()
+
+        self.g = n_genes
+        self.k = hidden_layer_width
+        self.n_hidden_layers = n_hidden_layers
+
+        self.prior_network_labels = (
+            pd.Index(np.arange(self.g)).astype(str),
+            pd.Index(np.arange(self.k)).astype(str)
+        )
+
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
+
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(self.g, self.k, bias=False)
+        )
+
+        self.append_activation_function(
+            self.encoder,
+            activation
+        )
+
+        for _ in range(1, n_hidden_layers):
+            self.encoder.append(
+                torch.nn.Linear(self.k, self.k, bias=False)
+            )
+            self.append_activation_function(
+                self.encoder,
+                activation
+            )
+
+        self.activation = activation
+
+        self.decoder = self.set_decoder(
+            activation=output_activation
+        )
+
+    def forward(
+        self,
+        x,
+        hidden_state=None,
+        n_time_steps=0,
+        return_tfa=False
+    ):
+
+        return self._forward(
+            x,
+            hidden_state,
+            n_time_steps,
+            return_tfa
+        )
 
 
 class TFAutoencoder(
