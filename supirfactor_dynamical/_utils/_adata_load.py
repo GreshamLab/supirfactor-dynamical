@@ -33,6 +33,7 @@ def load_data_files_jtb_2023(
     decay_velocity=False,
     shuffle_time=False,
     shuffle_data=False,
+    untreated_only=False,
     counts_layer='X',
     velocity_layers=('rapamycin_velocity', 'cell_cycle_velocity'),
     decay_velocity_layers=('decay_constants', 'denoised')
@@ -42,6 +43,9 @@ def load_data_files_jtb_2023(
 
     print(f"Loading and processing data from {adata_file}")
     adata = ad.read(adata_file)
+
+    if untreated_only:
+        adata = adata[adata.obs['Pool'].isin([1, 2]), :].copy()
 
     if counts:
 
