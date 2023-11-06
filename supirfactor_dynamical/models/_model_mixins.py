@@ -281,20 +281,35 @@ class _PriorMixin:
         # Build the encoder module
         if activation is None:
             pass
+        else:
+            module.append(
+                _PriorMixin.get_activation_function(
+                    activation,
+                    **kwargs
+                )
+            )
+
+        return module
+
+    @staticmethod
+    def get_activation_function(
+        activation,
+        **kwargs
+    ):
+        if activation is None:
+            return None
         elif activation.lower() == 'sigmoid':
-            module.append(torch.nn.Sigmoid(**kwargs))
+            return torch.nn.Sigmoid(**kwargs)
         elif activation.lower() == 'softplus':
-            module.append(torch.nn.Softplus(**kwargs))
+            return torch.nn.Softplus(**kwargs)
         elif activation.lower() == 'relu':
-            module.append(torch.nn.ReLU(**kwargs))
+            return torch.nn.ReLU(**kwargs)
         elif activation.lower() == 'tanh':
-            module.append(torch.nn.Tanh(**kwargs))
+            return torch.nn.Tanh(**kwargs)
         else:
             raise ValueError(
                 f"Activation {activation} unknown"
             )
-
-        return module
 
 
 class _ScalingMixin:

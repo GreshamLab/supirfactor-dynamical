@@ -219,7 +219,8 @@ class TestMathUtils(unittest.TestCase):
         )
 
         tss = _calculate_tss(
-            X_tensor
+            X_tensor,
+            ybar=False
         )
 
         r2 = _calculate_r2(rss, tss)

@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import warnings
+import collections
+import math
 
 from scipy.sparse import isspmatrix
 
@@ -22,6 +24,7 @@ class TimeDataset(torch.utils.data.Dataset):
     t_min = None
     t_max = None
     t_step = None
+    wrap_times = False
 
     strat_idxes = None
     shuffle_idxes = None
@@ -53,7 +56,7 @@ class TimeDataset(torch.utils.data.Dataset):
 
             if x is not None:
                 self.n = min(map(len, self.strat_idxes))
-                self.n *= int(np.floor(self.n_steps / x))
+                self.n *= int(max(np.floor(self.n_steps / x), 1))
 
     def __init__(
         self,
@@ -65,7 +68,8 @@ class TimeDataset(torch.utils.data.Dataset):
         sequence_length=None,
         random_seed=500,
         with_replacement=True,
-        shuffle_time_vector=None
+        shuffle_time_vector=None,
+        wrap_times=False
     ):
 
         # Only keep data that's usable
@@ -105,6 +109,7 @@ class TimeDataset(torch.utils.data.Dataset):
             self.t_min = t_min
             self.t_max = t_max
             self.t_step = t_step
+            self.wrap_times = wrap_times
 
             # Create a list of arrays, where each element
             # is an array of indices to observations for that
@@ -217,31 +222,61 @@ class TimeDataset(torch.utils.data.Dataset):
 
         # For each time interval, reshuffle by random selection
         # to length of n
-        _idxes = [
-            self.rng.choice(
-                x,
-                size=n,
-                replace=with_replacement
-            )
-            for x in self.strat_idxes
-        ]
+        _idxes = np.ascontiguousarray(
+            np.array([
+                self.rng.choice(
+                    x,
+                    size=n,
+                    replace=with_replacement
+                )
+                for x in self.strat_idxes
+            ]).T
+        )
 
+        if self.wrap_times:
+            return np.array(
+                [
+                    self._get_wrap_indices(
+                        seq_length,
+                        _idxes[i],
+                        n_wraps=math.ceil(seq_length / len(self.strat_idxes))
+                    )
+                    for i in range(n)
+                ]
+            )
+
+        else:
+            return np.array(
+                [
+                    self._get_no_wrap_indices(
+                        seq_length,
+                        _idxes[i]
+                    )
+                    for i in range(n)
+                ]
+            )
+
+    def _get_no_wrap_indices(
+        self,
+        seq_length,
+        indexes
+    ):
+
+        print(indexes.shape)
         # If L is shorter than the total number of time intervals,
         # randomly select a starting time on data sequence
         # to get L observations from the shuffled indices
-        if seq_length < len(self.strat_idxes):
+        if seq_length < len(indexes):
 
-            start_position = np.arange(
+            start_position = self.rng.integers(
+                0,
                 len(self.strat_idxes) - seq_length + 1,
             )
 
-            def _get_sequence():
-                start = self.rng.choice(start_position)
-                return slice(start, start + seq_length)
+            return indexes[start_position:start_position + seq_length]
 
-        elif seq_length == len(self.strat_idxes):
-            def _get_sequence():
-                return slice(None)
+        elif seq_length == len(indexes):
+            return indexes
 
         else:
             raise ValueError(
@@ -249,11 +284,21 @@ class TimeDataset(torch.utils.data.Dataset):
                 f"from {len(self.strat_idxes)} bins"
             )
 
-        return [
-            np.array([
-                x[i] for x in _idxes[_get_sequence()]
-            ]) for i in range(n)
-        ]
+    def _get_wrap_indices(
+        self,
+        seq_length,
+        indexes,
+        n_wraps=1
+    ):
+
+        indexes = collections.deque(indexes)
+        indexes.rotate(self.rng.integers(
+            0,
+            len(self.strat_idxes),
+        ))
+        indexes = np.array(indexes * n_wraps)
+
+        return indexes[:seq_length]
 
     def __getitem__(self, i):
 

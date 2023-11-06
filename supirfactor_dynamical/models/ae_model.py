@@ -7,7 +7,6 @@ from ._base_trainer import (
     _TrainingMixin,
     _TimeOffsetMixinStatic
 )
-from .._utils import _process_weights_to_tensor
 
 
 class Autoencoder(
@@ -16,6 +15,8 @@ class Autoencoder(
     _TFMixin,
     _TrainingMixin
 ):
+
+    type_name = "autoencoder"
 
     def __init__(
         self,
@@ -31,9 +32,6 @@ class Autoencoder(
         """
         Create a black-box Autoencoder module
 
-        :param use_prior_weights: Use values in the prior_network as the
-            initalization for encoder weights, defaults to False
-        :type use_prior_weights: bool, optional
         :param input_dropout_rate: Training dropout for input genes,
             defaults to 0.5
         :type input_dropout_rate: float, optional
@@ -47,38 +45,34 @@ class Autoencoder(
 
         super().__init__()
 
-        self.g = n_genes
-        self.k = hidden_layer_width
         self.n_hidden_layers = n_hidden_layers
 
         if prior_network is None:
+            self.g = n_genes
+            self.k = hidden_layer_width
             self.prior_network_labels = (
                 pd.Index(np.arange(self.g)).astype(str),
                 pd.Index(np.arange(self.k)).astype(str)
             )
         else:
-            _, self.prior_network_labels = _process_weights_to_tensor(
+            self.process_prior(
                 prior_network
             )
-            self.prior_network = prior_network
 
         self.set_dropouts(
             input_dropout_rate,
             hidden_dropout_rate
         )
 
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(self.g, self.k, bias=False)
-        )
+        self.encoder = torch.nn.Sequential()
 
-        self.append_activation_function(
-            self.encoder,
-            activation
-        )
-
-        for _ in range(1, n_hidden_layers):
+        for i in range(n_hidden_layers):
             self.encoder.append(
-                torch.nn.Linear(self.k, self.k, bias=False)
+                torch.nn.Linear(
+                    self.k if i > 0 else self.g,
+                    self.k,
+                    bias=False
+                )
             )
             self.append_activation_function(
                 self.encoder,

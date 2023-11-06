@@ -65,6 +65,13 @@ class TestTimeDataset(unittest.TestCase):
             np.arange(75, 100)
         )
 
+        self.assertTrue(
+            all(
+                self.adata.obs['time'][idx].is_monotonic_increasing
+                for idx in td.shuffle_idxes
+            )
+        )
+
         with self.assertRaises(AssertionError):
             npt.assert_equal(
                 td.shuffle_idxes[0],
@@ -343,7 +350,6 @@ class TestTimeDataset(unittest.TestCase):
             _last_iteration = td.time_vector
             td.shuffle()
 
-
     def test_time_seq_randomize(self):
 
         td = TimeDataset(
@@ -394,7 +400,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_time_seq_randomize_bad(self):
 
         with self.assertRaises(ValueError):
-            td = TimeDataset(
+            TimeDataset(
                 self.adata.X,
                 self.adata.obs['time'],
                 0,
@@ -404,6 +410,51 @@ class TestTimeDataset(unittest.TestCase):
                 sequence_length=10,
                 random_seed=1
             )
+
+    def test_time_wrap(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            sequence_length=3,
+            random_seed=1,
+            wrap_times=True
+        )
+
+        self.assertFalse(
+            all(
+                self.adata.obs['time'][idx].is_monotonic_increasing
+                for idx in td.shuffle_idxes
+            )
+        )
+
+    def test_time_wrap_big(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            sequence_length=10,
+            random_seed=1,
+            wrap_times=True
+        )
+
+        self.assertFalse(
+            all(
+                self.adata.obs['time'][idx].is_monotonic_increasing
+                for idx in td.shuffle_idxes
+            )
+        )
+
+        self.assertEqual(
+            len(td.shuffle_idxes[0]),
+            10
+        )
 
 
 class TestTimeDatasetSparse(TestTimeDataset):

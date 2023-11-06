@@ -28,7 +28,7 @@ def _calculate_erv(rss_full, rss_reduced):
 
 def _calculate_tss(
     data,
-    ybar=False
+    ybar=True
 ):
 
     _last_axis = data.ndim - 1
