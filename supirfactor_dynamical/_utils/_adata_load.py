@@ -1,6 +1,8 @@
+import gc
 import anndata as ad
 import numpy as np
 import pandas as pd
+import torch
 
 from pandas.api.types import is_float_dtype
 
@@ -24,6 +26,104 @@ _SHUFFLE_TIMES = {
 }
 
 
+def load_standard_data(
+    data_file=None,
+    file_type='h5ad',
+    prior_file=None,
+    gold_standard_file=None,
+    data_layer='X',
+    scale_data=True,
+    **kwargs
+):
+    """
+    Load data into tensors and dataframes
+
+    :param data_file: Data file, defaults to None
+    :type data_file: str, optional
+    :param file_type: Data file type, 'h5ad' and 'tsv' are options,
+        defaults to 'h5ad'
+    :type file_type: str, optional
+    :param prior_file: Prior TSV file, defaults to None
+    :type prior_file: str, optional
+    :param gold_standard_file: Gold standard TSV file, defaults to None
+    :type gold_standard_file: _type_, optional
+    :param data_layer: Data layer from an h5ad file,
+        defaults to 'X'
+    :type data_layer: str, optional
+    :param scale_data: Scale data with TruncRobustScaler,
+        defaults to True
+    :type scale_data: bool, optional
+    :return: Data, scaler, prior, gold standard
+    :rtype: torch.Tensor, TruncRobustScaler, pd.DataFrame, pd.DataFrame
+    """
+
+    if data_file is not None and file_type == 'h5ad':
+
+        print(f"Loading and processing data from {data_file}")
+        adata = ad.read(data_file, **kwargs)
+        var_names = adata.var_names
+        count_data = _get_data(adata, data_layer)
+
+        del adata
+        gc.collect()
+
+    elif data_file is not None and file_type == 'tsv':
+
+        print(f"Loading and processing data from {data_file}")
+        count_data = pd.read_csv(
+            data_file,
+            sep="\t",
+            **kwargs
+        )
+        var_names = count_data.columns
+        count_data = count_data.values
+
+    elif data_file is None:
+        count_data = None
+    else:
+        raise ValueError(
+            f"Unknown file_type {file_type}"
+        )
+
+    if count_data is not None and scale_data:
+        count_scaling = TruncRobustScaler(with_centering=False)
+        count_data = count_scaling.fit_transform(count_data)
+    else:
+        count_scaling = None
+
+    if prior_file is not None:
+        print(f"Loading and processing priors from {prior_file}")
+        prior = pd.read_csv(
+            prior_file,
+            sep="\t",
+            index_col=0
+        ).reindex(
+            var_names,
+            axis=0
+        ).fillna(
+            0
+        ).astype(int)
+
+        prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
+    else:
+        prior = None
+
+    if gold_standard_file is not None:
+        print(f"Loading gold standard from {gold_standard_file}")
+        gs = pd.read_csv(
+            gold_standard_file,
+            sep="\t",
+            index_col=0
+        )
+    else:
+        gs = None
+
+    if count_data is not None:
+        count_data = torch.Tensor(count_data)
+
+    return count_data, count_scaling, prior, gs
+
+
 def load_data_files_jtb_2023(
     adata_file,
     prior_file=None,
@@ -38,6 +138,53 @@ def load_data_files_jtb_2023(
     velocity_layers=('rapamycin_velocity', 'cell_cycle_velocity'),
     decay_velocity_layers=('decay_constants', 'denoised')
 ):
+    """
+    Helper to load the data used in the associated manuscript:
+    https://www.biorxiv.org/content/10.1101/2023.09.21.558277v1
+
+    :param adata_file: Prepared adata file with counts in counts_layer
+        saved as an '.h5ad' file.
+    :type adata_file: str
+    :param prior_file: Priors TSV file, defaults to None
+    :type prior_file: str, optional
+    :param gold_standard_file: Gold standard TSV file, defaults to None
+    :type gold_standard_file: str, optional
+    :param counts: Return array contains counts,
+        defaults to True
+    :type counts: bool, optional
+    :param velocity: Return array contains preprocessed velocities,
+        defaults to False
+    :type velocity: bool, optional
+    :param decay_velocity: Return array contains preprocessed
+        decay-specific velocities, calculated from decay_constants and
+        denoised expression, defaults to False
+    :type decay_velocity: bool, optional
+    :param shuffle_time: Shuffle time metadata, defaults to False
+    :type shuffle_time: bool, optional
+    :param shuffle_data: Turn array data into white noise,
+        defaults to False
+    :type shuffle_data: bool, optional
+    :param untreated_only: Return only untreated cells,
+        in pools 1 & 2, defaults to False
+    :type untreated_only: bool, optional
+    :param counts_layer: Layer with count data,
+        defaults to 'X'
+    :type counts_layer: str, optional
+    :param velocity_layers: Layer with preprocessed velocity data,
+        defaults to ('rapamycin_velocity', 'cell_cycle_velocity')
+    :type velocity_layers: tuple, optional
+    :param decay_velocity_layers: Layers with preprocessed decay rates,
+        and expression data, defaults to ('decay_constants', 'denoised')
+    :type decay_velocity_layers: tuple, optional
+    :return:
+        Array data,
+        Time lookup dict,
+        Prior dataframe,
+        Gold standard dataframe,
+        Count scaler,
+        Velocity scaler
+    :rtype: _type_
+    """
     count_scaling = TruncRobustScaler(with_centering=False)
     velo_scaling = TruncRobustScaler(with_centering=False)
 
@@ -118,32 +265,11 @@ def load_data_files_jtb_2023(
         for k in _SHUFFLE_TIMES.keys():
             time_lookup[k][-1] = _SHUFFLE_TIMES[k]
 
-    if prior_file is not None:
-        print(f"Loading and processing priors from {prior_file}")
-        prior = pd.read_csv(
-            prior_file,
-            sep="\t",
-            index_col=0
-        ).reindex(
-            adata.var_names,
-            axis=0
-        ).fillna(
-            0
-        ).astype(int)
-
-        prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
-    else:
-        prior = None
-
-    if gold_standard_file is not None:
-        print(f"Loading gold standard from {gold_standard_file}")
-        gs = pd.read_csv(
-            gold_standard_file,
-            sep="\t",
-            index_col=0
-        )
-    else:
-        gs = None
+    _, _, prior, gs = load_standard_data(
+        data_file=None,
+        prior_file=prior_file,
+        gold_standard_file=gold_standard_file
+    )
 
     return (
         data,
