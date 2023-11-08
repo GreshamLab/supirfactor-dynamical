@@ -33,6 +33,7 @@ def load_standard_data(
     gold_standard_file=None,
     data_layer='X',
     scale_data=True,
+    genes=None,
     **kwargs
 ):
     """
@@ -61,6 +62,10 @@ def load_standard_data(
 
         print(f"Loading and processing data from {data_file}")
         adata = ad.read(data_file, **kwargs)
+
+        if genes is not None:
+            adata = adata[:, genes]
+
         var_names = adata.var_names
         count_data = _get_data(adata, data_layer)
 
@@ -75,10 +80,15 @@ def load_standard_data(
             sep="\t",
             **kwargs
         )
+
+        if genes is not None:
+            count_data = count_data[:, genes]
+
         var_names = count_data.columns
         count_data = count_data.values
 
     elif data_file is None:
+        var_names = genes
         count_data = None
     else:
         raise ValueError(
