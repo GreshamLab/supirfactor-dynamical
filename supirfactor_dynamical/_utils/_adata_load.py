@@ -1,14 +1,15 @@
-import gc
 import anndata as ad
 import numpy as np
-import pandas as pd
-import torch
+
 
 from pandas.api.types import is_float_dtype
 
 from sklearn.preprocessing import StandardScaler
 from supirfactor_dynamical import TruncRobustScaler
-
+from supirfactor_dynamical._io.load_data import (
+    load_standard_data,
+    _get_data_from_ad
+)
 from inferelator.preprocessing import ManagePriors
 from inferelator.preprocessing.simulate_data import (
     _sim_ints,
@@ -24,114 +25,6 @@ _SHUFFLE_TIMES = {
     'rapa': [-10, 88],
     'cc': [0, 88]
 }
-
-
-def load_standard_data(
-    data_file=None,
-    file_type='h5ad',
-    prior_file=None,
-    gold_standard_file=None,
-    data_layer='X',
-    scale_data=True,
-    genes=None,
-    **kwargs
-):
-    """
-    Load data into tensors and dataframes
-
-    :param data_file: Data file, defaults to None
-    :type data_file: str, optional
-    :param file_type: Data file type, 'h5ad' and 'tsv' are options,
-        defaults to 'h5ad'
-    :type file_type: str, optional
-    :param prior_file: Prior TSV file, defaults to None
-    :type prior_file: str, optional
-    :param gold_standard_file: Gold standard TSV file, defaults to None
-    :type gold_standard_file: _type_, optional
-    :param data_layer: Data layer from an h5ad file,
-        defaults to 'X'
-    :type data_layer: str, optional
-    :param scale_data: Scale data with TruncRobustScaler,
-        defaults to True
-    :type scale_data: bool, optional
-    :return: Data, scaler, prior, gold standard
-    :rtype: torch.Tensor, TruncRobustScaler, pd.DataFrame, pd.DataFrame
-    """
-
-    if data_file is not None and file_type == 'h5ad':
-
-        print(f"Loading and processing data from {data_file}")
-        adata = ad.read(data_file, **kwargs)
-
-        if genes is not None:
-            adata = adata[:, genes]
-
-        var_names = adata.var_names
-        count_data = _get_data(adata, data_layer)
-
-        del adata
-        gc.collect()
-
-    elif data_file is not None and file_type == 'tsv':
-
-        print(f"Loading and processing data from {data_file}")
-        count_data = pd.read_csv(
-            data_file,
-            sep="\t",
-            **kwargs
-        )
-
-        if genes is not None:
-            count_data = count_data[:, genes]
-
-        var_names = count_data.columns
-        count_data = count_data.values
-
-    elif data_file is None:
-        var_names = genes
-        count_data = None
-    else:
-        raise ValueError(
-            f"Unknown file_type {file_type}"
-        )
-
-    if count_data is not None and scale_data:
-        count_scaling = TruncRobustScaler(with_centering=False)
-        count_data = count_scaling.fit_transform(count_data)
-    else:
-        count_scaling = None
-
-    if prior_file is not None:
-        print(f"Loading and processing priors from {prior_file}")
-        prior = pd.read_csv(
-            prior_file,
-            sep="\t",
-            index_col=0
-        ).reindex(
-            var_names,
-            axis=0
-        ).fillna(
-            0
-        ).astype(int)
-
-        prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
-    else:
-        prior = None
-
-    if gold_standard_file is not None:
-        print(f"Loading gold standard from {gold_standard_file}")
-        gs = pd.read_csv(
-            gold_standard_file,
-            sep="\t",
-            index_col=0
-        )
-    else:
-        gs = None
-
-    if count_data is not None:
-        count_data = torch.Tensor(count_data)
-
-    return count_data, count_scaling, prior, gs
 
 
 def load_data_files_jtb_2023(
@@ -211,7 +104,7 @@ def load_data_files_jtb_2023(
                 adata.layers['counts']
             ).astype(float)
         else:
-            count_data = _get_data(adata, counts_layer)
+            count_data = _get_data_from_ad(adata, counts_layer)
 
         data = [count_scaling.fit_transform(count_data).A]
 
@@ -220,7 +113,7 @@ def load_data_files_jtb_2023(
 
     if velocity:
 
-        velocity_data = _get_data(adata, velocity_layers)
+        velocity_data = _get_data_from_ad(adata, velocity_layers)
 
         if shuffle_data:
             velocity_data = _shuffle_data(
@@ -236,12 +129,16 @@ def load_data_files_jtb_2023(
         )
     elif decay_velocity:
         velo_scaling.fit(
-            _get_data(adata, velocity_layers)
+            _get_data_from_ad(adata, velocity_layers)
         )
 
     if decay_velocity:
 
-        velocity_data = _get_data(adata, decay_velocity_layers, np.multiply)
+        velocity_data = _get_data_from_ad(
+            adata,
+            decay_velocity_layers,
+            np.multiply
+        )
         velocity_data *= -1
 
         if shuffle_data:
@@ -289,39 +186,6 @@ def load_data_files_jtb_2023(
         count_scaling,
         velo_scaling
     )
-
-
-def _get_data(
-    adata,
-    layers,
-    agg_func=np.add,
-    densify=False,
-    **kwargs
-):
-
-    if isinstance(layers, (tuple, list)):
-        _output = _get_data(adata, layers[0]).copy()
-        for layer in layers[1:]:
-            agg_func(
-                _output,
-                _get_data(adata, layer),
-                out=_output,
-                **kwargs
-            )
-
-    elif layers == 'X':
-        _output = adata.X
-
-    else:
-        _output = adata.layers[layers]
-
-    if densify:
-        try:
-            _output = _output.A
-        except AttributeError:
-            pass
-
-    return _output
 
 
 def _shuffle_prior(prior, seed=100):

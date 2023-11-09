@@ -262,7 +262,6 @@ class TimeDataset(torch.utils.data.Dataset):
         indexes
     ):
 
-        print(indexes.shape)
         # If L is shorter than the total number of time intervals,
         # randomly select a starting time on data sequence
         # to get L observations from the shuffled indices
