@@ -23,6 +23,8 @@ from supirfactor_dynamical.models import (
     DecayModule
 )
 
+from supirfactor_dynamical._utils import _get_data_offsets
+
 from ._stubs import (
     A,
     T,
@@ -448,7 +450,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         self.assertEqual(
-            self.dynamical_model._get_data_offsets(
+            _get_data_offsets(
                 L,
                 loss_offset=self.dynamical_model.loss_offset
             ),

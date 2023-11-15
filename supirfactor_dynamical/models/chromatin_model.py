@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import warnings
 
-from ._base_trainer import (
+from ._model_mixins import (
     _TrainingMixin,
     _TimeOffsetMixinStatic
 )

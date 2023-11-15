@@ -3,6 +3,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import torch
+from scipy.sparse import issparse
 
 from supirfactor_dynamical._utils._trunc_robust_scaler import (
     TruncRobustScaler
@@ -128,6 +129,7 @@ def _get_data_from_ad(
     layers,
     agg_func=np.add,
     densify=False,
+    standardize_depth=None,
     **kwargs
 ):
 
@@ -146,6 +148,13 @@ def _get_data_from_ad(
 
     else:
         _output = adata.layers[layers]
+
+    if standardize_depth is not None and not issparse(_output):
+        _depth_factor = standardize_depth / np.sum(_output, axis=1)
+        _output = np.multiply(_output, _depth_factor[:, None])
+    elif standardize_depth:
+        _depth_factor = standardize_depth / _output.sum(axis=1)
+        _output = _output.multiply(_depth_factor)
 
     if densify:
         try:

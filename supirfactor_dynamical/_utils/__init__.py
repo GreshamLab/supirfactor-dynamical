@@ -23,3 +23,8 @@ from .misc import (
 from .time_dataset import (
     TimeDataset
 )
+
+from .time_offsets import (
+    _get_data_offsets,
+    _check_data_offsets
+)

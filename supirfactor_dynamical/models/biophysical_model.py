@@ -2,11 +2,11 @@ import torch
 
 from .recurrent_models import TFRNNDecoder
 from ._base_model import _TFMixin
-from ._base_trainer import (
+from ._model_mixins import (
+    _VelocityMixin,
     _TrainingMixin,
     _TimeOffsetMixinRecurrent
 )
-from ._base_velocity_model import _VelocityMixin
 from .decay_model import DecayModule
 from .._utils.misc import (_cat, _add)
 from .._utils._math import _calculate_rss

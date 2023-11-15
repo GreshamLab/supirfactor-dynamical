@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 from ._base_model import _TFMixin
-from ._base_trainer import (
+from ._model_mixins import (
     _TrainingMixin,
     _TimeOffsetMixinStatic
 )

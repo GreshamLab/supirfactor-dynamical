@@ -4,7 +4,7 @@ import pandas as pd
 import tqdm
 import time
 
-from .._utils import (
+from supirfactor_dynamical._utils import (
     _calculate_rss,
     _calculate_tss,
     _calculate_r2,
@@ -12,7 +12,8 @@ from .._utils import (
     _cat
 )
 
-from .._io._writer import write
+from supirfactor_dynamical._io._writer import write
+from supirfactor_dynamical._utils import _check_data_offsets
 
 from torch.utils.data import DataLoader
 
@@ -265,7 +266,7 @@ class _TrainingMixin:
 
         # If it's a tuple, process the individual tuple elements
         # separately for optimizer
-        elif isinstance(optimizer, tuple):
+        elif isinstance(optimizer, (tuple, list)):
             return tuple(
                 self.process_optimizer(opt)
                 for opt in optimizer
@@ -442,7 +443,7 @@ class _TrainingMixin:
         else:
             loss_offset = self.loss_offset
 
-        _, output_offset = self._check_data_offsets(
+        _, output_offset = _check_data_offsets(
             x.shape[1],
             _t_plus_one,
             self.n_additional_predictions,
@@ -497,57 +498,6 @@ class _TrainingMixin:
         """
 
         return x
-
-    @staticmethod
-    def _get_data_offsets(
-        L,
-        output_t_plus_one=False,
-        n_additional_predictions=0,
-        loss_offset=0
-    ):
-        """
-        Returns slice indices for input (O:input_offset) and
-        for output (output_offset:L) based on slice parameters
-        """
-
-        if loss_offset is None:
-            loss_offset = 0
-
-        if n_additional_predictions is None:
-            n_additional_predictions = 0
-
-        input_offset = L - n_additional_predictions
-        output_offset = loss_offset
-
-        if output_t_plus_one:
-            input_offset -= 1
-            output_offset += 1
-
-        return input_offset, output_offset
-
-    @staticmethod
-    def _check_data_offsets(
-        L,
-        output_t_plus_one=False,
-        n_additional_predictions=0,
-        loss_offset=0
-    ):
-
-        in_offset, out_offset = _TrainingMixin._get_data_offsets(
-            L,
-            output_t_plus_one,
-            n_additional_predictions,
-            loss_offset
-        )
-
-        if in_offset < 1 or out_offset >= L:
-            raise ValueError(
-                f"Cannot train on {L} sequence length with "
-                f"{n_additional_predictions} additional predictions and "
-                f"{loss_offset} values excluded from loss"
-            )
-
-        return in_offset, out_offset
 
     def save(
         self,
@@ -696,69 +646,3 @@ def _shuffle_time_data(dl):
         dl.dataset.shuffle()
     except AttributeError:
         pass
-
-
-class _TimeOffsetMixinRecurrent:
-
-    def input_data(self, x):
-
-        if self._offset_data:
-            input_offset, _ = _TrainingMixin._check_data_offsets(
-                x.shape[1],
-                output_t_plus_one=self.output_t_plus_one,
-                loss_offset=self.loss_offset,
-                n_additional_predictions=self.n_additional_predictions
-            )
-            return x[:, 0:input_offset, :]
-
-        else:
-            return x
-
-
-class _TimeOffsetMixinStatic:
-
-    def input_data(self, x):
-
-        if self._offset_data:
-            return x[:, [0], ...]
-        else:
-            return x
-
-    def output_data(
-        self,
-        x,
-        output_t_plus_one=None,
-        **kwargs
-    ):
-
-        if not self._offset_data:
-            return x
-
-        L = x.shape[1]
-        max_L = 1
-
-        if output_t_plus_one is None:
-            output_t_plus_one = self.output_t_plus_one
-
-        if output_t_plus_one:
-            max_L += 1
-
-        if self.n_additional_predictions is not None:
-            max_L += self.n_additional_predictions
-
-        if max_L == L:
-            return super().output_data(
-                x,
-                output_t_plus_one=output_t_plus_one,
-                **kwargs
-            )
-        elif max_L > L:
-            raise ValueError(
-                f"Cannot train on {L} sequence length with "
-                f"{self.n_additional_predictions} additional predictions and "
-                f"{self.loss_offset} values excluded from loss"
-            )
-        else:
-            return super().output_data(
-                x[:, 0:max_L, ...]
-            )

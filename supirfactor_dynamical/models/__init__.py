@@ -17,11 +17,11 @@ from .chromatin_model import (
 )
 
 # Standard mixins
-from ._base_velocity_model import (
+from ._model_mixins import (
+    _TrainingMixin,
     _VelocityMixin
 )
 from ._base_model import _TFMixin
-from ._base_trainer import _TrainingMixin
 
 
 _CLASS_DICT = {

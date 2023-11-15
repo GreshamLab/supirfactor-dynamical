@@ -1,6 +1,6 @@
 import torch
 
-from ._base_trainer import (
+from ._model_mixins import (
     _TrainingMixin
 )
 

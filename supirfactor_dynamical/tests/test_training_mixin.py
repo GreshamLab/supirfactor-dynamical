@@ -1,7 +1,5 @@
 import unittest
-
-
-from supirfactor_dynamical.models._base_trainer import _TrainingMixin
+from supirfactor_dynamical._utils.time_offsets import _get_data_offsets
 
 
 class TestInputOutputOffsets(unittest.TestCase):
@@ -10,7 +8,7 @@ class TestInputOutputOffsets(unittest.TestCase):
 
     def test_no_shift(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             False,
             0,
@@ -27,7 +25,7 @@ class TestInputOutputOffsets(unittest.TestCase):
 
     def test_loss_shift(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             False,
             0,
@@ -44,7 +42,7 @@ class TestInputOutputOffsets(unittest.TestCase):
 
     def test_predict_shift(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             False,
             5,
@@ -61,7 +59,7 @@ class TestInputOutputOffsets(unittest.TestCase):
 
     def test_both(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             False,
             5,
@@ -83,7 +81,7 @@ class TestInputOutputOffsetsWithShift(unittest.TestCase):
 
     def test_no_shift(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             True,
             0,
@@ -100,7 +98,7 @@ class TestInputOutputOffsetsWithShift(unittest.TestCase):
 
     def test_loss_shift(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             True,
             0,
@@ -117,7 +115,7 @@ class TestInputOutputOffsetsWithShift(unittest.TestCase):
 
     def test_predict_shift(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             True,
             5,
@@ -134,7 +132,7 @@ class TestInputOutputOffsetsWithShift(unittest.TestCase):
 
     def test_both(self):
 
-        a, b = _TrainingMixin._get_data_offsets(
+        a, b = _get_data_offsets(
             self.L,
             True,
             5,
