@@ -175,7 +175,8 @@ def load_data_files_jtb_2023(
     _, _, prior, gs = load_standard_data(
         data_file=None,
         prior_file=prior_file,
-        gold_standard_file=gold_standard_file
+        gold_standard_file=gold_standard_file,
+        genes=adata.var_names
     )
 
     return (
