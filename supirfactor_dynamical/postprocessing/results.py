@@ -117,27 +117,30 @@ def process_results_to_dataframes(
         hasattr(model_object, "training_r2_over_time")
     ):
 
-        time_dependent_loss = pd.concat([
-            pd.concat(
-                (
-                    loss_leaders[k].iloc[[0], :],
-                    pd.DataFrame(
-                        o,
-                        columns=np.arange(1, len(o) + 1)
-                    )
-                ),
-                axis=1
-            ) for k, o in zip(
-                [
-                    'training',
-                    'validation'
-                ],
-                [
-                    model_object.training_r2_over_time,
-                    model_object.validation_r2_over_time
-                ]
-            ) if o is not None
-        ])
+        try:
+            time_dependent_loss = pd.concat([
+                pd.concat(
+                    (
+                        loss_leaders[k].iloc[[0], :],
+                        pd.DataFrame(
+                            o,
+                            columns=np.arange(1, len(o) + 1)
+                        )
+                    ),
+                    axis=1
+                ) for k, o in zip(
+                    [
+                        'training',
+                        'validation'
+                    ],
+                    [
+                        model_object.training_r2_over_time,
+                        model_object.validation_r2_over_time
+                    ]
+                ) if o is not None
+            ])
+        except ValueError:
+            time_dependent_loss = None
 
     else:
         time_dependent_loss = None
