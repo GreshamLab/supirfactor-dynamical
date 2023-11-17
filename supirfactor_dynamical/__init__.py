@@ -10,8 +10,13 @@ from .models import (
 )
 
 from ._utils import (
-    TruncRobustScaler,
-    TimeDataset
+    TruncRobustScaler
+)
+
+from .datasets import (
+    TimeDataset,
+    ChromatinDataLoader,
+    ChromatinDataset
 )
 
 from .postprocessing import (

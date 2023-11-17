@@ -5,6 +5,7 @@ import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import scipy.sparse as sps
+import torch
 
 from torch.utils.data import DataLoader
 
@@ -13,7 +14,10 @@ from ._stubs import (
     T
 )
 
-from supirfactor_dynamical import TimeDataset
+from supirfactor_dynamical.datasets import (
+    TimeDataset,
+    MultimodalDataLoader
+)
 
 
 class TestTimeDataset(unittest.TestCase):
@@ -455,6 +459,25 @@ class TestTimeDataset(unittest.TestCase):
             len(td.shuffle_idxes[0]),
             10
         )
+
+    def test_return_times_too(self):
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            return_times=True
+        )
+
+        dl = MultimodalDataLoader(td, batch_size=10)
+
+        t = next(iter(dl))
+
+        self.assertEqual(len(t), 2)
+        self.assertTrue(isinstance(t, tuple))
+        self.assertTrue(torch.is_tensor(t[0]))
+        self.assertTrue(torch.is_tensor(t[1]))
 
 
 class TestTimeDatasetSparse(TestTimeDataset):

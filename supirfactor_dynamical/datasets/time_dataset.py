@@ -12,6 +12,7 @@ class TimeDataset(torch.utils.data.Dataset):
     n = 0
     n_steps = None
     with_replacement = True
+    return_times = False
 
     rng = None
     data = None
@@ -69,7 +70,8 @@ class TimeDataset(torch.utils.data.Dataset):
         random_seed=500,
         with_replacement=True,
         shuffle_time_vector=None,
-        wrap_times=False
+        wrap_times=False,
+        return_times=False
     ):
 
         # Only keep data that's usable
@@ -100,6 +102,7 @@ class TimeDataset(torch.utils.data.Dataset):
 
         self.with_replacement = with_replacement
         self.rng = np.random.default_rng(random_seed)
+        self.return_times = return_times
 
         if shuffle_time_vector is not None:
             self.shuffle_time_limits = shuffle_time_vector
@@ -392,6 +395,12 @@ class TimeDataset(torch.utils.data.Dataset):
             data = torch.tensor(
                 data,
                 dtype=torch.float32
+            )
+
+        if self.return_times:
+            data = (
+                data,
+                torch.Tensor(self.time_vector[idx])
             )
 
         return data

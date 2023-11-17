@@ -7,7 +7,7 @@ from ._stubs import (
     PEAKS_SP
 )
 
-from supirfactor_dynamical._utils.chromatin_dataset import (
+from supirfactor_dynamical.datasets import (
     ChromatinDataset,
     ChromatinDataLoader
 )

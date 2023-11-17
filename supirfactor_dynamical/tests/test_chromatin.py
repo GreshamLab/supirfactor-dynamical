@@ -14,7 +14,7 @@ from ._stubs import (
 
 from torch.utils.data import DataLoader
 
-from supirfactor_dynamical._utils.chromatin_dataset import (
+from supirfactor_dynamical.datasets import (
     ChromatinDataset,
     ChromatinDataLoader
 )
