@@ -4,7 +4,7 @@ import warnings
 import collections
 import math
 
-from scipy.sparse import isspmatrix
+from scipy.sparse import issparse
 
 
 class TimeDataset(torch.utils.data.Dataset):
@@ -74,19 +74,38 @@ class TimeDataset(torch.utils.data.Dataset):
         return_times=False
     ):
 
-        # Only keep data that's usable
-        # erase the rest
+        self.time_vector = time_vector
+        self.t_min = t_min
+        self.t_max = t_max
+        self.t_step = t_step
+
+        self.data = self._to_tensor(data_reference)
+        self._intial_time_processing()
+
+        self.rng = np.random.default_rng(random_seed)
+        self.return_times = return_times
+        self.shuffle_time_limits = shuffle_time_vector
+        self.with_replacement = with_replacement
+        self.wrap_times = wrap_times
+
+        self._initial_index_processing(sequence_length)
+
+    def _intial_time_processing(
+        self
+    ):
+
         _data_keep_idx = np.logical_and(
-            t_min <= time_vector,
-            time_vector < t_max
+            self.t_min <= self.time_vector,
+            self.time_vector < self.t_max
         )
 
         if not np.all(_data_keep_idx):
-            self.data = data_reference[_data_keep_idx, :]
-            self.time_vector = time_vector[_data_keep_idx]
-        else:
-            self.data = data_reference
-            self.time_vector = time_vector
+            self.data = self._get_data(
+                self.data,
+                _data_keep_idx,
+                keep_sparse=True
+            )
+            self.time_vector = self.time_vector[_data_keep_idx]
 
         # Make sure it's not a pandas series
         try:
@@ -94,25 +113,9 @@ class TimeDataset(torch.utils.data.Dataset):
         except AttributeError:
             pass
 
-        if not torch.is_tensor(self.data) and not isspmatrix(self.data):
-            self.data = torch.tensor(
-                self.data,
-                dtype=torch.float32
-            )
+    def _initial_index_processing(self, sequence_length):
 
-        self.with_replacement = with_replacement
-        self.rng = np.random.default_rng(random_seed)
-        self.return_times = return_times
-
-        if shuffle_time_vector is not None:
-            self.shuffle_time_limits = shuffle_time_vector
-
-        if t_step is not None:
-
-            self.t_min = t_min
-            self.t_max = t_max
-            self.t_step = t_step
-            self.wrap_times = wrap_times
+        if self.t_step is not None:
 
             # Create a list of arrays, where each element
             # is an array of indices to observations for that
@@ -122,12 +125,11 @@ class TimeDataset(torch.utils.data.Dataset):
             self.n = min(map(len, self.strat_idxes))
             self.n_steps = len(self.strat_idxes)
             self.sequence_length = sequence_length
-
             self.shuffle()
 
         else:
 
-            self.n = self.data.shape[0]
+            self.n = self._n_samples(self.data)
             self.strat_idxes = None
 
         if self.n == 0:
@@ -138,6 +140,12 @@ class TimeDataset(torch.utils.data.Dataset):
             )
 
     def _generate_stratified_indices(self):
+
+        if self.t_min is None or self.t_max is None or self.t_step is None:
+            raise ValueError(
+                f"Cannot create indices from t_min {self.t_min} "
+                f"t_max {self.t_max} and t_step {self.t_step}"
+            )
 
         return [
             np.where(
@@ -310,7 +318,13 @@ class TimeDataset(torch.utils.data.Dataset):
         else:
             _data_index = i
 
-        return self._get_data(_data_index)
+        if self.return_times:
+            return (
+                self._get_data(self.data, _data_index),
+                torch.Tensor(self.time_vector[_data_index])
+            )
+        else:
+            return self._get_data(self.data, _data_index)
 
     def __len__(self):
         return self.n
@@ -332,7 +346,7 @@ class TimeDataset(torch.utils.data.Dataset):
             self.time_vector < t_stop
         )
 
-        return self._get_data(_data_idx)
+        return self._get_data(self.data, _data_idx)
 
     def get_times_in_order(
         self
@@ -355,7 +369,7 @@ class TimeDataset(torch.utils.data.Dataset):
         def _timeiterator():
             for i in range(n_steps):
                 yield torch.stack([
-                    self._get_data(a[i:i + seq_length])
+                    self._get_data(self.data, a[i:i + seq_length])
                     for a in all_time_indexes
                 ])
 
@@ -366,7 +380,7 @@ class TimeDataset(torch.utils.data.Dataset):
     ):
 
         _aggregate_data = torch.stack([
-            self._get_data(self.strat_idxes[i]).mean(axis=0)
+            self._get_data(self.data, self.strat_idxes[i]).mean(axis=0)
             for i in range(self.n_steps)
         ])
 
@@ -378,29 +392,32 @@ class TimeDataset(torch.utils.data.Dataset):
         else:
             return _aggregate_data
 
-    def _get_data(
-        self,
-        idx
-    ):
+    @staticmethod
+    def _get_data(data, idx, keep_sparse=False):
 
-        data = self.data[idx, ...]
+        _data = data[idx, :]
 
-        if isspmatrix(data):
-            data = data.A
+        if issparse(_data) and not keep_sparse:
 
-            if data.shape[0] == 1:
-                data = data.ravel()
-
-        if not torch.is_tensor(data):
-            data = torch.tensor(
-                data,
-                dtype=torch.float32
+            _data = torch.Tensor(
+                _data.A.reshape(-1) if _data.shape[0] == 1 else _data.A
             )
 
-        if self.return_times:
-            data = (
-                data,
-                torch.Tensor(self.time_vector[idx])
-            )
+        return _data
 
-        return data
+    @staticmethod
+    def _to_tensor(data):
+
+        if torch.is_tensor(data):
+            return data
+
+        elif not issparse(data):
+            return torch.Tensor(data)
+
+        else:
+            return data
+
+    @staticmethod
+    def _n_samples(data):
+
+        return data.shape[0]

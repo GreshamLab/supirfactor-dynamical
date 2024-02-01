@@ -30,6 +30,7 @@ class _PriorMixin:
         self,
         x
     ):
+
         x = self.encoder(x)
 
         if self._drop_tf is not None:
@@ -38,7 +39,7 @@ class _PriorMixin:
 
             x = x @ torch.diag(
                 torch.Tensor(_mask.astype(int))
-            )
+            ).to(self.device)
 
         x = self.hidden_dropout(x)
 
@@ -103,7 +104,8 @@ class _PriorMixin:
 
     def set_decoder(
         self,
-        activation='softplus'
+        activation='softplus',
+        width=None
     ):
         """
         Set decoder
@@ -115,9 +117,12 @@ class _PriorMixin:
 
         self.output_activation = activation
 
+        if width is None:
+            width = self.k
+
         decoder = self.append_activation_function(
             torch.nn.Sequential(
-                torch.nn.Linear(self.k, self.g, bias=False),
+                torch.nn.Linear(width, self.g, bias=False),
             ),
             activation
         )

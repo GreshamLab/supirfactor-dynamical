@@ -1,6 +1,7 @@
 from .ae_model import (
     TFAutoencoder,
-    TFMetaAutoencoder
+    TFMetaAutoencoder,
+    TFMultilayerAutoencoder
 )
 
 from .recurrent_models import (
@@ -27,6 +28,7 @@ from ._base_model import _TFMixin
 _CLASS_DICT = {
     TFAutoencoder.type_name: TFAutoencoder,
     TFMetaAutoencoder.type_name: TFMetaAutoencoder,
+    TFMultilayerAutoencoder.type_name: TFMultilayerAutoencoder,
     TFRNNDecoder.type_name: TFRNNDecoder,
     TFGRUDecoder.type_name: TFGRUDecoder,
     TFLSTMDecoder.type_name: TFLSTMDecoder,

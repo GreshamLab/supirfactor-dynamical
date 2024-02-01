@@ -1,6 +1,18 @@
 import torch
 
 
+def to(obj, device):
+
+    if obj is None:
+        return None
+
+    if isinstance(obj, (tuple, list)):
+        return tuple(to(thing, device) for thing in obj)
+
+    else:
+        return obj.to(device)
+
+
 def _cat(_data, dim):
     """
     Concatenate list of tensors or list of tensor tuples

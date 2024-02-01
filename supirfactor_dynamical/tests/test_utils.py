@@ -6,6 +6,7 @@ import pandas as pd
 import anndata as ad
 
 from supirfactor_dynamical._utils import (
+    to,
     _calculate_erv,
     _calculate_rss,
     _calculate_tss,
@@ -23,8 +24,36 @@ from ._stubs import (
     X_tensor
 )
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 
 class TestTensorUtils(unittest.TestCase):
+
+    def test_to_device(self):
+
+        x = torch.clone(X_tensor)
+        x = to(x, device)
+
+        if device == 'cpu':
+            self.assertEqual(x.get_device(), -1)
+        else:
+            self.assertEqual(x.get_device(), 0)
+
+    def test_tuple_to_device(self):
+
+        x = tuple(torch.clone(X_tensor) for _ in range(3))
+        x = to(x, device)
+
+        if device == 'cpu':
+            self.assertListEqual(
+                [y.get_device() for y in x],
+                [-1, -1, -1]
+            )
+        else:
+            self.assertListEqual(
+                [y.get_device() for y in x],
+                [0, 0, 0]
+            )
 
     def test_array_to_tensor(self):
 

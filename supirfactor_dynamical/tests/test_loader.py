@@ -6,6 +6,8 @@ import numpy.testing as npt
 import pandas as pd
 import scipy.sparse as sps
 import torch
+import tempfile
+import os
 
 from torch.utils.data import DataLoader
 
@@ -16,7 +18,8 @@ from ._stubs import (
 
 from supirfactor_dynamical.datasets import (
     TimeDataset,
-    MultimodalDataLoader
+    MultimodalDataLoader,
+    H5ADDataset
 )
 
 
@@ -487,3 +490,49 @@ class TestTimeDatasetSparse(TestTimeDataset):
             sps.csr_matrix(X)
         )
         self.adata.obs['time'] = T
+
+
+class TestADBacked(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            X
+        )
+        self.adata.obs['time'] = T
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)
+
+    def test_load_h5(self):
+
+        dataloader = DataLoader(
+            H5ADDataset(self.filename),
+            batch_size=10,
+            shuffle=True
+        )
+
+        lens = [d.shape[0] for d in dataloader]
+
+        self.assertEqual(
+            len(lens),
+            10
+        )
+        self.assertListEqual(
+            lens,
+            [10] * 10
+        )
+
+
+class TestADBackedSparse(TestADBacked):
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+        self.adata.obs['time'] = T
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)

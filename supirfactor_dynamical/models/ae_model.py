@@ -271,3 +271,110 @@ class TFMetaAutoencoder(
         x = self._decoder(x)
 
         return x
+
+
+class TFMultilayerAutoencoder(
+    torch.nn.Module,
+    _TimeOffsetMixinStatic,
+    _TFMixin,
+    _TrainingMixin
+):
+
+    type_name = "static_multilayer"
+
+    intermediate_sizes = None
+    decoder_sizes = None
+    intermediate_dropout_rate = 0.2
+
+    @property
+    def intermediate_weights(self):
+        return [
+            self._intermediate[3 * i].weight
+            for i in range(len(self.intermediate_sizes))
+        ]
+
+    @property
+    def decoder_weights(self):
+        return [
+            self._decoder[2 * i].weight
+            for i in range(len(self.decoder_sizes) + 1)
+        ]
+
+    def __init__(
+        self,
+        prior_network=None,
+        use_prior_weights=False,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
+        intermediate_dropout_rate=0.0,
+        intermediate_sizes=(100, ),
+        decoder_sizes=(100, ),
+        activation='relu',
+        output_activation='relu'
+    ):
+        super().__init__()
+
+        self.set_encoder(
+            prior_network,
+            use_prior_weights=use_prior_weights,
+            activation=activation
+        )
+
+        self._intermediate = torch.nn.Sequential()
+        self._decoder = torch.nn.Sequential()
+
+        self.intermediate_dropout_rate = intermediate_dropout_rate
+        self.intermediate_sizes = intermediate_sizes
+        self.decoder_sizes = decoder_sizes
+        self.output_activation = output_activation
+
+        intermediates = [self.k] + list(intermediate_sizes)
+        decoders = [intermediates[-1]] + list(decoder_sizes) + [self.g]
+
+        for s1, s2 in zip(intermediates[0:-1], intermediates[1:]):
+            self._intermediate.append(
+                torch.nn.Linear(s1, s2, bias=False)
+            )
+            self._intermediate.append(
+                self.get_activation_function(activation)
+            )
+            self._intermediate.append(
+                torch.nn.Dropout(p=intermediate_dropout_rate)
+            )
+
+        for s1, s2 in zip(decoders[0:-1], decoders[1:]):
+            self._decoder.append(
+                torch.nn.Linear(s1, s2, bias=False)
+            )
+            self._decoder.append(
+                self.get_activation_function(output_activation)
+            )
+
+        self.set_dropouts(
+            input_dropout_rate,
+            hidden_dropout_rate
+        )
+
+    def decoder(
+        self,
+        x,
+        hidden_state=None
+    ):
+
+        x = self._intermediate(x)
+        x = self._decoder(x)
+
+        return x
+
+    def forward(
+        self,
+        x,
+        n_time_steps=0,
+        return_tfa=False
+    ):
+
+        return self._forward(
+            x,
+            n_time_steps=n_time_steps,
+            return_tfa=return_tfa
+        )

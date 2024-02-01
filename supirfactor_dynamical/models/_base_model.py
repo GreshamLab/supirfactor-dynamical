@@ -225,7 +225,10 @@ class _TFMixin(
 
         # Get G x K decoder weights
         with torch.no_grad():
-            w = self.decoder_weights.numpy()
+            try:
+                w = self.decoder_weights.numpy()
+            except AttributeError:
+                w = self.decoder_weights[1].numpy()
             w[np.abs(w) <= np.finfo(np.float32).eps] = 0
 
         if mask is not None:

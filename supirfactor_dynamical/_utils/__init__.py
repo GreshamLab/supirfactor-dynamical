@@ -15,6 +15,7 @@ from ._trunc_robust_scaler import (
 )
 
 from .misc import (
+    to,
     _add,
     _cat,
     _unsqueeze

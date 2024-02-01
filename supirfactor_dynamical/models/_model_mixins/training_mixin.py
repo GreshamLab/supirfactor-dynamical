@@ -5,6 +5,7 @@ import tqdm
 import time
 
 from supirfactor_dynamical._utils import (
+    to,
     _calculate_rss,
     _calculate_tss,
     _calculate_r2,
@@ -25,6 +26,8 @@ DEFAULT_OPTIMIZER_PARAMS = {
 
 
 class _TrainingMixin:
+
+    device = 'cpu'
 
     training_time = None
 
@@ -102,6 +105,8 @@ class _TrainingMixin:
         :rtype: np.ndarray, np.ndarray
         """
 
+        to(self, self.device)
+
         optimizer = self.process_optimizer(
             optimizer
         )
@@ -119,6 +124,8 @@ class _TrainingMixin:
 
             _batch_losses = []
             for train_x in training_dataloader:
+
+                train_x = to(train_x, self.device)
 
                 mse = self._training_step(
                     epoch_num,
@@ -149,7 +156,9 @@ class _TrainingMixin:
             _shuffle_time_data(training_dataloader)
             _shuffle_time_data(validation_dataloader)
 
+        to(self, 'cpu')
         self.eval()
+
         self.r2(
             training_dataloader,
             validation_dataloader
@@ -215,6 +224,8 @@ class _TrainingMixin:
 
             with torch.no_grad():
                 for val_x in validation_dataloader:
+
+                    val_x = to(val_x, self.device)
 
                     _validation_batch_losses.append(
                         self._calculate_all_losses(

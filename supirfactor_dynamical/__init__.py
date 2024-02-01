@@ -1,6 +1,7 @@
 from .models import (
     TFAutoencoder,
     TFMetaAutoencoder,
+    TFMultilayerAutoencoder,
     TFRNNDecoder,
     TFLSTMDecoder,
     TFGRUDecoder,
