@@ -85,7 +85,7 @@ class TestMultiEncoderMixin(unittest.TestCase):
 
         self.assertEqual(
             self.model.training_loss_df.shape,
-            (2, 11)
+            (1, 11)
         )
 
     def test_param_freeze(self):
@@ -131,5 +131,5 @@ class TestMultiEncoderMixin(unittest.TestCase):
 
         self.assertEqual(
             self.model.training_loss_df.shape,
-            (2, 11)
+            (1, 11)
         )
