@@ -1,5 +1,3 @@
-import weakref
-
 import torch
 import h5py
 import numpy as np
@@ -29,7 +27,6 @@ class H5ADDataset(torch.utils.data.Dataset):
         self.layer = layer
 
         self._filehandle = h5py.File(file_name)
-        weakref.finalize(self, lambda x: x.close(), self._filehandle)
 
         if layer == 'X':
             self._data_reference = self._filehandle['X']
@@ -99,3 +96,7 @@ class H5ADDataset(torch.utils.data.Dataset):
                 shape=(1, self._data_shape[1])
             ).todense().reshape(-1)
         )
+
+    def close(self):
+        self._data_reference = None
+        self._filehandle.close()

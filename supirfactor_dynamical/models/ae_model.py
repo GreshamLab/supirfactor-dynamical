@@ -284,7 +284,9 @@ class TFMultilayerAutoencoder(
 
     intermediate_sizes = None
     decoder_sizes = None
+
     intermediate_dropout_rate = 0.2
+    tfa_activation = 'relu'
 
     @property
     def intermediate_weights(self):
@@ -295,10 +297,7 @@ class TFMultilayerAutoencoder(
 
     @property
     def decoder_weights(self):
-        return [
-            self._decoder[2 * i].weight
-            for i in range(len(self.decoder_sizes) + 1)
-        ]
+        return self._decoder[-2].weight
 
     def __init__(
         self,
@@ -309,6 +308,7 @@ class TFMultilayerAutoencoder(
         intermediate_dropout_rate=0.0,
         intermediate_sizes=(100, ),
         decoder_sizes=(100, ),
+        tfa_activation='relu',
         activation='relu',
         output_activation='relu'
     ):
@@ -317,19 +317,20 @@ class TFMultilayerAutoencoder(
         self.set_encoder(
             prior_network,
             use_prior_weights=use_prior_weights,
-            activation=activation
+            activation=tfa_activation
         )
 
         self._intermediate = torch.nn.Sequential()
         self._decoder = torch.nn.Sequential()
 
-        self.intermediate_dropout_rate = intermediate_dropout_rate
         self.intermediate_sizes = intermediate_sizes
         self.decoder_sizes = decoder_sizes
+
+        self.tfa_activation = tfa_activation
         self.output_activation = output_activation
 
         intermediates = [self.k] + list(intermediate_sizes)
-        decoders = [intermediates[-1]] + list(decoder_sizes) + [self.g]
+        decoders = [intermediates[-1]] + list(decoder_sizes)
 
         for s1, s2 in zip(intermediates[0:-1], intermediates[1:]):
             self._intermediate.append(
@@ -342,17 +343,29 @@ class TFMultilayerAutoencoder(
                 torch.nn.Dropout(p=intermediate_dropout_rate)
             )
 
-        for s1, s2 in zip(decoders[0:-1], decoders[1:]):
-            self._decoder.append(
-                torch.nn.Linear(s1, s2, bias=False)
-            )
-            self._decoder.append(
-                self.get_activation_function(output_activation)
-            )
+        if len(decoders) > 1:
+            for s1, s2 in zip(decoders[0:-1], decoders[1:]):
+                self._decoder.append(
+                    torch.nn.Linear(s1, s2, bias=False)
+                )
+                self._decoder.append(
+                    self.get_activation_function(activation)
+                )
+                self._decoder.append(
+                    torch.nn.Dropout(p=intermediate_dropout_rate)
+                )
+
+        self._decoder.append(
+            torch.nn.Linear(decoders[-1], self.g, bias=False)
+        )
+        self._decoder.append(
+            self.get_activation_function(output_activation)
+        )
 
         self.set_dropouts(
             input_dropout_rate,
-            hidden_dropout_rate
+            hidden_dropout_rate,
+            intermediate_dropout_rate
         )
 
     def decoder(
@@ -365,6 +378,14 @@ class TFMultilayerAutoencoder(
         x = self._decoder(x)
 
         return x
+
+    def latent_embedding(
+        self,
+        x
+    ):
+
+        x = self.drop_encoder(x)
+        return self._intermediate(x)
 
     def forward(
         self,

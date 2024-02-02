@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 import pandas as pd
 
 from torch.utils.data import DataLoader
@@ -203,86 +202,6 @@ class _TFMixin(
                 tensor_list,
                 dim=tensor_list[0].ndim - 2
             )
-
-    @torch.inference_mode()
-    def output_weights(
-        self,
-        as_dataframe=False,
-        mask=None
-    ):
-        """
-        Return a 2D [G x K] array or DataFrame with decoder weights
-
-        :param as_dataframe: Return pandas DataFrame with labels
-            (if labels exist), defaults to False
-        :type as_dataframe: bool, optional
-        :param mask: 2D mask for weights (False prunes weight to zero),
-            defaults to None
-        :type mask: np.ndarray, optional
-        :return: 2D [G x K] model weights as a numpy array or pandas DataFrame
-        :rtype: np.ndarray, pd.DataFrame
-        """
-
-        # Get G x K decoder weights
-        with torch.no_grad():
-            try:
-                w = self.decoder_weights.numpy()
-            except AttributeError:
-                w = self.decoder_weights[1].numpy()
-            w[np.abs(w) <= np.finfo(np.float32).eps] = 0
-
-        if mask is not None:
-            w[~mask] = 0
-
-        if as_dataframe:
-            return self._to_dataframe(w)
-
-        else:
-            return w
-
-    @torch.inference_mode()
-    def pruned_model_weights(
-        self,
-        erv=None,
-        data_loader=None,
-        erv_threshold=1e-4,
-        as_dataframe=False
-    ):
-        """
-        Gets output weights pruned to zeros based on an
-        explained relative variance threshold
-
-        :param erv: Precalculated ERV dataframe/array [G x K],
-            defaults to None
-        :type erv: np.ndarray, pd.DataFrame, optional
-        :param data_loader: Dataloader to calcualte ERV,
-            defaults to None
-        :type data_loader: torch.utils.data.DataLoader, optional
-        :param erv_threshold: Threshold for trimming based on ERV,
-            defaults to 1e-4
-        :type erv_threshold: float, optional
-        :param as_dataframe: Return as dataframe instead of array,
-            defaults to False
-        :type as_dataframe: bool, optional
-        :return: Model weights trimmed to zero
-        :rtype: pd.DataFrame, np.ndarray
-        """
-
-        if erv is not None:
-            erv_mask = erv >= erv_threshold
-        elif data_loader is not None:
-            erv_mask = self.erv(data_loader) >= erv_threshold
-        else:
-            raise ValueError(
-                "Pass erv or data_loader to `pruned_model_weights`"
-            )
-
-        out_weights = self.output_weights(
-            as_dataframe=as_dataframe,
-            mask=erv_mask
-        )
-
-        return out_weights
 
     @torch.inference_mode()
     def latent_layer(self, x):

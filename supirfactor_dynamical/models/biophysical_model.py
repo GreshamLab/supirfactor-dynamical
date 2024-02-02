@@ -698,9 +698,6 @@ class SupirFactorBiophysical(
             )[0]
         )
 
-    def output_weights(self, *args, **kwargs):
-        return self._transcription_model.output_weights(*args, **kwargs)
-
     def set_drop_tfs(self, *args, **kwargs):
         self._transcription_model.set_drop_tfs(*args, **kwargs)
         return self

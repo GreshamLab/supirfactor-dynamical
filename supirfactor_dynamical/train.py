@@ -145,17 +145,12 @@ def model_training(
 
     model_obj.eval()
 
-    _weights = model_obj.output_weights(
-        as_dataframe=True
-    )
-
     _erv = model_obj.erv(
         training_dataloader,
         as_data_frame=True
     )
 
     result = evaluate_results(
-        _weights,
         _erv,
         prior_network,
         gold_standard if gold_standard is not None else prior_network

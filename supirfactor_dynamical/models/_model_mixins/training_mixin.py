@@ -239,7 +239,8 @@ class _TrainingMixin:
     def set_dropouts(
         self,
         input_dropout_rate,
-        hidden_dropout_rate
+        hidden_dropout_rate,
+        intermediate_dropout_rate=None
     ):
 
         self.input_dropout = torch.nn.Dropout(
@@ -252,6 +253,12 @@ class _TrainingMixin:
 
         self.input_dropout_rate = input_dropout_rate
         self.hidden_dropout_rate = hidden_dropout_rate
+
+        if intermediate_dropout_rate is not None:
+            self.intermediate_dropout = torch.nn.Dropout(
+                p=intermediate_dropout_rate
+            )
+            self.intermediate_dropout_rate = intermediate_dropout_rate
 
         return self
 

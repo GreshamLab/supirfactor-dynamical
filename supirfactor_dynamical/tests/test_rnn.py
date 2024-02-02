@@ -429,13 +429,8 @@ class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
 
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
-            out_weights = self.dyn_ae.output_weights()
-
-        expected_nz = np.ones_like(out_weights, dtype=bool)
-        expected_nz[3, :] = False
 
         npt.assert_equal(in_weights == 0, self.expect_mask)
-        npt.assert_equal(out_weights != 0, expected_nz)
 
     def test_train_loop_with_validation(self):
 
@@ -454,13 +449,8 @@ class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
         self.dyn_ae.eval()
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
-            out_weights = self.dyn_ae.output_weights()
-
-        expected_nz = np.ones_like(out_weights, dtype=bool)
-        expected_nz[3, :] = False
 
         npt.assert_equal(in_weights == 0, self.expect_mask)
-        npt.assert_equal(out_weights != 0, expected_nz)
 
     def test_erv(self):
 
@@ -474,7 +464,7 @@ class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
 
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
-            out_weights = self.dyn_ae.output_weights()
+            out_weights = self.dyn_ae.decoder_weights.numpy()
 
         self.time_data.sequence_length = 2
         self.time_data.shuffle_idxes = self.time_data._get_shuffle_indexes(
@@ -593,7 +583,7 @@ class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
 
         with torch.no_grad():
             in_weights = self.dyn_ae.encoder_weights.numpy()
-            out_weights = self.dyn_ae.output_weights()
+            out_weights = self.dyn_ae.decoder_weights.numpy()
 
         expected_nz = np.ones_like(out_weights, dtype=bool)
         expected_nz[3, :] = False

@@ -131,10 +131,7 @@ class TestTFAutoencoder(unittest.TestCase):
 
         with torch.no_grad():
             in_weights = self.ae.encoder_weights.numpy()
-            try:
-                out_weights = self.ae.decoder_weights.numpy()
-            except AttributeError:
-                out_weights = self.ae.decoder_weights[1].numpy()
+            out_weights = self.ae.decoder_weights.numpy()
 
         expected_nz = np.ones_like(out_weights, dtype=bool)
         expected_nz[3, :] = False
@@ -182,10 +179,7 @@ class TestTFAutoencoder(unittest.TestCase):
 
         with torch.no_grad():
             in_weights = self.ae.encoder_weights.numpy()
-            try:
-                out_weights = self.ae.decoder_weights.numpy()
-            except AttributeError:
-                out_weights = self.ae.decoder_weights[1].numpy()
+            out_weights = self.ae.decoder_weights.numpy()
 
         expected_nz = np.ones_like(out_weights, dtype=bool)
         expected_nz[3, :] = False
@@ -205,10 +199,11 @@ class TestTFAutoencoder(unittest.TestCase):
                     x = x @ self.ae.intermediate_weights.numpy().T
                     x[x < 0] = 0
 
-                if isinstance(self.ae.decoder_weights, list):
-                    for w in self.ae.decoder_weights:
-                        x = x @ w.numpy().T
-                        x[x < 0] = 0
+                if hasattr(self.ae, "_decoder") and len(self.ae._decoder) > 3:
+                    x = x @ self.ae._decoder[0].weight.numpy().T
+                    x[x < 0] = 0
+                    x = x @ self.ae._decoder[3].weight.numpy().T
+                    x[x < 0] = 0
                 else:
                     x = x @ self.ae.decoder_weights.numpy().T
                     x[x < 0] = 0
@@ -280,39 +275,6 @@ class TestTFAutoencoder(unittest.TestCase):
                 erv_expect,
                 decimal=1
             )
-
-    def test_weights(self):
-
-        loader = DataLoader(
-            X_tensor,
-            batch_size=2
-        )
-
-        self.ae.train_model(
-            loader,
-            20
-        )
-
-        erv = self.ae.erv(loader, return_rss=False)
-
-        with torch.no_grad():
-            try:
-                out_weights = self.ae.decoder_weights.numpy()
-            except AttributeError:
-                out_weights = self.ae.decoder_weights[1].numpy()
-
-        masked_weights = self.ae.pruned_model_weights(data_loader=loader)
-        out_weights[erv <= 0] = 0.
-
-        self.assertEqual(
-            masked_weights.shape,
-            A.shape
-        )
-
-        npt.assert_almost_equal(
-            masked_weights,
-            out_weights
-        )
 
     def test_r2(self):
 
@@ -686,7 +648,7 @@ class TestTFMultilayerAutoencoder(TestTFAutoencoder):
         self.ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.eye(3, dtype=torch.float32)
         )
-        self.ae._decoder[2].weight = torch.nn.parameter.Parameter(
+        self.ae._decoder[3].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 

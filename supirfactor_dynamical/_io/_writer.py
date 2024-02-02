@@ -6,6 +6,7 @@ from ._network import write_network
 
 _SERIALIZE_ARGS = [
     'input_dropout_rate',
+    'intermediate_dropout_rate',
     'hidden_dropout_rate',
     'output_t_plus_one',
     'n_additional_predictions',
@@ -25,12 +26,16 @@ _SERIALIZE_ARGS = [
     'hidden_layer_width',
     'n_peaks',
     'output_activation',
-    'activation'
+    'tfa_activation',
+    'activation',
+    'intermediate_sizes',
+    'decoder_sizes'
 ]
 
 _SERIALIZE_ENCODED_ARGS = [
     'output_activation',
-    'activation'
+    'activation',
+    'tfa_activation'
 ]
 
 _SERIALIZE_NETWORKS = [
