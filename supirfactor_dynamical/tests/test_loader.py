@@ -509,8 +509,15 @@ class TestADBacked(unittest.TestCase):
 
     def test_load_h5(self):
 
+        dataset = H5ADDataset(self.filename)
+
+        self.assertEqual(
+            len(dataset),
+            100
+        )
+
         dataloader = DataLoader(
-            H5ADDataset(self.filename),
+            dataset,
             batch_size=10,
             shuffle=True
         )
@@ -524,6 +531,40 @@ class TestADBacked(unittest.TestCase):
         self.assertListEqual(
             lens,
             [10] * 10
+        )
+
+    def test_h5_mask(self):
+
+        dataset = H5ADDataset(
+            self.filename,
+            obs_include_mask=np.arange(50, 100)
+        )
+
+        self.assertEqual(
+            len(dataset),
+            50
+        )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=50,
+            shuffle=False
+        )
+
+        data = [d for d in dataloader]
+
+        self.assertEqual(
+            len(data),
+            1
+        )
+        self.assertEqual(
+            data[0].shape[0],
+            50
+        )
+
+        npt.assert_almost_equal(
+            X[np.arange(50, 100), :],
+            data[0].numpy()
         )
 
 

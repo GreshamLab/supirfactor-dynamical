@@ -1,3 +1,5 @@
+import weakref
+
 import torch
 import h5py
 import numpy as np
@@ -12,6 +14,7 @@ class H5ADDataset(torch.utils.data.Dataset):
     _data_shape = None
     _data_sparse_format = False
     _data_sparse_indptr = None
+    _data_row_index = None
 
     file_name = None
     layer = None
@@ -19,12 +22,14 @@ class H5ADDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         file_name,
-        layer='X'
+        layer='X',
+        obs_include_mask=None
     ):
         self.file_name = file_name
         self.layer = layer
 
         self._filehandle = h5py.File(file_name)
+        weakref.finalize(self, lambda x: x.close(), self._filehandle)
 
         if layer == 'X':
             self._data_reference = self._filehandle['X']
@@ -37,23 +42,22 @@ class H5ADDataset(torch.utils.data.Dataset):
         if self._data_sparse_format:
             self._data_sparse_indptr = self._data_reference['indptr'][:]
 
-    def __del__(
-        self
-    ):
-        if self._filehandle is not None:
-            self._filehandle.close()
+        self._data_row_index = np.arange(self._data_shape[0])
 
-        super()
+        if obs_include_mask is not None:
+            self._data_row_index = self._data_row_index[obs_include_mask]
 
     def __getitem__(self, i):
 
+        row_idx = self._data_row_index[i]
+
         if self._data_sparse_format:
-            return self._get_data_sparse(i)
+            return self._get_data_sparse(row_idx)
         else:
-            return self._get_data_dense(i)
+            return self._get_data_dense(row_idx)
 
     def __len__(self):
-        return self._data_shape[0]
+        return self._data_row_index.shape[0]
 
     @staticmethod
     def _get_shape(ref):
