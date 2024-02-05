@@ -78,9 +78,14 @@ class _PriorMixin:
         activation='softplus'
     ):
 
-        self.prior_network = self.process_prior(
-            prior_network
-        )
+        if isinstance(prior_network, tuple):
+            self.g, self.k = prior_network
+            self.prior_network = prior_network
+
+        else:
+            self.prior_network = self.process_prior(
+                prior_network
+            )
 
         self.encoder = torch.nn.Sequential(
             torch.nn.Linear(self.g, self.k, bias=False)
@@ -93,12 +98,13 @@ class _PriorMixin:
 
         self.activation = activation
 
-        # Replace initialized encoder weights with prior weights
-        self.mask_input_weights(
-            self.prior_network,
-            use_mask_weights=use_prior_weights,
-            layer_name='weight'
-        )
+        if not isinstance(prior_network, tuple):
+            # Replace initialized encoder weights with prior weights
+            self.mask_input_weights(
+                self.prior_network,
+                use_mask_weights=use_prior_weights,
+                layer_name='weight'
+            )
 
         return self
 

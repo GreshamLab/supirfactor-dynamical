@@ -28,6 +28,25 @@ TEST_MEDIUM = torch.rand((3, 10, 4))
 TEST_LONG = torch.rand((3, 50, 4))
 
 
+class TestTFAutoencoderNoPrior(unittest.TestCase):
+
+    def setUp(self) -> None:
+        torch.manual_seed(55)
+        self.ae = TFAutoencoder(A.shape)
+
+    def test_initialize(self):
+
+        self.assertEqual(
+            self.ae.k,
+            3
+        )
+
+        self.assertEqual(
+            self.ae.g,
+            4
+        )
+
+
 class TestTFAutoencoder(unittest.TestCase):
 
     def setUp(self) -> None:
