@@ -6,7 +6,9 @@ from .multimodal_dataset import (
 )
 
 from .anndata_backed_dataset import (
-    H5ADDataset
+    H5ADDataset,
+    H5ADDatasetIterable,
+    H5ADDatasetStratified
 )
 
 class ChromatinDataset(MultimodalDataset):

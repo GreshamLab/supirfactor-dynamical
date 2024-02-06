@@ -1,9 +1,9 @@
 import unittest
-
 import anndata as ad
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
+import pandas.testing as pdt
 import scipy.sparse as sps
 import torch
 import tempfile
@@ -19,7 +19,9 @@ from ._stubs import (
 from supirfactor_dynamical.datasets import (
     TimeDataset,
     MultimodalDataLoader,
-    H5ADDataset
+    H5ADDataset,
+    H5ADDatasetIterable,
+    H5ADDatasetStratified
 )
 
 
@@ -74,7 +76,7 @@ class TestTimeDataset(unittest.TestCase):
 
         self.assertTrue(
             all(
-                self.adata.obs['time'][idx].is_monotonic_increasing
+                self.adata.obs['time'].iloc[idx].is_monotonic_increasing
                 for idx in td.shuffle_idxes
             )
         )
@@ -433,7 +435,7 @@ class TestTimeDataset(unittest.TestCase):
 
         self.assertFalse(
             all(
-                self.adata.obs['time'][idx].is_monotonic_increasing
+                self.adata.obs['time'].iloc[idx].is_monotonic_increasing
                 for idx in td.shuffle_idxes
             )
         )
@@ -453,7 +455,7 @@ class TestTimeDataset(unittest.TestCase):
 
         self.assertFalse(
             all(
-                self.adata.obs['time'][idx].is_monotonic_increasing
+                self.adata.obs['time'].iloc[idx].is_monotonic_increasing
                 for idx in td.shuffle_idxes
             )
         )
@@ -494,6 +496,8 @@ class TestTimeDatasetSparse(TestTimeDataset):
 
 class TestADBacked(unittest.TestCase):
 
+    dataset = None
+
     @classmethod
     def setUpClass(cls):
         cls.tempdir = tempfile.TemporaryDirectory()
@@ -507,9 +511,16 @@ class TestADBacked(unittest.TestCase):
         self.adata.layers['tst'] = self.adata.X.copy()
         self.adata.write(self.filename)
 
+    def tearDown(self) -> None:
+        if self.dataset is not None:
+            self.dataset.close()
+
+        return super().tearDown()
+
     def test_load_h5(self):
 
         dataset = H5ADDataset(self.filename)
+        self.dataset = dataset
 
         self.assertEqual(
             len(dataset),
@@ -539,6 +550,7 @@ class TestADBacked(unittest.TestCase):
             self.filename,
             obs_include_mask=np.arange(50, 100)
         )
+        self.dataset = dataset
 
         self.assertEqual(
             len(dataset),
@@ -567,6 +579,33 @@ class TestADBacked(unittest.TestCase):
             data[0].numpy()
         )
 
+    def test_load_h5_layer(self):
+
+        dataset = H5ADDataset(self.filename, layer='tst')
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset),
+            100
+        )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=10,
+            shuffle=True
+        )
+
+        lens = [d.shape[0] for d in dataloader]
+
+        self.assertEqual(
+            len(lens),
+            10
+        )
+        self.assertListEqual(
+            lens,
+            [10] * 10
+        )
+
 
 class TestADBackedSparse(TestADBacked):
 
@@ -577,3 +616,268 @@ class TestADBackedSparse(TestADBacked):
         self.adata.obs['time'] = T
         self.adata.layers['tst'] = self.adata.X.copy()
         self.adata.write(self.filename)
+
+
+class TestADBackedChunk(unittest.TestCase):
+
+    dataset = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            X
+        )
+        self.adata.obs['time'] = T
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)
+
+    def tearDown(self) -> None:
+        if self.dataset is not None:
+            self.dataset.close()
+
+        return super().tearDown()
+
+    def test_load_h5(self):
+
+        dataset = H5ADDatasetIterable(
+            self.filename,
+            file_chunk_size=50
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.file_chunks),
+            2
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[0],
+            np.arange(50)
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[1],
+            np.arange(50, 100)
+        )
+
+        dataset.load_chunk(0)
+
+        npt.assert_array_equal(
+            dataset._data_loaded_chunk.numpy(),
+            X[0:50, :]
+        )
+
+        dataset.load_chunk(1)
+
+        npt.assert_array_equal(
+            dataset._data_loaded_chunk.numpy(),
+            X[50:100, :]
+        )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=10
+        )
+
+        lens = [d.shape[0] for d in dataloader]
+
+        self.assertEqual(
+            len(lens),
+            10
+        )
+        self.assertListEqual(
+            lens,
+            [10] * 10
+        )
+
+    def test_h5_mask(self):
+
+        dataset = H5ADDatasetIterable(
+            self.filename,
+            obs_include_mask=np.arange(50, 100),
+            file_chunk_size=27
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.file_chunks),
+            2
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[0],
+            np.arange(50, 77)
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[1],
+            np.arange(77, 100)
+        )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=50
+        )
+
+        data = [d for d in dataloader]
+
+        self.assertEqual(
+            len(data),
+            1
+        )
+        self.assertEqual(
+            data[0].shape[0],
+            50
+        )
+
+
+class TestADBackedChunkSparse(TestADBackedChunk):
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+        self.adata.obs['time'] = T
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)
+
+
+class TestADBackedStratified(unittest.TestCase):
+
+    dataset = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            X
+        )
+        self.adata.obs['time'] = T
+
+        _strats = np.tile(["A", "B", "C"], 34)[0:100]
+        _strats[[3, 6, 10]] = 'D'
+        self.adata.obs['strat'] = _strats
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)
+
+    def tearDown(self) -> None:
+        if self.dataset is not None:
+            self.dataset.close()
+
+        return super().tearDown()
+
+    def test_load_h5(self):
+
+        dataset = H5ADDatasetStratified(
+            self.filename,
+            'strat',
+            file_chunk_size=50
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.file_chunks),
+            2
+        )
+
+        pdt.assert_series_equal(
+            self.adata.obs['strat'],
+            dataset.stratification_grouping
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[0],
+            np.arange(50)
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[1],
+            np.arange(50, 100)
+        )
+
+        for c, s in enumerate([slice(0, 50), slice(50, 100)]):
+            dataset.load_chunk(c)
+
+            npt.assert_array_equal(
+                dataset._data_loaded_chunk.numpy(),
+                X[s, :]
+            )
+            self.assertEqual(
+                len(dataset._data_loaded_stratification),
+                4
+            )
+            for i in range(4):
+                _idx = np.nonzero(
+                    self.adata.obs['strat'].iloc[s].cat.codes == i
+                )[0]
+                npt.assert_array_equal(
+                    _idx,
+                    np.intersect1d(
+                        _idx,
+                        dataset._data_loaded_stratification[i]
+                    )
+                )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=10
+        )
+
+        lens = [d.shape[0] for d in dataloader]
+
+        self.assertEqual(
+            len(lens),
+            6
+        )
+        self.assertListEqual(
+            lens,
+            [10] * 6
+        )
+
+    def test_h5_mask(self):
+
+        dataset = H5ADDatasetStratified(
+            self.filename,
+            'strat',
+            obs_include_mask=np.arange(0, 50),
+            file_chunk_size=27
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.file_chunks),
+            2
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[0],
+            np.arange(27)
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[1],
+            np.arange(27, 50)
+        )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=50
+        )
+
+        data = [d for d in dataloader]
+
+        self.assertEqual(
+            len(data),
+            1
+        )
+        self.assertEqual(
+            data[0].shape[0],
+            33
+        )
