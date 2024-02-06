@@ -241,6 +241,10 @@ class H5ADDatasetIterable(
         self._chunk_index_order = np.arange(self._data_loaded_chunk.shape[0])
         self.rng.shuffle(self._chunk_index_order)
 
+    def clear_chunks(self):
+        self._data_loaded_chunk = None
+        self._chunk_index_order = None
+
     def __iter__(self):
 
         worker_info = torch.utils.data.get_worker_info()
@@ -270,6 +274,8 @@ class H5ADDatasetIterable(
 
             for d in self._chunk_index_order:
                 yield self._data_loaded_chunk[d, :]
+
+        self.clear_chunks()
 
 
 class H5ADDatasetStratified(
@@ -325,6 +331,10 @@ class H5ADDatasetStratified(
 
         for i in self._data_loaded_stratification:
             self.rng.shuffle(i)
+
+    def clear_chunks(self):
+        super().clear_chunks()
+        self._data_loaded_stratification = None
 
     def get_chunk_order(self):
 
