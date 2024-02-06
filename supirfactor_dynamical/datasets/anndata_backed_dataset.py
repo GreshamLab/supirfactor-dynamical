@@ -104,16 +104,20 @@ class _H5ADLoader:
         _left = indptr[0]
         _right = indptr[-1]
 
-        return torch.Tensor(
-            csr_array(
-                (
-                    self._data_reference['data'][_left:_right],
-                    self._data_reference['indices'][_left:_right],
-                    indptr - indptr[0]
-                ),
-                shape=(end - start, self._data_shape[1])
-            ).todense()
-        )
+        return torch.sparse_csr_tensor(
+            torch.tensor(
+                indptr - _left,
+                dtype=torch.int64
+            ),
+            torch.tensor(
+                self._data_reference['indices'][_left:_right],
+                dtype=torch.int64
+            ),
+            torch.Tensor(
+                self._data_reference['data'][_left:_right]
+            ),
+            size=(end - start, self._data_shape[1])
+        ).to_dense()
 
     def _load_dense(self, start, end):
         return torch.Tensor(
