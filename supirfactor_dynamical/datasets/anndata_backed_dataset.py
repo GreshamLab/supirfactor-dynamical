@@ -72,7 +72,9 @@ class _H5ADLoader:
         self._data_row_index = np.arange(self._data_shape[0])
 
         if obs_include_mask is not None:
-            self._data_row_index = self._data_row_index[obs_include_mask]
+            self._data_row_index = np.sort(
+                self._data_row_index[obs_include_mask]
+            )
 
     @staticmethod
     def _get_shape(ref):
