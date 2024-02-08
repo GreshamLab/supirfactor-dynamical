@@ -27,6 +27,17 @@ class SupirFactorBiophysical(
         'biophysical_decay_rate'
     ]
 
+    _serialize_args = [
+        'prior_network',
+        'input_dropout_rate',
+        'hidden_dropout_rate',
+        'activation',
+        'output_activation',
+        'decay_epoch_delay',
+        'decay_k',
+        'separately_optimize_decay_model'
+    ]
+
     separately_optimize_decay_model = False
     decay_epoch_delay = 0
     decay_k = 20
@@ -112,6 +123,7 @@ class SupirFactorBiophysical(
         if decay_model is False:
 
             self._decay_model = None
+            self.decay_k = None
 
         elif decay_model is not None:
 

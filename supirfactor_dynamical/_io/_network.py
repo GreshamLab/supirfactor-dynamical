@@ -197,7 +197,7 @@ def _write_df(
     with pd.HDFStore(file_name, mode="a") as f:
         df.to_hdf(
             f,
-            key
+            key=key
         )
 
 
@@ -208,5 +208,5 @@ def _read_df(
     with pd.HDFStore(file_name, mode='r') as f:
         return pd.read_hdf(
             f,
-            key
+            key=key
         )

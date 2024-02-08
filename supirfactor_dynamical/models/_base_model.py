@@ -20,7 +20,6 @@ class _TFMixin(
     _ScalingMixin
 ):
 
-    gene_loss_sum_axis = 0
     type_name = "base"
 
     hidden_final = None

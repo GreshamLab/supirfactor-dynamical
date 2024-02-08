@@ -182,7 +182,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             velocity=self.velocity
         )(self.prior, use_prior_weights=True)
 
-        ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
@@ -325,7 +325,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             'static',
             velocity=self.velocity
         )(self.prior, use_prior_weights=True)
-        ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
@@ -344,8 +344,8 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )
 
         self._compare_module(
-            ae.decoder,
-            loaded_ae.decoder
+            ae._decoder,
+            loaded_ae._decoder
         )
 
         npt.assert_almost_equal(

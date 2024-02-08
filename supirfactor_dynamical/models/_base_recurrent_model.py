@@ -15,10 +15,16 @@ class _TF_RNN_mixin(
     _TrainingMixin
 ):
 
-    gene_loss_sum_axis = (0, 1)
-
     training_r2_over_time = None
     validation_r2_over_time = None
+
+    _serialize_args = [
+        'prior_network',
+        'input_dropout_rate',
+        'hidden_dropout_rate',
+        'activation',
+        'output_activation'
+    ]
 
     @property
     def recurrent_weights(self):

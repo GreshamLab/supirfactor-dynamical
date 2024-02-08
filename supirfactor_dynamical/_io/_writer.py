@@ -2,55 +2,16 @@ import h5py
 import numpy as np
 
 from ._network import write_network
-
-
-_SERIALIZE_ARGS = [
-    'input_dropout_rate',
-    'intermediate_dropout_rate',
-    'hidden_dropout_rate',
-    'output_t_plus_one',
-    'n_additional_predictions',
-    'loss_offset',
-    '_velocity_model',
-    'time_dependent_decay',
-    'decay_k',
-    'decay_epoch_delay',
-    '_velocity_inverse_scaler',
-    '_count_inverse_scaler',
-    '_training_loss',
-    '_validation_loss',
-    'training_time',
-    'training_r2',
-    'validation_r2',
-    'n_genes',
-    'hidden_layer_width',
-    'n_peaks',
-    'output_activation',
-    'tfa_activation',
-    'activation',
-    'intermediate_sizes',
-    'decoder_sizes'
-]
-
-_SERIALIZE_ENCODED_ARGS = [
-    'output_activation',
-    'activation',
-    'tfa_activation'
-]
-
-_SERIALIZE_NETWORKS = [
-    'prior_network',
-    'peak_tf_prior_network',
-    'gene_peak_mask'
-]
-
-_ENCODE_ACTIVATIONS = {
-    None: 0,
-    'relu': 1,
-    'softplus': 2,
-    'sigmoid': 3,
-    'tanh': 4
-}
+from ._args import (
+    _SERIALIZE_RUNTIME_ATTRS,
+    _SCALER_ARGS,
+    _SERIALIZE_MODEL_TYPE_ATTRS,
+    _SERIALIZE_ARGS,
+    _SERIALIZE_NETWORKS,
+    _SERIALIZE_TIME_ARGS,
+    _SERIALIZE_ENCODED_ARGS,
+    _ENCODE_ACTIVATIONS
+)
 
 
 def write(
@@ -85,9 +46,18 @@ def _write_state(
     prefix=''
 ):
 
+    if hasattr(model_object, '_serialize_args'):
+        _serialize_args = model_object._serialize_args
+    else:
+        _serialize_args = _SERIALIZE_ARGS
+
     _serialize_args = [
-        arg
-        for arg in _SERIALIZE_ARGS
+        arg for arg in
+        _serialize_args +
+        _SERIALIZE_RUNTIME_ATTRS +
+        _SERIALIZE_TIME_ARGS +
+        [x[0] for x in _SCALER_ARGS] +
+        _SERIALIZE_MODEL_TYPE_ATTRS
         if hasattr(model_object, arg)
     ]
 

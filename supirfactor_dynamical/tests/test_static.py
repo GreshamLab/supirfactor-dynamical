@@ -52,7 +52,7 @@ class TestTFAutoencoder(unittest.TestCase):
     def setUp(self) -> None:
         torch.manual_seed(55)
         self.ae = TFAutoencoder(A, use_prior_weights=True)
-        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        self.ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
@@ -536,7 +536,7 @@ class TestTFAutoencoderOffset(unittest.TestCase):
         )
 
         self.ae = TFAutoencoder(A, use_prior_weights=True)
-        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        self.ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
 
@@ -690,23 +690,28 @@ class TestAutoencoder(TestTFAutoencoder):
         self.ae.encoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(A.T, dtype=torch.float32)
         )
-        self.ae.decoder[0].weight = torch.nn.parameter.Parameter(
+        self.ae._decoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(pinv(A).T, dtype=torch.float32)
         )
-        self.ae.encoder[2].weight = torch.nn.parameter.Parameter(
+        self.ae._intermediate[0].weight = torch.nn.parameter.Parameter(
             torch.eye(3, dtype=torch.float32)
         )
-        self.ae.encoder[2].weight.requires_grad = False
+        self.ae._intermediate[0].weight.requires_grad = False
 
     def test_module_construction(self):
 
         self.assertEqual(
             len(self.ae.encoder),
-            4
+            2
         )
 
         self.assertEqual(
-            len(self.ae.decoder),
+            len(self.ae._intermediate),
+            3
+        )
+
+        self.assertEqual(
+            len(self.ae._decoder),
             2
         )
 

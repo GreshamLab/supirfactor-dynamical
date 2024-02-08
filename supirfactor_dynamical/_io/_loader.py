@@ -3,63 +3,22 @@ import collections
 import torch
 
 from ._network import read_network
+from ._args import (
+    _SERIALIZE_TIME_ARGS,
+    _SERIALIZE_NETWORKS,
+    _SCALER_ARGS,
+    _SERIALIZE_MODEL_TYPE_ATTRS,
+    _SERIALIZE_RUNTIME_ATTRS,
+    _SERIALIZE_ENCODED_ARGS,
+    _ENCODE_ACTIVATIONS
+)
 
 from ..models import (
     get_model
 )
 
-TIME_KWARGS = [
-    'output_t_plus_one',
-    'n_additional_predictions',
-    'loss_offset'
-]
-
-MODEL_TYPE_KWARGS = [
-    '_velocity_model'
-]
-
-FREEZE_ARGS = [
-    '_pretrained_count',
-    '_pretrained_decay'
-]
-
-SCALER_ARGS = [
-    ('_count_inverse_scaler', 'count_scaling'),
-    ('_velocity_inverse_scaler', 'velocity_scaling')
-]
-
-DEPRECATED_ARGS = [
-    '_decay_model',
-    '_pretrained_count',
-    '_pretrained_decay',
-    'time_dependent_decay'
-]
-
-NETWORK_ARGS = [
-    'prior_network',
-    'peak_tf_prior_network',
-    'gene_peak_mask'
-]
-
-INFO_KWARGS = [
-    'training_time',
-    '_training_loss',
-    '_validation_loss',
-    'training_r2',
-    'validation_r2'
-]
-
-_SERIALIZE_ENCODED_ARGS = [
-    'output_activation',
-    'activation'
-]
-
 _DECODE_ACTIVATIONS = {
-    0: None,
-    1: 'relu',
-    2: 'softplus',
-    3: 'sigmoid',
-    4: 'tanh'
+    v: k for k, v in _ENCODE_ACTIVATIONS.items()
 }
 
 _FORCE_UNIT = {
@@ -113,14 +72,15 @@ def read(
         kwargs = {
             k[_pre_len:]: _load_h5_dataset(f, k)
             for k in _state_args
+            if k not in _SERIALIZE_NETWORKS
         }
 
     for k, func in _FORCE_UNIT.items():
-        if k in kwargs:
+        if k in kwargs and kwargs[k] is not None:
             kwargs[k] = func(kwargs[k])
 
     # Get the network information
-    for net_arg in NETWORK_ARGS:
+    for net_arg in _SERIALIZE_NETWORKS:
         _net = read_network(
             file_name,
             prefix + net_arg
@@ -130,27 +90,20 @@ def read(
             kwargs[net_arg] = _net
 
     time_kwargs = {
-        k: kwargs.pop(k, None) for k in TIME_KWARGS
+        k: kwargs.pop(k, None) for k in _SERIALIZE_TIME_ARGS
     }
 
     model_type_kwargs = {
-        k: kwargs.pop(k, False) for k in MODEL_TYPE_KWARGS
-    }
-
-    freeze_kwargs = {
-        k: kwargs.pop(k, False) for k in FREEZE_ARGS
+        k: kwargs.pop(k, False) for k in _SERIALIZE_MODEL_TYPE_ATTRS
     }
 
     scaling_kwargs = {
-        k[1]: kwargs.pop(k[0], None) for k in SCALER_ARGS
+        k[1]: kwargs.pop(k[0], None) for k in _SCALER_ARGS
     }
 
     info_kwargs = {
-        k: kwargs.pop(k, None) for k in INFO_KWARGS
+        k: kwargs.pop(k, None) for k in _SERIALIZE_RUNTIME_ATTRS
     }
-
-    for dead_arg in DEPRECATED_ARGS:
-        kwargs.pop(dead_arg, None)
 
     for encoded_arg in _SERIALIZE_ENCODED_ARGS:
         if encoded_arg in kwargs:
@@ -191,9 +144,6 @@ def read(
     model.load_state_dict(
         _state_dict
     )
-
-    if freeze_kwargs['_pretrained_decay']:
-        model._pretrained_decay = True
 
     for k, v in info_kwargs.items():
         setattr(model, k, v)
