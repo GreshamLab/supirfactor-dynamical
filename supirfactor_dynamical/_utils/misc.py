@@ -42,6 +42,17 @@ def _cat(_data, dim):
         )
 
 
+def _nobs(x):
+
+    if isinstance(x, (tuple, list)):
+        return _nobs(x[0])
+
+    if x.ndim == 1:
+        return 1
+    else:
+        return x.shape[0]
+
+
 def _add(x, y):
 
     if x is None and y is None:

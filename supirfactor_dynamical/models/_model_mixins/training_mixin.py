@@ -10,7 +10,8 @@ from supirfactor_dynamical._utils import (
     _calculate_tss,
     _calculate_r2,
     _aggregate_r2,
-    _cat
+    _cat,
+    _nobs
 )
 
 from supirfactor_dynamical._io._writer import write
@@ -33,6 +34,8 @@ class _TrainingMixin:
 
     _training_loss = None
     _validation_loss = None
+    _training_n = None
+    _validation_n = None
     _loss_type_names = None
 
     training_r2 = None
@@ -75,6 +78,20 @@ class _TrainingMixin:
     def validation_loss_df(self):
         return self._loss_df(self.validation_loss)
 
+    @property
+    def training_n(self):
+        if self._training_n is None:
+            self._training_n = []
+
+        return np.array(self._training_n)
+
+    @property
+    def validation_n(self):
+        if self._validation_n is None:
+            self._validation_n = []
+
+        return np.array(self._validation_n)
+
     def train_model(
         self,
         training_dataloader,
@@ -114,15 +131,18 @@ class _TrainingMixin:
         # Set training time and create loss lists
         self.set_training_time()
         self.training_loss
+        self.training_n
 
         if validation_dataloader is not None:
             self.validation_loss
+            self.validation_n
 
         for epoch_num in tqdm.trange(epochs):
 
             self.train()
 
             _batch_losses = []
+            _batch_n = 0
             for train_x in training_dataloader:
 
                 train_x = to(train_x, self.device)
@@ -135,10 +155,12 @@ class _TrainingMixin:
                 )
 
                 _batch_losses.append(mse)
+                _batch_n = _batch_n + _nobs(train_x)
 
             self._training_loss.append(
                 np.mean(np.array(_batch_losses), axis=0)
             )
+            self._training_n.append(_batch_n)
 
             # Get validation losses during training
             # if validation data was provided
@@ -221,6 +243,7 @@ class _TrainingMixin:
         if validation_dataloader is not None:
 
             _validation_batch_losses = []
+            _validation_n = 0
 
             with torch.no_grad():
                 for val_x in validation_dataloader:
@@ -233,6 +256,10 @@ class _TrainingMixin:
                             loss_function
                         )
                     )
+
+                    _validation_n = _validation_n + _nobs(val_x)
+
+                self._validation_n.append(_validation_n)
 
             return np.mean(np.array(_validation_batch_losses), axis=0)
 
