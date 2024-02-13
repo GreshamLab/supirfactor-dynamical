@@ -4,7 +4,6 @@ import torch.utils.data
 import h5py
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_array
 
 
 def _batched_len(things, batch_length):
@@ -227,6 +226,13 @@ class H5ADDatasetIterable(
 
     def load_chunk(self, chunk):
 
+        if (
+            chunk == 0 and
+            len(self.file_chunks) == 1 and
+            self._data_loaded_chunk is not None
+        ):
+            return
+
         if self._data_sparse_format:
             self._data_loaded_chunk = self._load_sparse(
                 self.file_chunks[chunk][0],
@@ -248,7 +254,10 @@ class H5ADDatasetIterable(
         self.rng.shuffle(self._chunk_index_order)
 
     def clear_chunks(self):
-        self._data_loaded_chunk = None
+
+        if len(self.file_chunks) > 1:
+            self._data_loaded_chunk = None
+
         self._chunk_index_order = None
 
     def __iter__(self):

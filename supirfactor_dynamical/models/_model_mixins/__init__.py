@@ -1,4 +1,4 @@
-from .multiencoder_mixin import _MultiencoderModuleMixin
+from .multiencoder_mixin import _MultiSubmoduleMixin
 from .prior_mixin import _PriorMixin
 from .scaling_mixin import _ScalingMixin
 from .time_offset_mixins import (

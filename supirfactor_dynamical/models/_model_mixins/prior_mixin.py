@@ -108,10 +108,36 @@ class _PriorMixin:
 
         return self
 
+    def create_submodule(
+        self,
+        widths,
+        activation='relu',
+        dropout_rate=0.0
+    ):
+
+        _module = torch.nn.Sequential()
+
+        if widths is not None and len(widths) > 1:
+
+            for s1, s2 in zip(widths[0:-1], widths[1:]):
+                _module.append(
+                    torch.nn.Linear(s1, s2, bias=False)
+                )
+                _module.append(
+                    self.get_activation_function(activation)
+                )
+                _module.append(
+                    torch.nn.Dropout(p=dropout_rate, inplace=True)
+                )
+
+        return _module
+
     def set_decoder(
         self,
         activation='softplus',
-        width=None
+        intermediate_activation=None,
+        decoder_sizes=None,
+        dropout_rate=0.0
     ):
         """
         Set decoder
@@ -121,16 +147,27 @@ class _PriorMixin:
         :type relu: bool, optional
         """
 
-        self.output_activation = activation
+        if intermediate_activation is None:
+            intermediate_activation = activation
 
-        if width is None:
-            width = self.k
+        if decoder_sizes is None:
+            decoder_sizes = [self.k]
 
-        decoder = self.append_activation_function(
-            torch.nn.Sequential(
-                torch.nn.Linear(width, self.g, bias=False),
-            ),
-            activation
+        if len(decoder_sizes) > 1:
+
+            decoder = self.create_submodule(
+                decoder_sizes,
+                activation=intermediate_activation,
+                dropout_rate=dropout_rate
+            )
+        else:
+            decoder = torch.nn.Sequential()
+
+        decoder.append(
+            torch.nn.Linear(decoder_sizes[-1], self.g, bias=False)
+        )
+        decoder.append(
+            self.get_activation_function(activation)
         )
 
         return decoder
@@ -308,7 +345,7 @@ class _PriorMixin:
         **kwargs
     ):
         if activation is None:
-            return None
+            return torch.nn.Identity()
         elif activation.lower() == 'sigmoid':
             return torch.nn.Sigmoid(**kwargs)
         elif activation.lower() == 'softplus':

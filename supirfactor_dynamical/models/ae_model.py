@@ -32,6 +32,7 @@ class TFMultilayerAutoencoder(
     decoder_sizes = None
 
     intermediate_dropout_rate = 0.2
+
     tfa_activation = 'relu'
 
     @property
@@ -69,13 +70,11 @@ class TFMultilayerAutoencoder(
             activation=tfa_activation
         )
 
-        self._intermediate = torch.nn.Sequential()
-        self._decoder = torch.nn.Sequential()
-
         self.intermediate_sizes = intermediate_sizes
         self.decoder_sizes = decoder_sizes
 
         self.tfa_activation = tfa_activation
+        self.activation = activation
         self.output_activation = output_activation
 
         intermediates = [self.k]
@@ -83,38 +82,24 @@ class TFMultilayerAutoencoder(
         if intermediate_sizes is not None:
             intermediates = intermediates + list(intermediate_sizes)
 
-            for s1, s2 in zip(intermediates[0:-1], intermediates[1:]):
-                self._intermediate.append(
-                    torch.nn.Linear(s1, s2, bias=False)
-                )
-                self._intermediate.append(
-                    self.get_activation_function(activation)
-                )
-                self._intermediate.append(
-                    torch.nn.Dropout(p=intermediate_dropout_rate)
-                )
+            self._intermediate = self.create_submodule(
+                intermediates,
+                activation=activation,
+                dropout_rate=intermediate_dropout_rate
+            )
+        else:
+            self._intermediate = torch.nn.Sequential()
 
         decoders = [intermediates[-1]]
 
         if decoder_sizes is not None:
             decoders = decoders + list(decoder_sizes)
 
-            for s1, s2 in zip(decoders[0:-1], decoders[1:]):
-                self._decoder.append(
-                    torch.nn.Linear(s1, s2, bias=False)
-                )
-                self._decoder.append(
-                    self.get_activation_function(activation)
-                )
-                self._decoder.append(
-                    torch.nn.Dropout(p=intermediate_dropout_rate)
-                )
-
-        self._decoder.append(
-            torch.nn.Linear(decoders[-1], self.g, bias=False)
-        )
-        self._decoder.append(
-            self.get_activation_function(output_activation)
+        self._decoder = self.set_decoder(
+            output_activation,
+            intermediate_activation=activation,
+            decoder_sizes=decoders,
+            dropout_rate=intermediate_dropout_rate
         )
 
         self.set_dropouts(

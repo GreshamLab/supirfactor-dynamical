@@ -12,6 +12,9 @@ from ._args import (
     _SERIALIZE_ENCODED_ARGS,
     _ENCODE_ACTIVATIONS
 )
+from ._torch_state import (
+    _write_torch_state
+)
 
 
 def write(
@@ -61,11 +64,11 @@ def _write_state(
         if hasattr(model_object, arg)
     ]
 
-    for k, data in model_object.state_dict().items():
-        f.create_dataset(
-            prefix + k,
-            data=data.numpy()
-        )
+    _write_torch_state(
+        f,
+        model_object,
+        prefix=prefix
+    )
 
     for s_arg in _serialize_args:
 
@@ -80,14 +83,6 @@ def _write_state(
                 prefix + s_arg,
                 data=np.array(_d)
             )
-
-    f.create_dataset(
-        prefix + 'keys',
-        data=np.array(
-            list(model_object.state_dict().keys()),
-            dtype=object
-        )
-    )
 
     f.create_dataset(
         prefix + 'args',

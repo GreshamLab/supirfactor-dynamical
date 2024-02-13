@@ -20,7 +20,8 @@ from .chromatin_model import (
 # Standard mixins
 from ._model_mixins import (
     _TrainingMixin,
-    _VelocityMixin
+    _VelocityMixin,
+    _MultiSubmoduleMixin
 )
 from ._base_model import _TFMixin
 
@@ -48,7 +49,8 @@ _not_velocity = [
 
 def get_model(
     model,
-    velocity=False
+    velocity=False,
+    multisubmodel=False
 ) -> _TFMixin:
 
     try:
@@ -60,7 +62,12 @@ def get_model(
         class TFVelocity(_VelocityMixin, model):
             pass
 
-        return TFVelocity
+        model = TFVelocity
 
-    else:
-        return model
+    if multisubmodel:
+        class TFMultimodule(_MultiSubmoduleMixin, model):
+            pass
+
+        model = TFMultimodule
+
+    return model

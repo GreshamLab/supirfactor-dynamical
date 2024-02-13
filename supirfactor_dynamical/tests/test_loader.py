@@ -734,6 +734,47 @@ class TestADBackedChunk(unittest.TestCase):
             50
         )
 
+    def test_load_h5_big_chunk(self):
+
+        dataset = H5ADDatasetIterable(
+            self.filename,
+            file_chunk_size=5000
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.file_chunks),
+            1
+        )
+
+        npt.assert_array_equal(
+            dataset.file_chunks[0],
+            np.arange(100)
+        )
+
+        dataset.load_chunk(0)
+
+        npt.assert_array_equal(
+            dataset._data_loaded_chunk.numpy(),
+            X
+        )
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=10
+        )
+
+        lens = [d.shape[0] for d in dataloader]
+
+        self.assertEqual(
+            len(lens),
+            10
+        )
+        self.assertListEqual(
+            lens,
+            [10] * 10
+        )
+
 
 class TestADBackedChunkSparse(TestADBackedChunk):
 

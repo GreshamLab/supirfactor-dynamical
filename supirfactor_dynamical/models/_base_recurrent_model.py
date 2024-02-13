@@ -84,6 +84,8 @@ class _TF_RNN_mixin(
             activation=output_activation
         )
 
+        self.output_activation = output_activation
+
         self.set_dropouts(
             input_dropout_rate,
             hidden_dropout_rate

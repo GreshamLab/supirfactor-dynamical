@@ -8,11 +8,7 @@ from supirfactor_dynamical import (
 )
 
 from supirfactor_dynamical.models import (
-    TFAutoencoder
-)
-
-from supirfactor_dynamical.models._model_mixins import (
-    _MultiencoderModuleMixin
+    get_model
 )
 
 from ._stubs import (
@@ -24,15 +20,14 @@ from ._stubs import (
 
 class TestMultiEncoderMixin(unittest.TestCase):
 
+    model = 'static'
+
     def setUp(self) -> None:
 
-        class _multimodel(
-            _MultiencoderModuleMixin,
-            TFAutoencoder
-        ):
-            pass
-
-        self.model = _multimodel(A)
+        self.model = get_model(
+            self.model,
+            multisubmodel=True
+        )(A, use_prior_weights=True)
 
         self.count_data = DataLoader(
             TimeDataset(
@@ -44,6 +39,17 @@ class TestMultiEncoderMixin(unittest.TestCase):
                 sequence_length=3
             ),
             batch_size=25
+        )
+
+        self.model.add_submodel(
+            'lots_o_layers',
+            torch.nn.Sequential(
+                torch.nn.Linear(4, 3),
+                torch.nn.ReLU(),
+                torch.nn.Linear(3, 3),
+                torch.nn.Tanh(),
+                torch.nn.Linear(3, 3)
+            )
         )
 
         return super().setUp()
@@ -62,17 +68,6 @@ class TestMultiEncoderMixin(unittest.TestCase):
 
     def test_two_encoders(self):
 
-        self.model.add_encoder(
-            'lots_o_layers',
-            torch.nn.Sequential(
-                torch.nn.Linear(4, 3),
-                torch.nn.ReLU(),
-                torch.nn.Linear(3, 3),
-                torch.nn.Tanh(),
-                torch.nn.Linear(3, 3)
-            )
-        )
-
         self.model.train_model(self.count_data, 10)
 
         x = self.model(X_tensor)
@@ -88,28 +83,17 @@ class TestMultiEncoderMixin(unittest.TestCase):
             (1, 11)
         )
 
-    def test_param_freeze(self):
-
-        self.model.add_encoder(
-            'lots_o_layers',
-            torch.nn.Sequential(
-                torch.nn.Linear(4, 3),
-                torch.nn.ReLU(),
-                torch.nn.Linear(3, 3),
-                torch.nn.Tanh(),
-                torch.nn.Linear(3, 3)
-            )
-        )
+    def test_param_swap(self):
 
         self.assertEqual(
-            self.model.active_encoder, 'linear'
+            self.model.active_encoder, 'default_encoder'
         )
 
         self.assertEqual(
             len(self.model.encoder), 2
         )
 
-        self.model.select_encoder('lots_o_layers')
+        self.model.select_submodel('lots_o_layers')
 
         self.assertEqual(
             self.model.active_encoder, 'lots_o_layers'
@@ -132,4 +116,46 @@ class TestMultiEncoderMixin(unittest.TestCase):
         self.assertEqual(
             self.model.training_loss_df.shape,
             (1, 11)
+        )
+
+        torch.testing.assert_close(
+            torch.tensor(A.T),
+            self.model.module_bag['default_encoder'][0].weight
+        )
+
+    def test_param_freeze(self):
+
+        self.model.freeze_submodel('encoder')
+
+        for p in self.model.encoder.parameters():
+            self.assertFalse(p.requires_grad)
+
+        torch.testing.assert_close(
+            torch.tensor(A.T),
+            self.model.encoder[0].weight
+        )
+
+        self.model.train_model(self.count_data, 10)
+
+        torch.testing.assert_close(
+            torch.tensor(A.T),
+            self.model.encoder[0].weight
+        )
+
+        decoder_weight = torch.clone(self.model._decoder[0].weight.detach())
+
+        self.model.freeze_submodel('encoder', unfreeze=True)
+        self.model.freeze_submodel('decoder')
+
+        self.model.train_model(self.count_data, 10)
+
+        with self.assertRaises(AssertionError):
+            torch.testing.assert_close(
+                torch.tensor(A.T),
+                self.model.encoder[0].weight
+            )
+
+        torch.testing.assert_close(
+            decoder_weight,
+            self.model._decoder[0].weight
         )

@@ -1,6 +1,4 @@
 import h5py
-import collections
-import torch
 
 from ._network import read_network
 from ._args import (
@@ -11,6 +9,10 @@ from ._args import (
     _SERIALIZE_RUNTIME_ATTRS,
     _SERIALIZE_ENCODED_ARGS,
     _ENCODE_ACTIVATIONS
+)
+from ._torch_state import (
+    _read_torch_state,
+    _load_h5_dataset
 )
 
 from ..models import (
@@ -47,17 +49,10 @@ def read(
 
     with h5py.File(file_name, 'r') as f:
 
-        _state_dict = collections.OrderedDict()
-
-        _state_dict_keys = [
-            prefix + x.decode('utf-8')
-            for x in _load_h5_dataset(f, prefix + 'keys')
-        ]
-
-        for k in _state_dict_keys:
-            _state_dict[k[_pre_len:]] = torch.tensor(
-                _load_h5_dataset(f, k)
-            )
+        _state_dict = _read_torch_state(
+            f,
+            prefix=prefix
+        )
 
         _state_args = [
             prefix + x.decode('utf-8')
@@ -113,7 +108,7 @@ def read(
     if _state_model == 'biophysical':
 
         # Load a decay model if one exists, otherwise no decay model
-        if any([k.startswith("_decay") for k in _state_dict_keys]):
+        if any([k.startswith("_decay") for k in _state_dict.keys()]):
             kwargs['decay_model'] = None
         else:
             kwargs['decay_model'] = False
@@ -121,7 +116,8 @@ def read(
     if model_class is None:
         model = get_model(
             _state_model,
-            velocity=model_type_kwargs['_velocity_model']
+            velocity=model_type_kwargs['_velocity_model'],
+            multisubmodel=model_type_kwargs['_multisubmodel_model']
         )(
             **kwargs
         )
@@ -149,15 +145,3 @@ def read(
         setattr(model, k, v)
 
     return model
-
-
-def _load_h5_dataset(
-    h5_handle,
-    key
-):
-
-    if key in h5_handle.keys():
-        return h5_handle[key][()]
-
-    else:
-        return None

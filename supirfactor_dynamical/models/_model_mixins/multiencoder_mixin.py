@@ -1,59 +1,182 @@
-class _MultiencoderModuleMixin:
+import warnings
 
-    active_encoder = None
+from supirfactor_dynamical._io._torch_state import (
+    write_module,
+    read_state_dict
+)
 
-    _encoder_bag = None
-    _encoder_labels = None
+
+_DEFAULT_MODELS = [
+    'default_encoder',
+    'default_decoder',
+    'default_intermediate'
+]
+
+
+class _MultiSubmoduleMixin:
+
+    _multisubmodel_model = True
+
+    active_encoder = _DEFAULT_MODELS[0]
+    active_decoder = _DEFAULT_MODELS[1]
+    active_intermediate = _DEFAULT_MODELS[2]
+
+    _module_bag = None
 
     @property
-    def encoder_bag(self):
+    def module_bag(self):
 
-        if self._encoder_bag is None:
-            self._encoder_bag = {}
-            self._encoder_bag['linear'] = self.encoder
-            self.encoder_labels.append('linear')
-            self.active_encoder = 'linear'
+        if self._module_bag is None:
+            self._module_bag = {}
+            self._module_bag[_DEFAULT_MODELS[0]] = self.encoder
+            self._module_bag[_DEFAULT_MODELS[1]] = self._decoder
 
-        return self._encoder_bag
+            if hasattr(self, '_intermediate'):
+                self._module_bag[_DEFAULT_MODELS[2]] = self._intermediate
+
+        return self._module_bag
 
     @property
-    def encoder_labels(self):
+    def module_labels(self):
 
-        if self._encoder_labels is None:
-            self._encoder_labels = []
+        if self._module_bag is None:
+            return None
 
-        return self._encoder_labels
+        else:
+            return list(self._module_bag.keys())
 
-    def encoder_parameters(
+    def submodel_parameters(
         self,
-        encoder_name
+        module_name
     ):
 
-        self._check_encoder_label(encoder_name)
-        return self.encoder_bag[encoder_name].parameters()
+        self._check_label(module_name)
+        return self.module_bag[module_name].parameters()
 
-    def add_encoder(
+    def add_submodel(
         self,
-        encoder_name,
+        module_name,
         module
     ):
 
-        self.encoder_bag[encoder_name] = module
-        self.encoder_labels.append(encoder_name)
+        if (
+            self.module_labels is not None and
+            module_name in self.module_labels
+        ):
+            raise ValueError(
+                f"Submodel {module_name} exists:\n"
+                f"{module}"
+            )
 
-    def select_encoder(
+        self.module_bag[module_name] = module
+
+    def select_submodel(
         self,
-        encoder_name
+        module_name,
+        model_type='encoder'
     ):
 
-        self._check_encoder_label(encoder_name)
-        self.encoder = self.encoder_bag[encoder_name]
-        self.active_encoder = encoder_name
+        self._check_label(module_name)
 
-    def _check_encoder_label(self, label):
+        if model_type == 'encoder':
+            self.encoder = self.module_bag[module_name]
+            self.active_encoder = module_name
+        elif model_type == 'decoder':
+            self._decoder = self.module_bag[module_name]
+            self.active_decoder = module_name
+        elif model_type == 'intermediate':
+            self._intermediate = self.module_bag[module_name]
+            self.active_intermediate = module_name
+        else:
+            raise ValueError
 
-        if label not in self.encoder_bag.keys():
+    def freeze_submodel(
+        self,
+        model_type,
+        unfreeze=False
+    ):
+
+        if model_type == 'encoder':
+            _model_ref = self.encoder
+        elif model_type == 'intermediate':
+            _model_ref = self._intermediate
+        elif model_type == 'decoder':
+            _model_ref = self._decoder
+        else:
             raise ValueError(
-                f"Cannot select {label} from available encoders: "
-                f"{', '.join(self.encoder_bag.keys())}"
+                f"model_type must be `encoder`, `decoder`, or "
+                f"`intermediate`; {model_type} provided"
             )
+
+        for param in _model_ref.parameters():
+            param.requires_grad = unfreeze
+
+    def _check_label(self, label):
+
+        if self.module_labels is not None and label not in self.module_labels:
+            raise ValueError(
+                f"Cannot select {label} from "
+                f"available models: {', '.join(self.module_labels)}"
+            )
+
+    def default_submodules(self):
+
+        if self.active_encoder != _DEFAULT_MODELS[0]:
+            self.select_submodel(_DEFAULT_MODELS[0], "encoder")
+        if self.active_decoder != _DEFAULT_MODELS[1]:
+            self.select_submodel(_DEFAULT_MODELS[1], "decoder")
+        if self.active_intermediate != _DEFAULT_MODELS[2]:
+            self.select_submodel(_DEFAULT_MODELS[2], "intermediate")
+
+    def save(
+        self,
+        file_name,
+        **kwargs
+    ):
+
+        if (
+            self._module_bag is not None and
+            not all(x in _DEFAULT_MODELS for x in self.module_labels)
+        ):
+
+            warnings.warn(
+                "Only the default submodels will be saved"
+            )
+
+            self.default_submodules()
+
+        super().save(
+            file_name,
+            **kwargs
+        )
+
+    def save_submodel_state(
+        self,
+        module_name,
+        file_name,
+        **kwargs
+    ):
+
+        self._check_label(module_name)
+
+        write_module(
+            self.module_bag[module_name],
+            file_name,
+            **kwargs
+        )
+
+    def load_submodel_state(
+        self,
+        module_name,
+        file_name,
+        **kwargs
+    ):
+
+        self._check_label(module_name)
+
+        self.module_bag[module_name].load_state_dict(
+            read_state_dict(
+                file_name,
+                **kwargs
+            )
+        )
