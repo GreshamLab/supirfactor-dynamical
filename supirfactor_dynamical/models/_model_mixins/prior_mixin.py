@@ -127,7 +127,7 @@ class _PriorMixin:
                     self.get_activation_function(activation)
                 )
                 _module.append(
-                    torch.nn.Dropout(p=dropout_rate, inplace=True)
+                    torch.nn.Dropout(p=dropout_rate)
                 )
 
         return _module
