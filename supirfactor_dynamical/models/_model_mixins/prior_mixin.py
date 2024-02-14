@@ -20,6 +20,9 @@ class _PriorMixin:
         if self.prior_network is None:
             return None
 
+        elif isinstance(self.prior_network, tuple):
+            return self.prior_network
+
         else:
             return self._to_dataframe(
                 self.prior_network,

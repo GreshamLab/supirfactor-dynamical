@@ -225,6 +225,22 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             }
         )
 
+    def test_h5_no_prior(self):
+
+        ae = get_model(
+            'static',
+            velocity=self.velocity
+        )((4, 3))
+
+        ae.save(self.temp_file_name)
+
+        stub = read(
+            self.temp_file_name,
+            model_class=_ModelStub
+        )
+
+        self.assertEqual(stub.prior_network, (4, 3))
+
     def test_h5_dynamic(self):
 
         ae = get_model(

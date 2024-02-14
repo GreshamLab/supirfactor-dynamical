@@ -39,17 +39,17 @@ def write_network(
     if isinstance(data, pd.DataFrame):
         return _write_df(file_name, data, key)
 
-    elif isinstance(data, np.ndarray):
+    elif isinstance(data, (np.ndarray, tuple)):
         return _write_df(file_name, pd.DataFrame(data), key)
 
-    elif not isinstance(data, ad.AnnData):
+    elif isinstance(data, ad.AnnData):
+        _write_ad(file_name, data, key)
+
+    else:
         raise ValueError(
             f"Network data for {key} must be array, anndata, or dataframe; "
             f"{type(data)} provided"
         )
-
-    else:
-        _write_ad(file_name, data, key)
 
 
 def read_network(
@@ -58,7 +58,14 @@ def read_network(
 ):
 
     try:
-        return _read_df(file_name, key)
+        df = _read_df(file_name, key)
+
+        # Assume that this is a null prior
+        # and this encodes # genes & # tfs
+        if df.shape == (2, 1):
+            return (df.iloc[0, 0], df.iloc[1, 0])
+
+        return df
     except (KeyError, TypeError):
         return _read_ad(file_name, key)
 
