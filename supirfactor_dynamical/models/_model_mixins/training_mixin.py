@@ -221,14 +221,16 @@ class _TrainingMixin:
         self,
         x,
         loss_function,
-        loss_weight=None,
-        output_kwargs={},
+        target_data=None,
         **kwargs
     ):
 
+        if target_data is None:
+            target_data = self.output_data(x)
+
         loss = loss_function(
             self._slice_data_and_forward(x, **kwargs),
-            self.output_data(x)
+            target_data
         ).item()
 
         return (loss, )

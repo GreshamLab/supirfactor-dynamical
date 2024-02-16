@@ -513,26 +513,39 @@ class SupirFactorBiophysical(
         self,
         x,
         loss_function,
+        target_data=None,
+        target_decay_data=None,
+        **kwargs
     ):
 
         # Get model output for training data
         (pos, neg) = self._slice_data_and_forward(
             x,
-            return_submodels=True
+            return_submodels=True,
+            **kwargs
         )
+
+        if target_data is None:
+            target_data = self.output_data(x)
 
         loss = loss_function(
             _add(pos, neg),
-            self.output_data(x)
+            target_data
         ).item()
+
+        del target_data
 
         if (
             self.has_decay and
             self.separately_optimize_decay_model
         ):
+
+            if target_decay_data is None:
+                target_decay_data = self.output_data(x, decay=True)
+
             decay_rate_loss = loss_function(
                 neg,
-                self.output_data(x, decay=True)
+                target_decay_data
             ).item()
         else:
             decay_rate_loss = 0
