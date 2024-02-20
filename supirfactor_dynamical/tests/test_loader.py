@@ -21,7 +21,8 @@ from supirfactor_dynamical.datasets import (
     MultimodalDataLoader,
     H5ADDataset,
     H5ADDatasetIterable,
-    H5ADDatasetStratified
+    H5ADDatasetStratified,
+    H5ADDatasetObsStratified
 )
 
 
@@ -922,3 +923,66 @@ class TestADBackedStratified(unittest.TestCase):
             data[0].shape[0],
             33
         )
+
+
+class TestADObsBacked(unittest.TestCase):
+
+    dataset = None
+    obs_dataset = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
+
+    def setUp(self) -> None:
+        x = X.copy()
+        x[:, 0] = np.arange(x.shape[0])
+        self.adata = ad.AnnData(
+            x
+        )
+        self.adata.obs['time'] = T.astype(str)
+        self.adata.obs['strat'] = np.tile(["A", "B", "C"], 34)[0:100]
+        self.adata.write(self.filename)
+
+    def tearDown(self) -> None:
+        if self.dataset is not None:
+            self.dataset.close()
+
+        if self.obs_dataset is not None:
+            self.obs_dataset.close()
+
+        return super().tearDown()
+
+    def test_obs_alignment(self):
+
+        dataset = H5ADDatasetStratified(
+            self.filename,
+            'strat',
+            file_chunk_size=27,
+            random_seed=876
+        )
+        self.dataset = dataset
+
+        obs_dataset = H5ADDatasetObsStratified(
+            self.filename,
+            'strat',
+            file_chunk_size=27,
+            obs_columns=['time', 'strat'],
+            random_seed=876
+        )
+        self.obs_dataset = obs_dataset
+
+        self.assertEqual(
+            obs_dataset._data_reference.shape,
+            (100, 7)
+        )
+
+        obs_dataset._data_reference[:, 0] = torch.LongTensor(
+            np.arange(100)
+        )
+
+        for i, j in zip(DataLoader(dataset), DataLoader(obs_dataset)):
+            self.assertEqual(
+                i[0][0], j[0][0]
+            )

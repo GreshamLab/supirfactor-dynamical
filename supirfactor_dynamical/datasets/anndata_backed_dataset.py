@@ -4,6 +4,7 @@ import torch.utils.data
 import h5py
 import numpy as np
 import pandas as pd
+from anndata._io.h5ad import read_dataframe
 
 
 def _batched_len(things, batch_length):
@@ -59,6 +60,8 @@ class _H5ADLoader:
 
         if layer == 'X':
             self._data_reference = self._filehandle['X']
+        elif layer == 'obs':
+            self._data_reference = read_dataframe(self._filehandle['obs'])
         else:
             self._data_reference = self._filehandle['layers'][layer]
 
@@ -84,7 +87,11 @@ class _H5ADLoader:
 
     @staticmethod
     def _get_issparse(ref):
-        _encoding = ref.attrs['encoding-type']
+
+        try:
+            _encoding = ref.attrs['encoding-type']
+        except KeyError:
+            return False
 
         if _encoding == 'array':
             return False
@@ -197,7 +204,7 @@ class H5ADDatasetIterable(
     torch.utils.data.IterableDataset
 ):
 
-    rng = None
+    seeder = None
 
     file_chunks = None
     _data_loaded_chunk = None
@@ -219,10 +226,12 @@ class H5ADDatasetIterable(
 
         self.rng = np.random.default_rng(random_seed)
 
-        self.file_chunks = list(_batched_len(
-            self._data_row_index,
-            file_chunk_size
-        ))
+        self.file_chunks = list(
+            _batched_len(
+                self._data_row_index,
+                file_chunk_size
+            )
+        )
 
     def load_chunk(self, chunk):
 
@@ -249,7 +258,7 @@ class H5ADDatasetIterable(
             :
         ]
 
-    def get_chunk_order(self):
+    def get_chunk_order(self, chunk):
         self._chunk_index_order = np.arange(self._data_loaded_chunk.shape[0])
         self.rng.shuffle(self._chunk_index_order)
 
@@ -274,8 +283,8 @@ class H5ADDatasetIterable(
                         np.arange(len(self.file_chunks)),
                         worker_info.num_workers
                     ))[worker_info.id]
-                    )
                 )
+            )
 
     def generator(self, worker_chunks=None):
 
@@ -285,7 +294,7 @@ class H5ADDatasetIterable(
         for c in range(len(worker_chunks)):
 
             self.load_chunk(c)
-            self.get_chunk_order()
+            self.get_chunk_order(c)
 
             for d in self._chunk_index_order:
                 yield self._data_loaded_chunk[d, :]
@@ -351,7 +360,7 @@ class H5ADDatasetStratified(
         super().clear_chunks()
         self._data_loaded_stratification = None
 
-    def get_chunk_order(self):
+    def get_chunk_order(self, chunk):
 
         self._chunk_index_order = np.ascontiguousarray(
             np.stack(tuple(
@@ -360,3 +369,34 @@ class H5ADDatasetStratified(
                 if len(self._data_loaded_stratification[i]) > 0
             ), axis=-1)
         ).reshape(-1)
+
+
+class H5ADDatasetObsStratified(H5ADDatasetStratified):
+
+    def __init__(self, *args, obs_columns=None, **kwargs):
+        kwargs['layer'] = 'obs'
+        super().__init__(*args, **kwargs)
+
+        if obs_columns is not None:
+            self._data_reference = self._data_reference[obs_columns]
+
+        self._data_labels = pd.concat(
+            [
+                self._data_reference[col].cat.categories.to_series()
+                for col in self._data_reference.columns
+            ]
+        )
+
+        self._data_reference = torch.cat(
+            [
+                torch.nn.functional.one_hot(
+                    torch.LongTensor(
+                        self._data_reference[col].cat.codes.values.copy()
+                    )
+                )
+                for col in self._data_reference.columns
+            ],
+            dim=1
+        )
+
+        self._filehandle.close()
