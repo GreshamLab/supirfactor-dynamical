@@ -304,8 +304,9 @@ class TestTFAutoencoder(unittest.TestCase):
 
         self.ae.eval()
 
-        r2 = self.ae._calculate_r2_score(
-            loader
+        r2, _ = self.ae.r2(
+            loader,
+            multioutput='raw_values'
         )
 
         npt.assert_equal(

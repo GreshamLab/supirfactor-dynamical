@@ -5,7 +5,7 @@ from ._model_mixins import (
     _TrainingMixin,
     _TimeOffsetMixinRecurrent
 )
-from .._utils import _aggregate_r2
+from ..postprocessing import r2_score
 
 
 class _TF_RNN_mixin(
@@ -99,24 +99,21 @@ class _TF_RNN_mixin(
     def r2_over_time(
         self,
         training_dataloader,
-        validation_dataloader=None
+        validation_dataloader=None,
+        multioutput='uniform_truncated_average'
     ):
 
         self.eval()
 
         self.training_r2_over_time = [
-            _aggregate_r2(
-                self._calculate_r2_score([x])
-            )
+            r2_score([x], self, multioutput=multioutput)
             for x in training_dataloader.dataset.get_times_in_order()
         ]
 
         if validation_dataloader is not None:
 
             self.validation_r2_over_time = [
-                _aggregate_r2(
-                    self._calculate_r2_score([x])
-                )
+                r2_score([x], self, multioutput=multioutput)
                 for x in validation_dataloader.dataset.get_times_in_order()
             ]
 

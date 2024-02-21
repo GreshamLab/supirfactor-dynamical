@@ -6,16 +6,13 @@ import time
 
 from supirfactor_dynamical._utils import (
     to,
-    _calculate_rss,
-    _calculate_tss,
-    _calculate_r2,
-    _aggregate_r2,
     _cat,
     _nobs
 )
 
 from supirfactor_dynamical._io._writer import write
 from supirfactor_dynamical._utils import _check_data_offsets
+from supirfactor_dynamical.postprocessing.eval import r2_score
 
 from torch.utils.data import DataLoader
 
@@ -366,7 +363,8 @@ class _TrainingMixin:
     def r2(
         self,
         training_dataloader,
-        validation_dataloader=None
+        validation_dataloader=None,
+        multioutput='uniform_truncated_average'
     ):
         """
         Calculate unweighted-average R2 score and store in the model object
@@ -382,48 +380,19 @@ class _TrainingMixin:
 
         self.eval()
 
-        self.training_r2 = _aggregate_r2(
-            self._calculate_r2_score(
-                training_dataloader
-            )
+        self.training_r2 = r2_score(
+            training_dataloader,
+            self,
+            multioutput=multioutput
         )
 
-        if validation_dataloader is not None:
-            self.validation_r2 = _aggregate_r2(
-                self._calculate_r2_score(
-                    validation_dataloader
-                )
-            )
+        self.validation_r2 = r2_score(
+            validation_dataloader,
+            self,
+            multioutput=multioutput
+        )
 
         return self.training_r2, self.validation_r2
-
-    @torch.inference_mode()
-    def _calculate_r2_score(
-        self,
-        dataloader
-    ):
-
-        if dataloader is None:
-            return None
-
-        _rss = 0
-        _ss = 0
-
-        with torch.no_grad():
-            for data in dataloader:
-
-                output_data = self.output_data(data)
-
-                _rss += _calculate_rss(
-                    output_data,
-                    self._slice_data_and_forward(data),
-                )
-
-                _ss += _calculate_tss(
-                    output_data
-                )
-
-        return _calculate_r2(_rss, _ss)
 
     def _slice_data_and_forward(
         self,

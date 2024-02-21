@@ -52,7 +52,7 @@ def train_decoder_submodels(
     model.set_training_time()
     model.training_loss
 
-    _ = [model._check_label(x) for x in decoder_models]
+    [model._check_label(x) for x in decoder_models]
 
     if freeze_embeddings:
         model.freeze_submodel('encoder')
@@ -110,12 +110,6 @@ def train_decoder_submodels(
         )
 
         # Get validation losses during training
-        # if validation data was provided
-        if validation_dataloader is not None:
-            model.validation_loss
-            model.validation_n
-
-            # Get validation losses during training
         # if validation data was provided
         if validation_dataloader is not None:
             model.validation_loss

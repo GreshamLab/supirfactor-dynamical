@@ -78,9 +78,40 @@ def _calculate_r2(rss, tss):
     return r2
 
 
-def _aggregate_r2(r2):
+def _true_positive(x, target):
 
-    r2 = torch.clone(r2)
-    r2[r2 < 0] = 0
+    return torch.logical_and(
+        x,
+        target
+    ).sum(axis=tuple(range(x.ndim - 1)))
 
-    return r2.mean().item()
+
+def _false_positive(x, target):
+
+    return torch.logical_and(
+        x,
+        torch.logical_not(target)
+    ).sum(axis=tuple(range(x.ndim - 1)))
+
+
+def _true_negative(x, target):
+
+    return torch.logical_and(
+        torch.logical_not(x),
+        torch.logical_not(target)
+    ).sum(axis=tuple(range(x.ndim - 1)))
+
+
+def _false_negative(x, target):
+
+    return torch.logical_and(
+        torch.logical_not(x),
+        target
+    ).sum(axis=tuple(range(x.ndim - 1)))
+
+
+def _f1_score(tp, fp, fn):
+
+    tp = 2 * tp
+
+    return tp / (tp + fp + fn)

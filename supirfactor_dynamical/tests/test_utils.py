@@ -11,7 +11,6 @@ from supirfactor_dynamical._utils import (
     _calculate_rss,
     _calculate_tss,
     _calculate_r2,
-    _aggregate_r2,
     _process_weights_to_tensor
 )
 
@@ -233,10 +232,6 @@ class TestMathUtils(unittest.TestCase):
             decimal=5
         )
 
-        npt.assert_almost_equal(
-            0.75,
-            _aggregate_r2(r2)
-        )
 
     def test_r2(self):
 
@@ -258,9 +253,4 @@ class TestMathUtils(unittest.TestCase):
             [1., 1., 1., 0],
             r2,
             decimal=5
-        )
-
-        npt.assert_almost_equal(
-            0.75,
-            _aggregate_r2(r2)
         )

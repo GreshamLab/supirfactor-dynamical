@@ -37,7 +37,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_stratified_sampling(self):
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -92,7 +92,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             2,
         )
@@ -116,7 +116,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -146,7 +146,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             2
         )
@@ -173,7 +173,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -198,7 +198,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -223,7 +223,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_stratified_aggregation(self):
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -246,7 +246,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -274,7 +274,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_stratified_inorder(self):
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -294,7 +294,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -328,7 +328,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -364,7 +364,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,

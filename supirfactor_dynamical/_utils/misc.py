@@ -13,6 +13,22 @@ def to(obj, device):
         return obj.to(device)
 
 
+def argmax_last_dim(x):
+    """
+    Get the argmax for the last dimension of a tensor
+
+    :param x: Tensor
+    :type x: torch.tensor
+    :return: Argmax of the last dimension
+    :rtype: torch.tensor
+    """
+
+    return torch.argmax(
+        x.view(-1, x.shape[-1]),
+        axis=1
+    ).reshape(x.shape[:-1])
+
+
 def _cat(_data, dim):
     """
     Concatenate list of tensors or list of tensor tuples

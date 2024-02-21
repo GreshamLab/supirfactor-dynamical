@@ -1,9 +1,13 @@
 from ._math import (
-    _aggregate_r2,
     _calculate_r2,
     _calculate_erv,
     _calculate_rss,
-    _calculate_tss
+    _calculate_tss,
+    _false_positive,
+    _true_negative,
+    _true_positive,
+    _false_negative,
+    _f1_score
 )
 
 from ._utils import (
