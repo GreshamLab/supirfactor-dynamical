@@ -151,7 +151,7 @@ def train_decoder_submodels(
                             )
                         )
 
-                    _val_loss.append(tuple(_batch_loss))
+                    _val_loss.append(_batch_loss)
 
             model._validation_n.append(_val_n)
             model._validation_loss.append(
