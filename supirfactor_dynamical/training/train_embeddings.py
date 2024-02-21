@@ -69,6 +69,7 @@ def train_embedding_submodels(
     # Set training time and create loss lists
     model.set_training_time()
     model.training_loss
+    model.training_n
 
     try:
         model.add_submodel(
@@ -88,10 +89,12 @@ def train_embedding_submodels(
         model.train()
 
         _batch_losses = []
+        _batch_n = 0
         for train_x in training_dataloader:
 
             to(train_x, model.device)
             _embed_x, _train_x = _get_data(train_x)
+            _batch_n = _batch_n + train_x.shape[0]
 
             frozen_embedding = _get_embedding(
                 model,
@@ -120,6 +123,7 @@ def train_embedding_submodels(
         model._training_loss.append(
             np.mean(np.array(_batch_losses), axis=0)
         )
+        model._training_n.append(_batch_n)
 
         # Get validation losses during training
         # if validation data was provided
@@ -132,6 +136,8 @@ def train_embedding_submodels(
                 _val_loss = []
                 _val_n = 0
                 for val_x in validation_dataloader:
+
+                    to(val_x, model.device)
 
                     _embed_val_x, _val_x = _get_data(val_x)
                     _embed = _get_embedding(model, _embed_val_x)

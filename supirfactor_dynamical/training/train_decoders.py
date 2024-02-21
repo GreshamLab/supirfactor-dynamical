@@ -5,6 +5,7 @@ import numpy as np
 from supirfactor_dynamical.models._model_mixins.training_mixin import (
     _shuffle_time_data
 )
+from supirfactor_dynamical._utils import to
 
 
 def train_decoder_submodels(
@@ -48,9 +49,12 @@ def train_decoder_submodels(
             "This training loop requires a model with multiple subunits"
         )
 
+    to(model, device=model.device)
+
     # Set training time and create loss lists
     model.set_training_time()
     model.training_loss
+    model.training_n
 
     [model._check_label(x) for x in decoder_models]
 
@@ -80,12 +84,15 @@ def train_decoder_submodels(
         model.train()
 
         _batch_losses = []
+        _batch_n = 0
         for train_x in training_dataloader:
 
+            to(train_x, model.device)
             if not isinstance(train_x, (tuple, list)):
                 train_x = [train_x] * len(decoder_models)
 
             _decoder_losses = []
+            _batch_n = _batch_n + train_x[0].shape[0]
             for x, lf, _target_x in zip(
                 decoder_models,
                 loss_function,
@@ -108,6 +115,7 @@ def train_decoder_submodels(
         model._training_loss.append(
             np.mean(np.array(_batch_losses), axis=0)
         )
+        model._training_n.append(_batch_n)
 
         # Get validation losses during training
         # if validation data was provided
@@ -121,11 +129,13 @@ def train_decoder_submodels(
                 _val_n = 0
                 for val_x in validation_dataloader:
 
+                    to(val_x, model.device)
+
                     if not isinstance(val_x, (tuple, list)):
                         val_x = [val_x] * len(decoder_models)
 
                     _batch_loss = []
-                    _n = []
+                    _val_n = _val_n + train_x[0].shape[0]
                     for x, lf, _target_x in zip(
                         decoder_models,
                         loss_function,
@@ -141,10 +151,7 @@ def train_decoder_submodels(
                             )
                         )
 
-                        _n.append(_target_x.shape[0])
-
                     _val_loss.append(tuple(_batch_loss))
-                    _val_n = _val_n + np.mean(_n)
 
             model._validation_n.append(_val_n)
             model._validation_loss.append(
