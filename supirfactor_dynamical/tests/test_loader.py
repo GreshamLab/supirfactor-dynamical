@@ -18,11 +18,11 @@ from ._stubs import (
 
 from supirfactor_dynamical.datasets import (
     TimeDataset,
-    MultimodalDataLoader,
     H5ADDataset,
     H5ADDatasetIterable,
     H5ADDatasetStratified,
-    H5ADDatasetObsStratified
+    H5ADDatasetObsStratified,
+    StackIterableDataset
 )
 
 
@@ -476,14 +476,18 @@ class TestTimeDataset(unittest.TestCase):
             return_times=True
         )
 
-        dl = MultimodalDataLoader(td, batch_size=10)
+        dl = DataLoader(td, batch_size=10)
 
         t = next(iter(dl))
 
         self.assertEqual(len(t), 2)
-        self.assertTrue(isinstance(t, tuple))
         self.assertTrue(torch.is_tensor(t[0]))
         self.assertTrue(torch.is_tensor(t[1]))
+
+        torch.testing.assert_close(
+            torch.tile(torch.Tensor([0, 1, 2, 3]), (10, 1)),
+            t[1]
+        )
 
 
 class TestTimeDatasetSparse(TestTimeDataset):
@@ -949,9 +953,6 @@ class TestADObsBacked(unittest.TestCase):
         if self.dataset is not None:
             self.dataset.close()
 
-        if self.obs_dataset is not None:
-            self.obs_dataset.close()
-
         return super().tearDown()
 
     def test_obs_alignment(self):
@@ -971,7 +972,6 @@ class TestADObsBacked(unittest.TestCase):
             obs_columns=['time', 'strat'],
             random_seed=876
         )
-        self.obs_dataset = obs_dataset
 
         self.assertEqual(
             obs_dataset._data_reference.shape,
@@ -985,4 +985,24 @@ class TestADObsBacked(unittest.TestCase):
         for i, j in zip(DataLoader(dataset), DataLoader(obs_dataset)):
             self.assertEqual(
                 i[0][0], j[0][0]
+            )
+
+        for data in DataLoader(
+            StackIterableDataset(
+                dataset,
+                obs_dataset
+            ),
+            batch_size=2,
+            drop_last=True
+        ):
+            self.assertEqual(
+                data[0][0][0], data[1][0][0]
+            )
+            self.assertEqual(
+                data[0].shape,
+                (2, 4)
+            )
+            self.assertEqual(
+                data[1].shape,
+                (2, 7)
             )

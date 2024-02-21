@@ -5,9 +5,7 @@ import torch
 
 from ._stubs import (
     X,
-    X_SP,
     PEAKS,
-    PEAKS_SP,
     G_TO_PEAK_PRIOR,
     PEAK_TO_TF_PRIOR
 )
@@ -15,8 +13,7 @@ from ._stubs import (
 from torch.utils.data import DataLoader
 
 from supirfactor_dynamical.datasets import (
-    ChromatinDataset,
-    ChromatinDataLoader
+    StackDataset
 )
 
 from supirfactor_dynamical.models.chromatin_model import (
@@ -36,12 +33,12 @@ class TestChromatinTraining(unittest.TestCase):
         self.peaks = PEAKS.copy()
         self.X = X.copy()
 
-        self.data = ChromatinDataset(
-            self.X,
-            self.peaks
+        self.data = StackDataset(
+            torch.Tensor(self.X),
+            torch.Tensor(self.peaks)
         )
 
-        self.dataloader = ChromatinDataLoader(
+        self.dataloader = DataLoader(
             self.data,
             batch_size=2
         )
@@ -109,23 +106,6 @@ class TestChromatinTraining(unittest.TestCase):
         self.assertEqual(
             results.iloc[0, 8],
             np.sum(PEAKS == 1) / PEAKS.size
-        )
-
-
-class TestChromatinTrainingSparse(TestChromatinTraining):
-
-    def setUp(self) -> None:
-        self.peaks = PEAKS_SP.copy()
-        self.X = X_SP.copy()
-
-        self.data = ChromatinDataset(
-            self.X,
-            self.peaks
-        )
-
-        self.dataloader = ChromatinDataLoader(
-            self.data,
-            batch_size=2
         )
 
 

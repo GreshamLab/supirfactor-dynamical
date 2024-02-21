@@ -16,8 +16,8 @@ from ._utils import (
 
 from .datasets import (
     TimeDataset,
-    ChromatinDataLoader,
-    ChromatinDataset
+    H5ADDatasetStratified,
+    H5ADDatasetObsStratified
 )
 
 from .postprocessing import (

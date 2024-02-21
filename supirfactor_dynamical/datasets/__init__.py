@@ -1,9 +1,25 @@
+
+import torch
+from torch.utils.data import StackDataset
+
 from .time_dataset import TimeDataset
 
-from .multimodal_dataset import (
-    MultimodalDataset,
-    MultimodalDataLoader
-)
+
+class StackIterableDataset(
+    torch.utils.data.IterableDataset
+):
+
+    datasets = None
+
+    def __init__(self, *args):
+
+        super().__init__()
+        self.datasets = args
+
+    def __iter__(self):
+        for d in zip(*self.datasets):
+            yield d
+
 
 from .anndata_backed_dataset import (
     H5ADDataset,
@@ -11,9 +27,3 @@ from .anndata_backed_dataset import (
     H5ADDatasetStratified,
     H5ADDatasetObsStratified
 )
-
-class ChromatinDataset(MultimodalDataset):
-    pass
-
-class ChromatinDataLoader(MultimodalDataLoader):
-    pass
