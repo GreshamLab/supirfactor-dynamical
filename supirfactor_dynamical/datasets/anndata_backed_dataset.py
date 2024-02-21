@@ -389,11 +389,11 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
 
         self._data_reference = torch.cat(
             [
-                torch.nn.functional.one_hot(
+                torch.Tensor(torch.nn.functional.one_hot(
                     torch.LongTensor(
                         self._data_reference[col].cat.codes.values.copy()
                     )
-                )
+                ))
                 for col in self._data_reference.columns
             ],
             dim=1
