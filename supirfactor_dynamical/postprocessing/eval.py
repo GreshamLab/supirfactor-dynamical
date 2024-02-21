@@ -61,6 +61,10 @@ def r2_score(
             return rsq.mean()
         elif multioutput == 'variance_weighted':
             return 1 - _rss.sum() / _tss.sum()
+        else:
+            raise ValueError(
+                f"Invalid multioutput = {multioutput}"
+            )
 
 
 def f1_score(
@@ -68,7 +72,7 @@ def f1_score(
     model,
     target_data_idx=None,
     input_data_idx=None,
-    multioutput='uniform_average'
+    multioutput='micro'
 ):
 
     if dataloader is None:
@@ -129,3 +133,8 @@ def f1_score(
 
         elif multioutput is None:
             return _f1_score(_tp, _fp, _fn)
+
+        else:
+            raise ValueError(
+                f"Invalid multioutput = {multioutput}"
+            )
