@@ -148,7 +148,7 @@ def train_decoder_submodels(
                                 val_x[encoder_data_index],
                                 lf,
                                 target_data=_target_x
-                            )
+                            )[0]
                         )
 
                     _val_loss.append(_batch_loss)

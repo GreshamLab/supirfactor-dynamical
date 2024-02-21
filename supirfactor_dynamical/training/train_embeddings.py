@@ -154,7 +154,7 @@ def train_embedding_submodels(
                             _val_x,
                             loss_function,
                             target_data=_embed
-                        )
+                        )[0]
                     )
 
             model._validation_n.append(_val_n)

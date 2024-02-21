@@ -9,7 +9,8 @@ from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
     TimeDataset,
-    get_model
+    get_model,
+    process_results_to_dataframes
 )
 
 from supirfactor_dynamical.training import (
@@ -154,6 +155,15 @@ class TestEmbeddingModelTraining(_SetupMixin, unittest.TestCase):
             torch.tensor(A).transpose(0, 1)
         )
 
+        res_df, loss_df, _ = process_results_to_dataframes(
+            model,
+            None,
+            model_type='test'
+        )
+
+        self.assertEqual(loss_df.shape, (2, 13))
+        self.assertEqual(res_df.shape, (1, 3))
+
 
 class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
 
@@ -225,3 +235,36 @@ class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
             model.encoder[0].weight.detach(),
             torch.tensor(A).transpose(0, 1)
         )
+
+    def test_swaps_no_freeze(self):
+
+        model = get_model('static_meta', multisubmodel=True)(
+            self.prior,
+            input_dropout_rate=0.0,
+            use_prior_weights=True
+        )
+
+        model.add_submodel(
+            'test_decoder',
+            torch.nn.Sequential(
+                torch.nn.Linear(A.shape[1], A.shape[0], bias=False)
+            )
+        )
+
+        train_decoder_submodels(
+            model,
+            self.static_dataloader,
+            10,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            decoder_models=('default_decoder', 'test_decoder'),
+            validation_dataloader=self.static_dataloader
+        )
+
+        res_df, loss_df, _ = process_results_to_dataframes(
+            model,
+            None,
+            model_type=('default_decoder', 'test_decoder')
+        )
+
+        self.assertEqual(loss_df.shape, (4, 12))
+        self.assertEqual(res_df.shape, (1, 3))

@@ -55,13 +55,19 @@ def process_results_to_dataframes(
     else:
         score_cols = results_object.all_names
 
+    if not isinstance(model_type, (tuple, list)):
+        model_type = [model_type]
+    else:
+        _n = int(_n / len(model_type))
+
     loss_leaders = {
         k: pd.concat(
             [
                 pd.DataFrame(
-                    [leader_values + [model_type, k]],
+                    [leader_values + [j, k]],
                     columns=leader_columns + _LOSS_COLS
                 )
+                for j in model_type
             ] * _n,
             ignore_index=True
         )
@@ -70,7 +76,7 @@ def process_results_to_dataframes(
 
     if model_object is not None:
 
-        result_line = [model_type] + [
+        result_line = [model_type[0]] + [
             results_object.all_scores[n]
             for n in score_cols
         ] + [
@@ -95,7 +101,7 @@ def process_results_to_dataframes(
         ])
 
     else:
-        result_line = [model_type] + [
+        result_line = [model_type[0]] + [
             results_object.all_scores[n]
             for n in score_cols
         ] + [
