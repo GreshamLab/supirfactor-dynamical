@@ -20,6 +20,7 @@ from ._trunc_robust_scaler import (
 
 from .misc import (
     to,
+    argmax_last_dim,
     _add,
     _cat,
     _unsqueeze,

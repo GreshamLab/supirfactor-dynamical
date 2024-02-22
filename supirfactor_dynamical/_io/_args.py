@@ -23,7 +23,8 @@ _SERIALIZE_TIME_ARGS = [
 
 _SERIALIZE_MODEL_TYPE_ATTRS = [
     '_velocity_model',
-    '_multisubmodel_model'
+    '_multisubmodel_model',
+    '_multimodal_data_model'
 ]
 
 _SERIALIZE_RUNTIME_ATTRS = [

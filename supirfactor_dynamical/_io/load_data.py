@@ -3,7 +3,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import torch
-from scipy.sparse import issparse
+import scanpy as sc
 
 from supirfactor_dynamical._utils._trunc_robust_scaler import (
     TruncRobustScaler
@@ -17,6 +17,7 @@ def load_standard_data(
     gold_standard_file=None,
     data_layer='X',
     depth_normalize_data=True,
+    normalization_depth=None,
     scale_data=True,
     genes=None,
     **kwargs
@@ -46,7 +47,7 @@ def load_standard_data(
     if data_file is not None and file_type == 'h5ad':
 
         print(f"Loading and processing data from {data_file}")
-        adata = ad.read(data_file, **kwargs)
+        adata = ad.read_h5ad(data_file, **kwargs)
 
         if genes is not None:
             adata = adata[:, genes]
@@ -79,6 +80,12 @@ def load_standard_data(
         raise ValueError(
             f"Unknown file_type {file_type}"
         )
+
+    if depth_normalize_data:
+        count_data = sc.pp.normalize_total(
+            ad.AnnData(count_data),
+            target_sum=normalization_depth
+        ).X
 
     if count_data is not None and scale_data:
         count_scaling = TruncRobustScaler(with_centering=False)
@@ -116,7 +123,6 @@ def load_standard_data(
     if count_data is not None:
         count_data = torch.Tensor(count_data)
 
-    if count_data is not None:
         print(
             f"Loaded data {count_data.shape} from {data_file}"
         )
@@ -129,7 +135,6 @@ def _get_data_from_ad(
     layers,
     agg_func=np.add,
     densify=False,
-    standardize_depth=None,
     **kwargs
 ):
 
@@ -148,13 +153,6 @@ def _get_data_from_ad(
 
     else:
         _output = adata.layers[layers]
-
-    if standardize_depth is not None and not issparse(_output):
-        _depth_factor = standardize_depth / np.sum(_output, axis=1)
-        _output = np.multiply(_output, _depth_factor[:, None])
-    elif standardize_depth:
-        _depth_factor = standardize_depth / _output.sum(axis=1)
-        _output = _output.multiply(_depth_factor)
 
     if densify:
         try:

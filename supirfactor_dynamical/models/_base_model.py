@@ -25,6 +25,8 @@ class _TFMixin(
     hidden_final = None
 
     _velocity_model = False
+    _multisubmodel_model = False
+    _multimodal_data_model = False
 
     @property
     def encoder_weights(self):

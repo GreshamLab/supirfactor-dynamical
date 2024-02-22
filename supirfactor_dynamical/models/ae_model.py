@@ -25,7 +25,8 @@ class TFMultilayerAutoencoder(
         'decoder_sizes',
         'tfa_activation',
         'activation',
-        'output_activation'
+        'output_activation',
+        'output_nodes'
     ]
 
     intermediate_sizes = None
@@ -60,7 +61,8 @@ class TFMultilayerAutoencoder(
         decoder_sizes=(100, ),
         tfa_activation='relu',
         activation='relu',
-        output_activation='relu'
+        output_activation='relu',
+        output_nodes=None
     ):
         super().__init__()
 
@@ -76,6 +78,7 @@ class TFMultilayerAutoencoder(
         self.tfa_activation = tfa_activation
         self.activation = activation
         self.output_activation = output_activation
+        self.output_nodes = output_nodes
 
         intermediates = [self.k]
 
@@ -95,11 +98,15 @@ class TFMultilayerAutoencoder(
         if decoder_sizes is not None:
             decoders = decoders + list(decoder_sizes)
 
+        if output_nodes is None:
+            output_nodes = self.g
+
         self._decoder = self.set_decoder(
             output_activation,
             intermediate_activation=activation,
             decoder_sizes=decoders,
-            dropout_rate=intermediate_dropout_rate
+            dropout_rate=intermediate_dropout_rate,
+            output_nodes=output_nodes
         )
 
         self.set_dropouts(

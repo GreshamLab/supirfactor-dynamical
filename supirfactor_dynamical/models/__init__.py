@@ -21,7 +21,8 @@ from .chromatin_model import (
 from ._model_mixins import (
     _TrainingMixin,
     _VelocityMixin,
-    _MultiSubmoduleMixin
+    _MultiSubmoduleMixin,
+    _MultiModalDataMixin
 )
 from ._base_model import _TFMixin
 
@@ -50,24 +51,27 @@ _not_velocity = [
 def get_model(
     model,
     velocity=False,
-    multisubmodel=False
+    multisubmodel=False,
+    multimodal_data=False
 ) -> _TFMixin:
 
     try:
         model = _CLASS_DICT[model]
     except KeyError:
-        pass
+        model = model
 
     if velocity and (model not in _not_velocity):
-        class TFVelocity(_VelocityMixin, model):
-            pass
-
-        model = TFVelocity
+        model = [_VelocityMixin] + [model]
+    else:
+        model = [model]
 
     if multisubmodel:
-        class TFMultimodule(_MultiSubmoduleMixin, model):
-            pass
+        model = [_MultiSubmoduleMixin] + model
 
-        model = TFMultimodule
+    if multimodal_data:
+        model = [_MultiModalDataMixin] + model
 
-    return model
+    class SupirFactorModel(*model):
+        pass
+
+    return SupirFactorModel

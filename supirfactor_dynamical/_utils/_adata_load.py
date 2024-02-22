@@ -37,7 +37,6 @@ def load_data_files_jtb_2023(
     shuffle_time=False,
     shuffle_data=False,
     untreated_only=False,
-    standardized_count_depth=None,
     counts_layer='X',
     velocity_layers=('rapamycin_velocity', 'cell_cycle_velocity'),
     decay_velocity_layers=('decay_constants', 'denoised')
@@ -107,8 +106,7 @@ def load_data_files_jtb_2023(
         else:
             count_data = _get_data_from_ad(
                 adata,
-                counts_layer,
-                standardize_depth=standardized_count_depth
+                counts_layer
             )
 
         data = [count_scaling.fit_transform(count_data).A]

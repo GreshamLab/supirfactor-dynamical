@@ -117,7 +117,8 @@ def read(
         model = get_model(
             _state_model,
             velocity=model_type_kwargs['_velocity_model'],
-            multisubmodel=model_type_kwargs['_multisubmodel_model']
+            multisubmodel=model_type_kwargs['_multisubmodel_model'],
+            multimodal_data=model_type_kwargs['_multimodal_data_model']
         )(
             **kwargs
         )

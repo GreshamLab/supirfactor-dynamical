@@ -7,3 +7,4 @@ from .time_offset_mixins import (
 )
 from .training_mixin import _TrainingMixin
 from .velocity_mixin import _VelocityMixin
+from .multimodal_data_mixin import _MultiModalDataMixin

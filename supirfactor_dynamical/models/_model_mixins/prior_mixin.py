@@ -140,7 +140,8 @@ class _PriorMixin:
         activation='softplus',
         intermediate_activation=None,
         decoder_sizes=None,
-        dropout_rate=0.0
+        dropout_rate=0.0,
+        output_nodes=None
     ):
         """
         Set decoder
@@ -166,8 +167,11 @@ class _PriorMixin:
         else:
             decoder = torch.nn.Sequential()
 
+        if output_nodes is None:
+            output_nodes = self.g
+
         decoder.append(
-            torch.nn.Linear(decoder_sizes[-1], self.g, bias=False)
+            torch.nn.Linear(decoder_sizes[-1], output_nodes, bias=False)
         )
         decoder.append(
             self.get_activation_function(activation)
