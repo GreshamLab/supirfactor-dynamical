@@ -81,7 +81,7 @@ def load_standard_data(
             f"Unknown file_type {file_type}"
         )
 
-    if depth_normalize_data:
+    if depth_normalize_data and count_data is not None:
         count_data = sc.pp.normalize_total(
             ad.AnnData(count_data),
             target_sum=normalization_depth
