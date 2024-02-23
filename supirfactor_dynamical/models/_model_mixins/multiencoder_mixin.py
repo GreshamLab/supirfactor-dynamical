@@ -1,5 +1,3 @@
-import warnings
-
 from supirfactor_dynamical._io._torch_state import (
     write_module,
     read_state_dict
@@ -128,22 +126,22 @@ class _MultiSubmoduleMixin:
         if self.active_intermediate != _DEFAULT_MODELS[2]:
             self.select_submodel(_DEFAULT_MODELS[2], "intermediate")
 
+    def is_active_module(self, module_name):
+
+        self._check_label(module_name)
+        return (
+            (self.active_encoder == module_name) or
+            (self.active_intermediate == module_name) or
+            (self.active_decoder == module_name)
+        )
+
     def save(
         self,
         file_name,
         **kwargs
     ):
 
-        if (
-            self._module_bag is not None and
-            not all(x in _DEFAULT_MODELS for x in self.module_labels)
-        ):
-
-            warnings.warn(
-                "Only the default submodels will be saved"
-            )
-
-            self.default_submodules()
+        self.default_submodules()
 
         super().save(
             file_name,
