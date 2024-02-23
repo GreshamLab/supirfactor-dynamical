@@ -12,6 +12,13 @@ from supirfactor_dynamical._utils.misc import (
     argmax_last_dim
 )
 
+from supirfactor_dynamical._utils._math import (
+    _true_positive,
+    _true_negative,
+    _false_negative,
+    _false_positive
+)
+
 
 class _ModelStub():
 
@@ -76,26 +83,60 @@ class TestEvalF1Raw(unittest.TestCase):
     multioutput = None
     seed = 150
 
-    def test_r2(self):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rng = np.random.default_rng(cls.seed)
 
-        rng = np.random.default_rng(self.seed)
-
-        target = torch.LongTensor(
-            rng.choice([0, 1, 2], size=(10, 2))
+        cls.target = torch.LongTensor(
+            cls.rng.choice([0, 1, 2], size=(10, 2))
         )
 
-        target_encoded = torch.nn.functional.one_hot(
-            target
+        cls.target_encoded = torch.nn.functional.one_hot(
+            cls.target
         )
 
-        inputs = torch.clone(target_encoded)
+        cls.inputs = cls.target_encoded.type(torch.Tensor)
 
-        inputs[0, 0, :] = torch.LongTensor([1, 0, 0])
-        inputs[1, 0, :] = torch.LongTensor([0, 0, 1])
-        inputs[2, 0, :] = torch.LongTensor([0, 1, 0])
+        cls.inputs[0, 0, :] = torch.Tensor([1., .10, .10])
+        cls.inputs[1, 0, :] = torch.Tensor([.10, .10, 1.])
+        cls.inputs[2, 0, :] = torch.Tensor([.10, 1., .10])
+
+        return super().setUpClass()
+
+    def test_maths(self):
+        torch.testing.assert_close(
+            torch.sum(
+                torch.logical_and(self.inputs == 1., self.target_encoded == 1),
+                axis=(0, 1)
+            ),
+            _true_positive(self.inputs == 1., self.target_encoded)
+        )
+        torch.testing.assert_close(
+            torch.sum(
+                torch.logical_and(self.inputs == 1., self.target_encoded == 0),
+                axis=(0, 1)
+            ),
+            _false_positive(self.inputs == 1., self.target_encoded)
+        )
+        torch.testing.assert_close(
+            torch.sum(
+                torch.logical_and(self.inputs != 1., self.target_encoded == 1),
+                axis=(0, 1)
+            ),
+            _false_negative(self.inputs == 1., self.target_encoded)
+        )
+        torch.testing.assert_close(
+            torch.sum(
+                torch.logical_and(self.inputs != 1., self.target_encoded == 0),
+                axis=(0, 1)
+            ),
+            _true_negative(self.inputs == 1., self.target_encoded)
+        )
+
+    def test_f1(self):
 
         f1s = f1_score(
-            [[target_encoded, inputs]],
+            [[self.target_encoded, self.inputs]],
             _ModelStub(),
             target_data_idx=0,
             input_data_idx=1,
@@ -103,8 +144,8 @@ class TestEvalF1Raw(unittest.TestCase):
         )
 
         te_f1s = torcheval.metrics.functional.multiclass_f1_score(
-            inputs.reshape(-1, 3),
-            argmax_last_dim(target_encoded).reshape(-1),
+            self.inputs.reshape(-1, 3),
+            argmax_last_dim(self.target_encoded).reshape(-1),
             average=self.multioutput,
             num_classes=3
         )

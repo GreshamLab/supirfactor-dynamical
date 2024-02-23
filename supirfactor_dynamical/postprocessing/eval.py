@@ -9,6 +9,7 @@ from supirfactor_dynamical._utils._math import (
     _false_positive,
     _f1_score
 )
+from supirfactor_dynamical._utils.misc import argmax_last_dim
 
 
 def r2_score(
@@ -72,7 +73,8 @@ def f1_score(
     model,
     target_data_idx=None,
     input_data_idx=None,
-    multioutput='micro'
+    multioutput='micro',
+    targets_one_hot_encoded=True
 ):
 
     if dataloader is None:
@@ -98,7 +100,18 @@ def f1_score(
                 input_data = data[input_data_idx]
 
             target_data = model.output_data(target_data)
-            predicts = model._slice_data_and_forward(input_data)
+
+            if not targets_one_hot_encoded:
+                target_data = torch.nn.functional.one_hot(
+                    target_data
+                )
+
+            predicts = torch.nn.functional.one_hot(
+                argmax_last_dim(
+                    model._slice_data_and_forward(input_data)
+                ),
+                num_classes=target_data.shape[-1]
+            )
 
             _fp += _false_positive(
                 predicts,
