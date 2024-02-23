@@ -32,7 +32,8 @@ _FORCE_UNIT = {
 def read(
     file_name,
     model_class=None,
-    prefix=''
+    prefix='',
+    submodule_templates=None
 ):
     """
     Load a model from a file
@@ -69,6 +70,15 @@ def read(
             for k in _state_args
             if k not in _SERIALIZE_NETWORKS
         }
+
+        if submodule_templates is not None:
+            for module_name, module_template in submodule_templates:
+                module_template.load_state_dict(
+                    _read_torch_state(
+                        f,
+                        module_name
+                    )
+                )
 
     for k, func in _FORCE_UNIT.items():
         if k in kwargs and kwargs[k] is not None:
@@ -144,5 +154,12 @@ def read(
 
     for k, v in info_kwargs.items():
         setattr(model, k, v)
+
+    if submodule_templates is not None:
+        for module_name, module in submodule_templates:
+            model.add_submodel(
+                module_name,
+                module
+            )
 
     return model

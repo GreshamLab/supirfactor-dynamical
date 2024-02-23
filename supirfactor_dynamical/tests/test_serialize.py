@@ -780,3 +780,60 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
 class TestSerializerVelocity(TestSerializer):
 
     velocity = True
+
+
+class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):
+
+    prior = A
+
+    def test_multimodels(self):
+
+        model = get_model('static_multilayer', multisubmodel=True)(
+            prior_network=self.prior,
+            intermediate_sizes=(3, 3),
+            decoder_sizes=(3, 3),
+            tfa_activation='softplus',
+            activation='tanh',
+            output_activation='relu',
+            input_dropout_rate=0.2,
+            hidden_dropout_rate=0.5,
+            intermediate_dropout_rate=0.5
+        )
+
+        model.add_submodel(
+            'testy',
+            model.create_submodule(
+                (3, 4, 3),
+                activation='softplus'
+            )
+        )
+
+        model.select_submodel(
+            'testy',
+            'intermediate'
+        )
+
+        model.save(self.temp_file_name)
+
+        loaded_model = read(
+            self.temp_file_name,
+            submodule_templates=[
+                (
+                    'testy',
+                    model.create_submodule(
+                        (3, 4, 3),
+                        activation='softplus'
+                    )
+                )
+            ]
+        )
+
+        self._compare_module(
+            model,
+            loaded_model
+        )
+
+        self._compare_module(
+            model.module_bag['testy'],
+            loaded_model.module_bag['testy']
+        )

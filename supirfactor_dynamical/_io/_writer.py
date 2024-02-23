@@ -27,6 +27,15 @@ def write(
     with h5py.File(file_name, mode) as f:
         _write_state(f, model_object, prefix)
 
+        if hasattr(model_object, 'module_labels'):
+            for mod_label in model_object.module_labels:
+                if not model_object.is_active_module(mod_label):
+                    _write_torch_state(
+                        f,
+                        model_object.module_bag[mod_label],
+                        mod_label
+                    )
+
     for net_attr in _SERIALIZE_NETWORKS:
         if hasattr(model_object, net_attr) and net_attr == "prior_network":
             write_network(
