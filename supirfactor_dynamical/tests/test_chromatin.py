@@ -12,7 +12,7 @@ from ._stubs import (
 
 from torch.utils.data import DataLoader
 
-from supirfactor_dynamical.datasets import (
+from torch.utils.data import (
     StackDataset
 )
 

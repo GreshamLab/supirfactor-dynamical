@@ -1,6 +1,5 @@
 
 import torch
-from torch.utils.data import StackDataset
 
 from .time_dataset import TimeDataset
 
