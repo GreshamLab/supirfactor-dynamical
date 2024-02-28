@@ -939,21 +939,59 @@ class TestADObsBacked(unittest.TestCase):
         cls.tempdir = tempfile.TemporaryDirectory()
         cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
 
-    def setUp(self) -> None:
         x = X.copy()
         x[:, 0] = np.arange(x.shape[0])
-        self.adata = ad.AnnData(
+        cls.adata = ad.AnnData(
             x
         )
-        self.adata.obs['time'] = T.astype(str)
-        self.adata.obs['strat'] = np.tile(["A", "B", "C"], 34)[0:100]
-        self.adata.write(self.filename)
+        cls.adata.obs['time'] = T.astype(str)
+        cls.adata.obs['strat'] = np.tile(["A", "B", "C"], 34)[0:100]
+        cls.adata.write(cls.filename)
 
     def tearDown(self) -> None:
         if self.dataset is not None:
             self.dataset.close()
 
         return super().tearDown()
+
+    def test_obs_one_hot(self):
+
+        obs_dataset = H5ADDatasetObsStratified(
+            self.filename,
+            'strat',
+            file_chunk_size=27,
+            obs_columns=['time', 'strat'],
+            random_seed=876,
+            one_hot=True
+        )
+
+        self.assertEqual(
+            torch.stack([x for x in obs_dataset]).shape,
+            (99, 7)
+        )
+
+    def test_obs_classnum(self):
+
+        obs_dataset = H5ADDatasetObsStratified(
+            self.filename,
+            'strat',
+            file_chunk_size=27,
+            obs_columns='strat',
+            random_seed=876,
+            one_hot=False
+        )
+
+        self.assertEqual(
+            torch.stack([x for x in obs_dataset]).shape,
+            (99, 1)
+        )
+
+        obs_dataset.format_data(True)
+
+        self.assertEqual(
+            torch.stack([x for x in obs_dataset]).shape,
+            (99, 3)
+        )
 
     def test_obs_alignment(self):
 

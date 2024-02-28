@@ -389,8 +389,8 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
 
         self._data_labels = pd.concat(
             [
-                self._data_reference[col].cat.categories.to_series()
-                for col in self._data_reference.columns
+                self._data_raw[col].cat.categories.to_series()
+                for col in self._data_raw.columns
             ]
         )
 
@@ -399,7 +399,7 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
 
     def format_data(self, one_hot):
 
-        if not one_hot and (self._data_raw.shape[1] == 1):
+        if not one_hot and (self._data_raw.shape[1] != 1):
             raise RuntimeError(
                 "Can only combine multiple columns when one_hot is True"
             )
@@ -419,4 +419,4 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
         else:
             self._data_reference = torch.LongTensor(
                 self._data_raw.iloc[:, 0].cat.codes.values.copy()
-            )
+            ).reshape(-1, 1)
