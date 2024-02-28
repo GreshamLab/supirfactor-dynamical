@@ -12,6 +12,9 @@ from supirfactor_dynamical import (
     get_model,
     process_results_to_dataframes
 )
+from supirfactor_dynamical.datasets import (
+    StackIterableDataset
+)
 
 from supirfactor_dynamical.training import (
     train_embedding_submodels,
@@ -22,6 +25,10 @@ from ._stubs import (
     X,
     A,
     T
+)
+
+from supirfactor_dynamical.models.modules import (
+    basic_classifier
 )
 
 
@@ -264,6 +271,53 @@ class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
             model,
             None,
             model_type=('default_decoder', 'test_decoder')
+        )
+
+        self.assertEqual(loss_df.shape, (4, 12))
+        self.assertEqual(res_df.shape, (1, 3))
+
+
+class TestDecoderClassifiers(unittest.TestCase):
+
+    def setUp(self) -> None:
+
+        super().setUp()
+
+        self.dataset = StackIterableDataset(
+            torch.Tensor(X),
+            torch.LongTensor(T)
+        )
+
+        self.dataloader = DataLoader(self.dataset)
+
+        return super().setUp()
+
+    def test_joint_classifier(self):
+
+        model = get_model('static_meta', multisubmodel=True)(
+            (4, 3),
+            input_dropout_rate=0.0
+        )
+
+        model.add_submodel(
+            'classifier',
+            basic_classifier(3, 4, 4)
+        )
+
+        train_decoder_submodels(
+            model,
+            self.dataloader,
+            10,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            decoder_models=('default_decoder', 'classifier'),
+            loss_function=(torch.nn.MSELoss(), torch.nn.CrossEntropyLoss()),
+            validation_dataloader=self.dataloader
+        )
+
+        res_df, loss_df, _ = process_results_to_dataframes(
+            model,
+            None,
+            model_type=('default_decoder', 'classifier')
         )
 
         self.assertEqual(loss_df.shape, (4, 12))

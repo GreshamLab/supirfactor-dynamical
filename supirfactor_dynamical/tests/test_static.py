@@ -8,7 +8,6 @@ import torch
 from torch.utils.data import DataLoader
 from scipy.linalg import pinv
 
-from supirfactor_dynamical.models.ae_model import Autoencoder
 from supirfactor_dynamical import (
     TFAutoencoder,
     TFMetaAutoencoder,
@@ -683,11 +682,12 @@ class TestAutoencoder(TestTFAutoencoder):
 
     def setUp(self) -> None:
         torch.manual_seed(55)
-        self.ae = Autoencoder(
-            n_genes=A.shape[0],
-            n_hidden_layers=2,
-            hidden_layer_width=A.shape[1]
+        self.ae = TFMultilayerAutoencoder(
+            prior_network=A.shape,
+            intermediate_sizes=(A.shape[1], ),
+            decoder_sizes=None
         )
+
         self.ae.encoder[0].weight = torch.nn.parameter.Parameter(
             torch.tensor(A.T, dtype=torch.float32)
         )

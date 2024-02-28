@@ -148,74 +148,6 @@ class TFMultilayerAutoencoder(
         )
 
 
-class Autoencoder(TFMultilayerAutoencoder):
-
-    type_name = "autoencoder"
-
-    _serialize_args = [
-        'prior_network',
-        'n_genes',
-        'hidden_layer_width',
-        'n_hidden_layers',
-        'input_dropout_rate',
-        'hidden_dropout_rate',
-        'activation',
-        'output_activation'
-    ]
-
-    def __init__(
-        self,
-        prior_network=None,
-        n_genes=None,
-        hidden_layer_width=50,
-        n_hidden_layers=1,
-        input_dropout_rate=0.5,
-        hidden_dropout_rate=0.0,
-        activation='relu',
-        output_activation='relu'
-    ):
-        """
-        Create a black-box Autoencoder module
-
-        :param input_dropout_rate: Training dropout for input genes,
-            defaults to 0.5
-        :type input_dropout_rate: float, optional
-        :param activation: Apply activation function to hidden
-            layer, defaults to ReLU
-        :type activation: bool, optional
-        :param output_activation: Apply activation function to output
-            layer, defaults to ReLU
-        :type output_activation: bool, optional
-        """
-
-        self.n_hidden_layers = n_hidden_layers
-        self.n_genes = n_genes
-
-        if prior_network is None:
-            self.g = n_genes
-            self.k = hidden_layer_width
-        else:
-            self.process_prior(
-                prior_network
-            )
-
-        if n_hidden_layers > 1:
-            intermediate_sizes = (hidden_layer_width, ) * (n_hidden_layers - 1)
-        else:
-            intermediate_sizes = None
-
-        super().__init__(
-            prior_network=(self.g, self.k),
-            input_dropout_rate=input_dropout_rate,
-            hidden_dropout_rate=hidden_dropout_rate,
-            intermediate_sizes=intermediate_sizes,
-            decoder_sizes=None,
-            activation=activation,
-            tfa_activation=activation,
-            output_activation=output_activation
-        )
-
-
 class TFMetaAutoencoder(TFMultilayerAutoencoder):
 
     type_name = "static_meta"
@@ -267,9 +199,10 @@ class TFMetaAutoencoder(TFMultilayerAutoencoder):
         :type output_activation: bool, optional
         """
 
-        self.process_prior(
-            prior_network
-        )
+        if isinstance(prior_network, tuple):
+            self.g, self.k = prior_network
+        else:
+            self.g, self.k = prior_network.shape
 
         super().__init__(
             prior_network=prior_network,

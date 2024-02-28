@@ -373,12 +373,19 @@ class H5ADDatasetStratified(
 
 class H5ADDatasetObsStratified(H5ADDatasetStratified):
 
-    def __init__(self, *args, obs_columns=None, **kwargs):
+    _data_raw = None
+
+    def __init__(self, *args, obs_columns=None, one_hot=True, **kwargs):
         kwargs['layer'] = 'obs'
         super().__init__(*args, **kwargs)
 
         if obs_columns is not None:
             self._data_reference = self._data_reference[obs_columns]
+
+        if self._data_reference.ndim == 1:
+            self._data_raw = self._data_reference.to_frame()
+        else:
+            self._data_raw = self._data_reference
 
         self._data_labels = pd.concat(
             [
@@ -387,16 +394,29 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
             ]
         )
 
-        self._data_reference = torch.cat(
-            [
-                torch.nn.functional.one_hot(
-                    torch.LongTensor(
-                        self._data_reference[col].cat.codes.values.copy()
-                    )
-                ).type(torch.Tensor)
-                for col in self._data_reference.columns
-            ],
-            dim=1
-        )
-
+        self.format_data(one_hot)
         self._filehandle.close()
+
+    def format_data(self, one_hot):
+
+        if not one_hot and (self._data_raw.shape[1] == 1):
+            raise RuntimeError(
+                "Can only combine multiple columns when one_hot is True"
+            )
+
+        if one_hot:
+            self._data_reference = torch.cat(
+                [
+                    torch.nn.functional.one_hot(
+                        torch.LongTensor(
+                            self._data_raw[col].cat.codes.values.copy()
+                        )
+                    ).type(torch.Tensor)
+                    for col in self._data_raw.columns
+                ],
+                dim=1
+            )
+        else:
+            self._data_reference = torch.LongTensor(
+                self._data_raw.iloc[:, 0].cat.codes.values.copy()
+            )
