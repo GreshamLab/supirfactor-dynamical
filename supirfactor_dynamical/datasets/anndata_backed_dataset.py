@@ -368,7 +368,8 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
 
         self._data_labels = pd.concat(
             [
-                self._data_raw[col].cat.categories.to_series()
+                self._data_raw[col].cat.remove_unused_categories(
+                ).cat.categories.to_series()
                 for col in self._data_raw.columns
             ]
         )
