@@ -132,36 +132,15 @@ class _H5ADLoader:
 
     def _load_obs_cat(self, obs_col):
 
-        _obs_keys = list(self._filehandle['obs'].keys())
-        if obs_col in _obs_keys:
+        _obs = read_dataframe(self._filehandle['obs'])
 
-            _cats = self._filehandle['obs'][obs_col]['categories'][:]
-
-            try:
-                _cats = list(
-                    map(
-                        lambda x: x.decode(),
-                        _cats
-                    )
-                )
-            except AttributeError:
-                pass
-
-            series = pd.Series(
-                pd.Categorical.from_codes(
-                    self._filehandle['obs'][obs_col]['codes'][:],
-                    categories=_cats,
-                    ordered=self._filehandle['obs'][obs_col].attrs['ordered']
-                )
-            )
-            series.index = series.index.astype(str)
-            series.name = obs_col
-            return series
-        else:
+        if obs_col not in _obs.columns:
             raise ValueError(
                 f"Key {obs_col} not present in "
-                f"obs: {_obs_keys}"
+                f"obs: {_obs.columns}"
             )
+
+        return _obs[obs_col].copy()
 
     def close(self):
         self._data_reference = None
