@@ -140,7 +140,7 @@ class _H5ADLoader:
                 f"obs: {_obs.columns}"
             )
 
-        return _obs[obs_col].copy()
+        return _obs[obs_col].cat.remove_unused_categories()
 
     def close(self):
         self._data_reference = None
