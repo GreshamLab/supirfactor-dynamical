@@ -35,9 +35,14 @@ def decoder_loss_transfer(
     _handle.remove()
 
     with torch.no_grad():
-        _new_embedding = torch.mul(
-            _grads[0],
-            model.latent_embedding(input_x)
+
+        _old_embedding = model.latent_embedding(input_x)
+        _new_embedding = torch.add(
+            torch.mul(
+                _grads[0],
+                _old_embedding
+            ),
+            _old_embedding
         )
 
         model.select_submodels(decoder=new_output_decoder)
