@@ -21,6 +21,9 @@ from supirfactor_dynamical.training import (
     train_decoder_submodels
 )
 
+from supirfactor_dynamical.perturbation import decoder_loss_transfer
+
+
 from ._stubs import (
     X,
     A,
@@ -322,3 +325,53 @@ class TestDecoderClassifiers(unittest.TestCase):
 
         self.assertEqual(loss_df.shape, (4, 12))
         self.assertEqual(res_df.shape, (1, 3))
+
+
+class TestLossTransfer(unittest.TestCase):
+
+    def setUp(self) -> None:
+
+        super().setUp()
+
+        self.dataset = StackIterableDataset(
+            torch.Tensor(X),
+            torch.LongTensor(T)
+        )
+
+        self.dataloader = DataLoader(self.dataset)
+
+        return super().setUp()
+
+    def test_classifier_to_expr(self):
+
+        model = get_model('static_meta', multisubmodel=True)(
+            (4, 3),
+            input_dropout_rate=0.0
+        )
+
+        model.add_submodel(
+            'classifier',
+            basic_classifier(3, 4, 4)
+        )
+
+        train_decoder_submodels(
+            model,
+            self.dataloader,
+            10,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            decoder_models=('default_decoder', 'classifier'),
+            loss_function=(torch.nn.MSELoss(), torch.nn.CrossEntropyLoss()),
+            validation_dataloader=self.dataloader
+        )
+
+        _embeds, _predicts = decoder_loss_transfer(
+            model,
+            torch.Tensor(X),
+            torch.LongTensor(T),
+            'classifier',
+            'default_decoder',
+            loss_function=torch.nn.CrossEntropyLoss()
+        )
+
+        self.assertEqual(_predicts.shape, X.shape)
+        self.assertEqual(_embeds.shape, (X.shape[0], 3))

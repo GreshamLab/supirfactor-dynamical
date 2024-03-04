@@ -74,19 +74,36 @@ class _MultiSubmoduleMixin:
         model_type='encoder'
     ):
 
-        self._check_label(module_name)
-
         if model_type == 'encoder':
-            self.encoder = self.module_bag[module_name]
-            self.active_encoder = module_name
+            self.select_submodels(encoder=module_name)
         elif model_type == 'decoder':
-            self._decoder = self.module_bag[module_name]
-            self.active_decoder = module_name
+            self.select_submodels(decoder=module_name)
         elif model_type == 'intermediate':
-            self._intermediate = self.module_bag[module_name]
-            self.active_intermediate = module_name
+            self.select_submodels(intermediate=module_name)
         else:
-            raise ValueError
+            raise ValueError(f"model_type {model_type} unknown")
+
+    def select_submodels(
+        self,
+        encoder=None,
+        intermediate=None,
+        decoder=None
+    ):
+
+        if encoder is not None:
+            self._check_label(encoder)
+            self.encoder = self.module_bag[encoder]
+            self.active_encoder = encoder
+
+        if decoder is not None:
+            self._check_label(decoder)
+            self._decoder = self.module_bag[decoder]
+            self.active_decoder = decoder
+
+        if intermediate is not None:
+            self._check_label(intermediate)
+            self._intermediate = self.module_bag[intermediate]
+            self.active_intermediate = intermediate
 
     def freeze_submodel(
         self,
@@ -119,12 +136,11 @@ class _MultiSubmoduleMixin:
 
     def default_submodules(self):
 
-        if self.active_encoder != _DEFAULT_MODELS[0]:
-            self.select_submodel(_DEFAULT_MODELS[0], "encoder")
-        if self.active_decoder != _DEFAULT_MODELS[1]:
-            self.select_submodel(_DEFAULT_MODELS[1], "decoder")
-        if self.active_intermediate != _DEFAULT_MODELS[2]:
-            self.select_submodel(_DEFAULT_MODELS[2], "intermediate")
+        self.select_submodels(
+            encoder=_DEFAULT_MODELS[0],
+            decoder=_DEFAULT_MODELS[1],
+            intermediate=_DEFAULT_MODELS[2]
+        )
 
     def is_active_module(self, module_name):
 
