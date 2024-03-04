@@ -9,7 +9,9 @@ def decoder_loss_transfer(
     new_output_decoder,
     loss_function=torch.nn.MSELoss(),
     encoder=None,
-    intermediate=None
+    intermediate=None,
+    n_iterations=10,
+    optimizer=None
 ):
 
     if not model._multisubmodel_model:
@@ -24,27 +26,20 @@ def decoder_loss_transfer(
         decoder=loss_decoder
     )
 
-    # Add a model hook to get gradients at the last layer before decoder
-    _grads = []
-    _handle = model._intermediate[-2].register_backward_hook(
-        lambda m, gi, go: _grads.append(torch.clone(go[0]))
+    _embedding = torch.nn.Parameter(
+        model.latent_embedding(input_x)
     )
 
-    loss_function(model(input_x), output_x).backward()
+    # Add a model hook to get gradients at the last layer before decoder
+    optimizer = model.process_optimizer(optimizer, params=(_embedding,))
 
-    _handle.remove()
+    for _ in range(n_iterations):
+        loss_function(model._decoder(_embedding), output_x).backward()
+
+        optimizer.step()
+        optimizer.zero_grad()
+
+    model.select_submodels(decoder=new_output_decoder)
 
     with torch.no_grad():
-
-        _old_embedding = model.latent_embedding(input_x)
-        _new_embedding = torch.add(
-            torch.mul(
-                _grads[0],
-                _old_embedding
-            ),
-            _old_embedding
-        )
-
-        model.select_submodels(decoder=new_output_decoder)
-
-        return _new_embedding, model._decoder(_new_embedding)
+        return _embedding.detach(), model._decoder(_embedding)
