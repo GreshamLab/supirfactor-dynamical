@@ -134,13 +134,22 @@ class _H5ADLoader:
 
         _obs = read_dataframe(self._filehandle['obs'])
 
-        if obs_col not in _obs.columns:
+        if not isinstance(obs_col, (tuple, list, pd.Index)):
+            obs_col = [obs_col]
+
+        _invalid_cols = [o not in _obs.columns for o in obs_col]
+        if any(_invalid_cols):
             raise ValueError(
-                f"Key {obs_col} not present in "
-                f"obs: {_obs.columns}"
+                f"Key(s) {_invalid_cols} "
+                f"not present in obs: {_obs.columns}"
             )
 
-        return _obs[obs_col].cat.remove_unused_categories()
+        _obs = _obs[obs_col].copy()
+
+        for o in obs_col:
+            _obs[o] = _obs[o].cat.remove_unused_categories()
+
+        return _obs
 
     def close(self):
         self._data_reference = None
@@ -319,24 +328,29 @@ class H5ADDatasetStratified(
 
         super().load_chunk(chunk)
 
+        _strat_cols = self.stratification_grouping.columns.to_list()
         _chunk_groups = self.stratification_grouping.iloc[
-            self.file_chunks[chunk]
-        ]
-        n_groups = len(_chunk_groups.cat.categories)
+            self.file_chunks[chunk], :
+        ].copy()
+        _chunk_groups['row_idx_loc'] = np.arange(_chunk_groups.shape[0])
 
-        if self.discard_categories is None:
-            valid_cats = range(n_groups)
-        else:
-            valid_cats = np.nonzero(
-                ~_chunk_groups.cat.categories.isin(
-                    self.discard_categories
-                )
-            )[0]
+        self._data_loaded_stratification = []
 
-        self._data_loaded_stratification = [
-            np.nonzero(_chunk_groups.cat.codes.values == x)[0]
-            for x in valid_cats
-        ]
+        for vals, idxes in _chunk_groups.groupby(_strat_cols)['row_idx_loc']:
+
+            if self.discard_categories is None:
+                pass
+            elif (
+                isinstance(vals, tuple) and
+                any(v in self.discard_categories for v in vals)
+            ):
+                continue
+            elif vals in self.discard_categories:
+                continue
+
+            self._data_loaded_stratification.append(
+                idxes.values
+            )
 
         self._min_strat_size = min(
             len(x)

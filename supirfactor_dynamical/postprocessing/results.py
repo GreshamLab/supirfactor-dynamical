@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-import torcheval.metrics
 import torch
 
 from inferelator.postprocessing import ResultsProcessor
+from supirfactor_dynamical._utils import argmax_last_dim
+from supirfactor_dynamical.postprocessing.eval import f1_score
 
 _LOSS_COLS = ["Model_Type", "Loss_Type"]
 _RESULT_COLS = ["R2_training", "R2_validation"]
@@ -157,50 +158,59 @@ def add_classification_metrics_to_dataframe(
     model_object,
     training_dataloader,
     validation_dataloader=None,
-    column_prefix=None
+    column_prefix="",
+    target_data_idx=1,
+    input_data_idx=0
 ):
-    if column_prefix is None:
-        column_prefix = "training_"
 
-    result_df[column_prefix + "accuracy"] = model_object.score(
+    model_object.eval()
+
+    if len(column_prefix) > 0:
+        column_prefix = "_" + column_prefix
+
+    result_df['f1_training' + column_prefix] = f1_score(
         training_dataloader,
-        loss_function=torcheval.metrics.functional.multilabel_accuracy,
-        criteria='hamming',
-        reduction='mean'
+        model_object,
+        target_data_idx=target_data_idx,
+        input_data_idx=input_data_idx
     ).item()
-
-    result_df[column_prefix + "auprc"] = model_object.score(
-        training_dataloader,
-        loss_function=torcheval.metrics.functional.multilabel_auprc,
-        reduction='mean'
-    ).item()
-
-    result_df[column_prefix + "cross_entropy"] = model_object.score(
-        training_dataloader,
-        loss_function=torch.nn.BCELoss(),
-        reduction='mean'
-    ).item()
-
-    _bincounts = 0
-    _total = 0
-    for data in training_dataloader:
-        _bincounts += torch.bincount(
-            model_object.output_data(data).int().view(-1),
-            minlength=2
-        )
-        _total += torch.numel(model_object.output_data(data))
-
-    # Add frequencies
-    for i, _bc in enumerate(_bincounts):
-        result_df[column_prefix + f"value_{i}_frequency"] = _bc.item() / _total
 
     if validation_dataloader is not None:
-        result_df = add_classification_metrics_to_dataframe(
-            result_df,
+        result_df['f1_validation' + column_prefix] = f1_score(
+            training_dataloader,
             model_object,
-            validation_dataloader,
-            column_prefix="validation_"
+            target_data_idx=target_data_idx,
+            input_data_idx=input_data_idx
+        ).item()
+
+    _predicts, _actuals, _labels = _get_classes(
+        model_object,
+        training_dataloader,
+        target_data_idx=target_data_idx,
+        input_data_idx=input_data_idx
+    )
+
+    result_df[
+        ("training" + column_prefix + "_actual_" + _labels).tolist()
+    ] = _actuals.numpy()
+    result_df[
+        ("training" + column_prefix + "_predict_" + _labels).tolist()
+    ] = _predicts.numpy()
+
+    if validation_dataloader is not None:
+        _predicts, _actuals, _labels = _get_classes(
+            model_object,
+            training_dataloader,
+            target_data_idx=target_data_idx,
+            input_data_idx=input_data_idx
         )
+
+        result_df[
+            ("validation" + column_prefix + "_actual_" + _labels).tolist()
+        ] = _actuals.numpy()
+        result_df[
+            ("validation" + column_prefix + "_predict_" + _labels).tolist()
+        ] = _predicts.numpy()
 
     return result_df
 
@@ -244,6 +254,32 @@ def process_combined_results(
     )
 
     return r
+
+
+def _get_classes(
+    model,
+    data,
+    target_data_idx=None,
+    input_data_idx=None
+):
+
+    _labels = data.dataset._data_labels
+
+    _training_classes = 0
+    _actual_classes = 0
+    for data in data:
+        _predicts = model(data[input_data_idx])
+        _n_class = _predicts.shape[-1]
+        _training_classes += torch.bincount(
+            argmax_last_dim(_predicts),
+            minlength=_n_class
+        )
+        _actual_classes += torch.bincount(
+            argmax_last_dim(data[target_data_idx]),
+            minlength=_n_class
+        )
+
+    return _training_classes, _actual_classes, _labels
 
 
 def _combine_weights(*args):

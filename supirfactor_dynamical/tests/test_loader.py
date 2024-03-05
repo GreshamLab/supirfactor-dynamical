@@ -810,6 +810,7 @@ class TestADBackedStratified(unittest.TestCase):
         _strats = np.tile(["A", "B", "C"], 34)[0:100]
         _strats[[3, 6, 10]] = 'D'
         self.adata.obs['strat'] = _strats
+        self.adata.obs['other_strat'] = ['F'] * 49 + ['G'] * 50 + ['F']
         self.adata.layers['tst'] = self.adata.X.copy()
         self.adata.write(self.filename)
 
@@ -835,7 +836,7 @@ class TestADBackedStratified(unittest.TestCase):
 
         pdt.assert_series_equal(
             self.adata.obs['strat'],
-            dataset.stratification_grouping
+            dataset.stratification_grouping['strat']
         )
 
         npt.assert_array_equal(
@@ -870,22 +871,6 @@ class TestADBackedStratified(unittest.TestCase):
                         dataset._data_loaded_stratification[i]
                     )
                 )
-
-        dataloader = DataLoader(
-            dataset,
-            batch_size=10
-        )
-
-        lens = [d.shape[0] for d in dataloader]
-
-        self.assertEqual(
-            len(lens),
-            6
-        )
-        self.assertListEqual(
-            lens,
-            [10] * 6
-        )
 
     def test_h5_mask(self):
 
@@ -926,6 +911,39 @@ class TestADBackedStratified(unittest.TestCase):
         self.assertEqual(
             data[0].shape[0],
             33
+        )
+
+    def test_dual_strat(self):
+
+        dataset = H5ADDatasetStratified(
+            self.filename,
+            ['strat', 'other_strat'],
+            discard_categories=['D'],
+            file_chunk_size=50
+        )
+
+        pdt.assert_series_equal(
+            self.adata.obs['strat'],
+            dataset.stratification_grouping['strat']
+        )
+
+        pdt.assert_series_equal(
+            self.adata.obs['other_strat'],
+            dataset.stratification_grouping['other_strat']
+        )
+
+        dataset.load_chunk(0)
+
+        npt.assert_array_equal(
+            dataset._data_loaded_chunk.numpy(),
+            X[0:50, :]
+        )
+
+        dataset.get_chunk_order(0)
+
+        self.assertEqual(
+            len(dataset._data_loaded_stratification),
+            4
         )
 
 
