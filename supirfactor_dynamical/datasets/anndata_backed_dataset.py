@@ -336,7 +336,10 @@ class H5ADDatasetStratified(
 
         self._data_loaded_stratification = []
 
-        for vals, idxes in _chunk_groups.groupby(_strat_cols)['row_idx_loc']:
+        for vals, idxes in _chunk_groups.groupby(
+            _strat_cols,
+            observed=False
+        )['row_idx_loc']:
 
             if self.discard_categories is None:
                 pass
