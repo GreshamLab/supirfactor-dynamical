@@ -970,6 +970,35 @@ class TestADObsBacked(unittest.TestCase):
             (99, 7)
         )
 
+    def test_obs_classnum_discard(self):
+
+        obs_dataset = H5ADDatasetObsStratified(
+            self.filename,
+            'strat',
+            file_chunk_size=27,
+            obs_columns='strat',
+            random_seed=876,
+            one_hot=False,
+            discard_categories=['B']
+        )
+
+        self.assertEqual(
+            torch.stack([x for x in obs_dataset]).shape,
+            (66, 1)
+        )
+
+        obs_dataset.format_data(True)
+
+        self.assertEqual(
+            torch.stack([x for x in obs_dataset]).shape,
+            (66, 3)
+        )
+
+        torch.testing.assert_close(
+            torch.stack([x for x in obs_dataset]).sum(axis=0),
+            torch.Tensor([33, 0, 33])
+        )
+
     def test_obs_classnum(self):
 
         obs_dataset = H5ADDatasetObsStratified(

@@ -298,7 +298,8 @@ class H5ADDatasetStratified(
         file_chunk_size=1000,
         random_seed=500,
         layer='X',
-        obs_include_mask=None
+        obs_include_mask=None,
+        discard_categories=None
     ):
         super().__init__(
             file_name,
@@ -312,6 +313,8 @@ class H5ADDatasetStratified(
             stratification_grouping_obs_column
         )
 
+        self.discard_categories = discard_categories
+
     def load_chunk(self, chunk):
 
         super().load_chunk(chunk)
@@ -321,9 +324,18 @@ class H5ADDatasetStratified(
         ]
         n_groups = len(_chunk_groups.cat.categories)
 
+        if self.discard_categories is None:
+            valid_cats = range(n_groups)
+        else:
+            valid_cats = np.nonzero(
+                ~_chunk_groups.cat.categories.isin(
+                    self.discard_categories
+                )
+            )[0]
+
         self._data_loaded_stratification = [
             np.nonzero(_chunk_groups.cat.codes.values == x)[0]
-            for x in range(n_groups)
+            for x in valid_cats
         ]
 
         self._min_strat_size = min(
@@ -354,7 +366,13 @@ class H5ADDatasetObsStratified(H5ADDatasetStratified):
 
     _data_raw = None
 
-    def __init__(self, *args, obs_columns=None, one_hot=True, **kwargs):
+    def __init__(
+        self,
+        *args,
+        obs_columns=None,
+        one_hot=True,
+        **kwargs
+    ):
         kwargs['layer'] = 'obs'
         super().__init__(*args, **kwargs)
 
