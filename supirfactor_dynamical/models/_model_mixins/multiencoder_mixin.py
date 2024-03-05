@@ -105,6 +105,8 @@ class _MultiSubmoduleMixin:
             self._intermediate = self.module_bag[intermediate]
             self.active_intermediate = intermediate
 
+        self.train(self.training)
+
     def freeze_submodel(
         self,
         model_type,
