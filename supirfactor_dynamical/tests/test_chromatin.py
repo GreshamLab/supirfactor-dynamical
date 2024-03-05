@@ -95,17 +95,7 @@ class TestChromatinTraining(unittest.TestCase):
 
         self.assertEqual(
             results.shape,
-            (1, 9)
-        )
-
-        self.assertEqual(
-            results.iloc[0, 7],
-            np.sum(PEAKS == 0) / PEAKS.size
-        )
-
-        self.assertEqual(
-            results.iloc[0, 8],
-            np.sum(PEAKS == 1) / PEAKS.size
+            (1, 5)
         )
 
 

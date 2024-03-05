@@ -160,7 +160,8 @@ def add_classification_metrics_to_dataframe(
     validation_dataloader=None,
     column_prefix="",
     target_data_idx=1,
-    input_data_idx=0
+    input_data_idx=0,
+    add_class_counts=False
 ):
 
     model_object.eval()
@@ -183,21 +184,7 @@ def add_classification_metrics_to_dataframe(
             input_data_idx=input_data_idx
         ).item()
 
-    _predicts, _actuals, _labels = _get_classes(
-        model_object,
-        training_dataloader,
-        target_data_idx=target_data_idx,
-        input_data_idx=input_data_idx
-    )
-
-    result_df[
-        ("training" + column_prefix + "_actual_" + _labels).tolist()
-    ] = _actuals.numpy()
-    result_df[
-        ("training" + column_prefix + "_predict_" + _labels).tolist()
-    ] = _predicts.numpy()
-
-    if validation_dataloader is not None:
+    if add_class_counts:
         _predicts, _actuals, _labels = _get_classes(
             model_object,
             training_dataloader,
@@ -206,11 +193,26 @@ def add_classification_metrics_to_dataframe(
         )
 
         result_df[
-            ("validation" + column_prefix + "_actual_" + _labels).tolist()
+            ("training" + column_prefix + "_actual_" + _labels).tolist()
         ] = _actuals.numpy()
         result_df[
-            ("validation" + column_prefix + "_predict_" + _labels).tolist()
+            ("training" + column_prefix + "_predict_" + _labels).tolist()
         ] = _predicts.numpy()
+
+        if validation_dataloader is not None:
+            _predicts, _actuals, _labels = _get_classes(
+                model_object,
+                training_dataloader,
+                target_data_idx=target_data_idx,
+                input_data_idx=input_data_idx
+            )
+
+            result_df[
+                ("validation" + column_prefix + "_actual_" + _labels).tolist()
+            ] = _actuals.numpy()
+            result_df[
+                ("validation" + column_prefix + "_predict_" + _labels).tolist()
+            ] = _predicts.numpy()
 
     return result_df
 
@@ -263,8 +265,6 @@ def _get_classes(
     input_data_idx=None
 ):
 
-    _labels = data.dataset._data_labels
-
     _training_classes = 0
     _actual_classes = 0
     for data in data:
@@ -278,6 +278,11 @@ def _get_classes(
             argmax_last_dim(data[target_data_idx]),
             minlength=_n_class
         )
+
+    try:
+        _labels = data.dataset.datasets[target_data_idx]._data_labels
+    except AttributeError:
+        _labels = pd.Series([f'{x}' for x in range(_n_class)])
 
     return _training_classes, _actual_classes, _labels
 

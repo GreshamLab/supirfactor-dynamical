@@ -1,6 +1,7 @@
 import unittest
 import torch
 import torcheval
+import torcheval.metrics
 import numpy as np
 
 from supirfactor_dynamical.postprocessing.eval import (
