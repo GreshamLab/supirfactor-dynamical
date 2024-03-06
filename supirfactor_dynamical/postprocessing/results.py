@@ -267,20 +267,21 @@ def _get_classes(
 
     _training_classes = 0
     _actual_classes = 0
-    for data in data:
-        _predicts = model(data[input_data_idx])
+    for d in data:
+        _predicts = model(d[input_data_idx])
         _n_class = _predicts.shape[-1]
         _training_classes += torch.bincount(
             argmax_last_dim(_predicts),
             minlength=_n_class
         )
         _actual_classes += torch.bincount(
-            argmax_last_dim(data[target_data_idx]),
+            argmax_last_dim(d[target_data_idx]),
             minlength=_n_class
         )
 
     try:
         _labels = data.dataset.datasets[target_data_idx]._data_labels
+        _labels = _labels.str.lower().str.replace(" ", "_")
     except AttributeError:
         _labels = pd.Series([f'{x}' for x in range(_n_class)])
 
