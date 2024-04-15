@@ -55,6 +55,13 @@ _DECODE_ACTIVATIONS = {
     4: 'tanh'
 }
 
+_FORCE_UNIT = {
+    'decay_k': int,
+    'k': int,
+    'g': int,
+    'hidden_layer_width': int
+}
+
 
 def read(
     file_name,
@@ -102,6 +109,10 @@ def read(
             k[_pre_len:]: _load_h5_dataset(f, k)
             for k in _state_args
         }
+
+    for k, func in _FORCE_UNIT.items():
+        if k in kwargs and kwargs[k] is not None:
+            kwargs[k] = func(kwargs[k])
 
     # Get the prior and pop out the prior
     # size variables
