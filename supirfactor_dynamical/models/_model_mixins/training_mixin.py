@@ -7,7 +7,8 @@ import time
 from supirfactor_dynamical._utils import (
     to,
     _cat,
-    _nobs
+    _nobs,
+    _to_tensor
 )
 
 from supirfactor_dynamical._io._writer import write
@@ -28,6 +29,7 @@ class _TrainingMixin:
     device = 'cpu'
 
     training_time = None
+    current_epoch = 0
 
     _training_loss = None
     _validation_loss = None
@@ -134,7 +136,7 @@ class _TrainingMixin:
             self.validation_loss
             self.validation_n
 
-        for epoch_num in tqdm.trange(epochs):
+        for epoch_num in tqdm.trange(self.current_epoch, epochs):
 
             self.train()
 
@@ -174,6 +176,8 @@ class _TrainingMixin:
             # is a noop unless the underlying DataSet is a TimeDataset
             _shuffle_time_data(training_dataloader)
             _shuffle_time_data(validation_dataloader)
+
+            self.current_epoch = epoch_num
 
         to(self, 'cpu')
         self.eval()
@@ -556,10 +560,7 @@ class _TrainingMixin:
     @staticmethod
     def to_tensor(x):
 
-        if not torch.is_tensor(x):
-            x = torch.Tensor(x)
-
-        return x
+        return _to_tensor(x)
 
     @torch.inference_mode()
     def predict(

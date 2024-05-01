@@ -509,6 +509,7 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
 
         biophysical._training_loss = [(1., 1., 1.), (1., 1., 1.)]
         biophysical._validation_loss = [(2., 2., 2.), (2., 2., 2.)]
+        biophysical.current_epoch = 3
 
         biophysical.save(self.temp_file_name)
         biophysical.eval()
@@ -534,6 +535,11 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         npt.assert_almost_equal(
             loaded_biophysical._validation_loss,
             biophysical._validation_loss
+        )
+
+        npt.assert_almost_equal(
+            loaded_biophysical.current_epoch,
+            biophysical.current_epoch
         )
 
         self.assertEqual(

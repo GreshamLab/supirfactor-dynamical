@@ -1,6 +1,7 @@
 import torch
 import tqdm
 import numpy as np
+import warnings
 
 from supirfactor_dynamical.models._model_mixins.training_mixin import (
     _shuffle_time_data
@@ -41,38 +42,43 @@ def train_decoder_submodels(
     :rtype: np.ndarray, np.ndarray
     """
 
+    if hasattr(model, 'module'):
+        model_ref = model.module
+    else:
+        model_ref = model
+
     if (
-        not hasattr(model, "_multisubmodel_model") or
-        not model._multisubmodel_model
+        not hasattr(model_ref, "_multisubmodel_model") or
+        not model_ref._multisubmodel_model
     ):
-        raise RuntimeError(
+        warnings.warn(
             "This training loop requires a model with multiple subunits"
         )
 
     to(model, device=model.device)
 
     # Set training time and create loss lists
-    model.set_training_time()
-    model.training_loss
-    model.training_n
+    model_ref.set_training_time()
+    model_ref.training_loss
+    model_ref.training_n
 
-    [model._check_label(x) for x in decoder_models]
+    [model_ref._check_label(x) for x in decoder_models]
 
     if freeze_embeddings:
-        model.freeze_submodel('encoder')
-        model.freeze_submodel('intermediate')
+        model_ref.freeze_submodel('encoder')
+        model_ref.freeze_submodel('intermediate')
         optimizers = {
-            x: model.process_optimizer(
+            x: model_ref.process_optimizer(
                 optimizer,
-                params=model.module_bag[x].parameters()
+                params=model_ref.module_bag[x].parameters()
             )
             for x in decoder_models
         }
     else:
         optimizers = {}
         for x in decoder_models:
-            model.select_submodel(x, 'decoder')
-            optimizers[x] = model.process_optimizer(
+            model_ref.select_submodel(x, 'decoder')
+            optimizers[x] = model_ref.process_optimizer(
                 optimizer
             )
 
@@ -98,10 +104,10 @@ def train_decoder_submodels(
                 loss_function,
                 train_x
             ):
-                model.select_submodel(x, 'decoder')
+                model_ref.select_submodel(x, 'decoder')
 
                 _decoder_losses.append(
-                    model._training_step(
+                    model_ref._training_step(
                         epoch_num,
                         train_x[encoder_data_index],
                         optimizers[x],
@@ -112,16 +118,16 @@ def train_decoder_submodels(
 
             _batch_losses.append(_decoder_losses)
 
-        model._training_loss.append(
+        model_ref._training_loss.append(
             np.mean(np.array(_batch_losses), axis=0)
         )
-        model._training_n.append(_batch_n)
+        model_ref._training_n.append(_batch_n)
 
         # Get validation losses during training
         # if validation data was provided
         if validation_dataloader is not None:
-            model.validation_loss
-            model.validation_n
+            model_ref.validation_loss
+            model_ref.validation_n
 
             with torch.no_grad():
 
@@ -144,7 +150,7 @@ def train_decoder_submodels(
                         model.select_submodel(x, 'decoder')
 
                         _batch_loss.append(
-                            model._calculate_all_losses(
+                            model_ref._calculate_all_losses(
                                 val_x[encoder_data_index],
                                 lf,
                                 target_data=_target_x
@@ -153,8 +159,8 @@ def train_decoder_submodels(
 
                     _val_loss.append(_batch_loss)
 
-            model._validation_n.append(_val_n)
-            model._validation_loss.append(
+            model_ref._validation_n.append(_val_n)
+            model_ref._validation_loss.append(
                 np.mean(np.array(_val_loss), axis=0)
             )
 

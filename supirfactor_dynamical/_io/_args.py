@@ -36,7 +36,8 @@ _SERIALIZE_RUNTIME_ATTRS = [
     'training_r2_over_time',
     'validation_r2_over_time',
     '_training_n',
-    '_validation_n'
+    '_validation_n',
+    'current_epoch'
 ]
 
 _SERIALIZE_ENCODED_ARGS = [

@@ -29,6 +29,20 @@ def argmax_last_dim(x):
     ).reshape(x.shape[:-1])
 
 
+def _to_tensor(data):
+
+    if isinstance(data, tuple):
+        return tuple(
+            _to_tensor(x)
+            for x in data
+        )
+
+    if not torch.is_tensor(data):
+        data = torch.Tensor(data)
+
+    return data
+
+
 def _cat(_data, dim):
     """
     Concatenate list of tensors or list of tensor tuples

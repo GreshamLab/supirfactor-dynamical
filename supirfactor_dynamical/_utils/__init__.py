@@ -24,7 +24,8 @@ from .misc import (
     _add,
     _cat,
     _unsqueeze,
-    _nobs
+    _nobs,
+    _to_tensor
 )
 
 from .time_offsets import (
