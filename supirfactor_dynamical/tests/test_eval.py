@@ -54,7 +54,8 @@ class TestEvalR2Raw(unittest.TestCase):
             _ModelStub(),
             target_data_idx=0,
             input_data_idx=1,
-            multioutput=self.multioutput
+            multioutput=self.multioutput,
+            exclude_low_variance=0.001
         )
 
         te_r2s = torcheval.metrics.functional.r2_score(

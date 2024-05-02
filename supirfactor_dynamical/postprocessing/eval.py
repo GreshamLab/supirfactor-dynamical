@@ -17,7 +17,8 @@ def r2_score(
     model,
     target_data_idx=None,
     input_data_idx=None,
-    multioutput='uniform_average'
+    multioutput='uniform_average',
+    exclude_low_variance=None
 ):
 
     if dataloader is None:
@@ -27,6 +28,7 @@ def r2_score(
 
     _rss = 0
     _tss = 0
+    _n = 0
 
     with torch.no_grad():
         for data in dataloader:
@@ -51,6 +53,17 @@ def r2_score(
             _tss += _calculate_tss(
                 output_data
             )
+
+            _n = _n + output_data.shape[0]
+
+            # Exclude very low variance features from
+            # R2 calculation
+            # Useful if averaging across features
+            # when some features are not informative
+            if exclude_low_variance is not None:
+                _var_mask = (_tss / (_n - 1)) < exclude_low_variance
+                _tss[_var_mask] = 0
+                _rss[_var_mask] = 0
 
         if multioutput == 'raw_values':
             return _calculate_r2(_rss, _tss)
