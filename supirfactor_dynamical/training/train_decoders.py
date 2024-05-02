@@ -86,7 +86,7 @@ def train_decoder_submodels(
     if not isinstance(loss_function, (tuple, list)):
         loss_function = [loss_function] * len(optimizers)
 
-    for epoch_num in tqdm.trange(model.current_epoch, epochs):
+    for epoch_num in tqdm.trange(model_ref.current_epoch, epochs):
 
         model.train()
 
