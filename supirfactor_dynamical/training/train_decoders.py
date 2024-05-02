@@ -148,7 +148,7 @@ def train_decoder_submodels(
                         loss_function,
                         val_x
                     ):
-                        model.select_submodel(x, 'decoder')
+                        model_ref.select_submodel(x, 'decoder')
 
                         _batch_loss.append(
                             model_ref._calculate_all_losses(
@@ -170,9 +170,9 @@ def train_decoder_submodels(
         _shuffle_time_data(training_dataloader)
         _shuffle_time_data(validation_dataloader)
 
-        model.current_epoch = epoch_num
+        model_ref.current_epoch = epoch_num
 
         if post_epoch_hook is not None:
-            post_epoch_hook(model)
+            post_epoch_hook(model_ref)
 
     return model
