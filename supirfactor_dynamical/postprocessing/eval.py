@@ -55,13 +55,13 @@ def r2_score(
         if multioutput == 'raw_values':
             return _calculate_r2(_rss, _tss)
         elif multioutput == 'uniform_average':
-            return _calculate_r2(_rss, _tss).mean()
+            return torch.nanmean(_calculate_r2(_rss, _tss))
         elif multioutput == 'uniform_truncated_average':
             rsq = _calculate_r2(_rss, _tss)
             rsq[rsq < 0] = 0
-            return rsq.mean()
+            return torch.nanmean(rsq)
         elif multioutput == 'variance_weighted':
-            return 1 - _rss.sum() / _tss.sum()
+            return 1 - torch.nansum(_rss) / torch.nansum(_tss)
         else:
             raise ValueError(
                 f"Invalid multioutput = {multioutput}"

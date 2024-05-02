@@ -70,7 +70,12 @@ def _calculate_r2(rss, tss):
 
     valid_ss = tss != 0.
 
-    r2 = torch.zeros_like(tss)
+    # Special case where all tss are zeros
+    # shouldn't ever actually happen outside testing
+    if not torch.any(valid_ss):
+        return torch.zeros_like(tss)
+
+    r2 = torch.full_like(tss, np.nan)
     r2[valid_ss] = rss[valid_ss] / tss[valid_ss]
     r2 *= -1
     r2 += 1

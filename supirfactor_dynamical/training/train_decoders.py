@@ -18,7 +18,8 @@ def train_decoder_submodels(
     freeze_embeddings=False,
     validation_dataloader=None,
     loss_function=torch.nn.MSELoss(),
-    optimizer=None
+    optimizer=None,
+    post_epoch_hook=None
 ):
     """
     Train this model
@@ -85,7 +86,7 @@ def train_decoder_submodels(
     if not isinstance(loss_function, (tuple, list)):
         loss_function = [loss_function] * len(optimizers)
 
-    for epoch_num in tqdm.trange(epochs):
+    for epoch_num in tqdm.trange(model.current_epoch, epochs):
 
         model.train()
 
@@ -168,5 +169,10 @@ def train_decoder_submodels(
         # is a noop unless the underlying DataSet is a TimeDataset
         _shuffle_time_data(training_dataloader)
         _shuffle_time_data(validation_dataloader)
+
+        model.current_epoch = epoch_num
+
+        if post_epoch_hook is not None:
+            post_epoch_hook(model)
 
     return model
