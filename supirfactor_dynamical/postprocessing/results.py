@@ -1,10 +1,15 @@
 import pandas as pd
 import numpy as np
 import torch
+import warnings
 
 from inferelator.postprocessing import ResultsProcessor
 from supirfactor_dynamical._utils import argmax_last_dim
 from supirfactor_dynamical.postprocessing.eval import f1_score
+
+# Silence the most idiotic thing
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+
 
 _LOSS_COLS = ["Model_Type", "Loss_Type"]
 _RESULT_COLS = ["R2_training", "R2_validation"]
@@ -214,7 +219,7 @@ def add_classification_metrics_to_dataframe(
                 ("validation" + column_prefix + "_predict_" + _labels).tolist()
             ] = _predicts.numpy()
 
-    return result_df.copy()
+    return result_df
 
 
 def process_combined_results(
