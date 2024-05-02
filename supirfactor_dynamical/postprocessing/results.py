@@ -214,7 +214,7 @@ def add_classification_metrics_to_dataframe(
                 ("validation" + column_prefix + "_predict_" + _labels).tolist()
             ] = _predicts.numpy()
 
-    return result_df
+    return result_df.copy()
 
 
 def process_combined_results(
