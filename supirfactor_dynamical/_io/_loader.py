@@ -147,6 +147,13 @@ def read(
             **scaling_kwargs
         )
 
+    if submodule_templates is not None:
+        for module_name, module in submodule_templates:
+            model.add_submodel(
+                module_name,
+                module
+            )
+
     # Load all the tensors in
     model.load_state_dict(
         _state_dict
@@ -154,12 +161,5 @@ def read(
 
     for k, v in info_kwargs.items():
         setattr(model, k, v)
-
-    if submodule_templates is not None:
-        for module_name, module in submodule_templates:
-            model.add_submodel(
-                module_name,
-                module
-            )
 
     return model

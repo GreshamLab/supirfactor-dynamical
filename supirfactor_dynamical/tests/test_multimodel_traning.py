@@ -84,7 +84,7 @@ class TestEmbeddingModelTraining(_SetupMixin, unittest.TestCase):
             use_prior_weights=True
         )
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(AttributeError):
             train_embedding_submodels(
                 model,
                 self.static_dataloader,

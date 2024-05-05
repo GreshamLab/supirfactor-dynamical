@@ -80,7 +80,8 @@ def train_decoder_submodels(
         for x in decoder_models:
             model_ref.select_submodel(x, 'decoder')
             optimizers[x] = model_ref.process_optimizer(
-                optimizer
+                optimizer,
+                params=model_ref.active_parameters()
             )
 
     if not isinstance(loss_function, (tuple, list)):

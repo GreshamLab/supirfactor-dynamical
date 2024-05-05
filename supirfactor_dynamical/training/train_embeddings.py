@@ -1,5 +1,6 @@
 import torch
 import tqdm
+import warnings
 import numpy as np
 
 from supirfactor_dynamical.models._model_mixins.training_mixin import (
@@ -20,7 +21,8 @@ def train_embedding_submodels(
     frozen_intermediate='default_intermediate',
     validation_dataloader=None,
     loss_function=torch.nn.MSELoss(),
-    optimizer=None
+    optimizer=None,
+    post_epoch_hook=None
 ):
     """
     Train model encoder/intermediate modules to produce a specific
@@ -55,31 +57,36 @@ def train_embedding_submodels(
     :type optimizer: torch.optim.object(), dict(), optional
     """
 
+    if hasattr(model, 'module'):
+        model_ref = model.module
+    else:
+        model_ref = model
+
     if (
-        not hasattr(model, "_multisubmodel_model") or
-        not model._multisubmodel_model
+        not hasattr(model_ref, "_multisubmodel_model") or
+        not model_ref._multisubmodel_model
     ):
-        raise RuntimeError(
+        warnings.warn(
             "This training loop requires a model with multiple subunits"
         )
 
     to(model, device=model.device)
-    optimizer = model.process_optimizer(optimizer)
+    optimizer = model_ref.process_optimizer(optimizer)
 
     # Set training time and create loss lists
-    model.set_training_time()
-    model.training_loss
-    model.training_n
+    model_ref.set_training_time()
+    model_ref.training_loss
+    model_ref.training_n
 
     try:
-        model.add_submodel(
+        model_ref.add_submodel(
             'NULL',
             torch.nn.Sequential()
         )
     except ValueError:
         pass
 
-    model.select_submodel(
+    model_ref.select_submodel(
         'NULL',
         model_type='decoder'
     )
@@ -97,19 +104,19 @@ def train_embedding_submodels(
             _batch_n = _batch_n + train_x.shape[0]
 
             frozen_embedding = _get_embedding(
-                model,
+                model_ref,
                 _embed_x,
                 frozen_encoder,
                 frozen_intermediate
             )
 
             _set_submodels(
-                model,
+                model_ref,
                 encoder=training_encoder,
                 intermediate=training_intermediate
             )
 
-            mse = model._training_step(
+            mse = model_ref._training_step(
                 epoch_num,
                 _train_x,
                 optimizer,
@@ -120,16 +127,16 @@ def train_embedding_submodels(
 
             _batch_losses.append(mse)
 
-        model._training_loss.append(
+        model_ref._training_loss.append(
             np.mean(np.array(_batch_losses), axis=0)
         )
-        model._training_n.append(_batch_n)
+        model_ref._training_n.append(_batch_n)
 
         # Get validation losses during training
         # if validation data was provided
         if validation_dataloader is not None:
-            model.validation_loss
-            model.validation_n
+            model_ref.validation_loss
+            model_ref.validation_n
 
             with torch.no_grad():
 
@@ -150,15 +157,15 @@ def train_embedding_submodels(
                     )
 
                     _val_loss.append(
-                        model._calculate_all_losses(
+                        model_ref._calculate_all_losses(
                             _val_x,
                             loss_function,
                             target_data=_embed
                         )[0]
                     )
 
-            model._validation_n.append(_val_n)
-            model._validation_loss.append(
+            model_ref._validation_n.append(_val_n)
+            model_ref._validation_loss.append(
                 np.mean(np.array(_val_loss), axis=0)
             )
 
@@ -166,6 +173,11 @@ def train_embedding_submodels(
         # is a noop unless the underlying DataSet is a TimeDataset
         _shuffle_time_data(training_dataloader)
         _shuffle_time_data(validation_dataloader)
+
+        model_ref.current_epoch = epoch_num
+
+        if post_epoch_hook is not None:
+            post_epoch_hook(model_ref)
 
     return model
 
