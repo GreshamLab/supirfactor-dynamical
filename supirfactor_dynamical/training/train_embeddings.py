@@ -91,7 +91,7 @@ def train_embedding_submodels(
         model_type='decoder'
     )
 
-    for epoch_num in tqdm.trange(epochs):
+    for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
 
         model.train()
 
@@ -127,16 +127,14 @@ def train_embedding_submodels(
 
             _batch_losses.append(mse)
 
-        model_ref._training_loss.append(
-            np.mean(np.array(_batch_losses), axis=0)
+        model_ref.append_loss(
+            training_loss=np.mean(np.array(_batch_losses), axis=0),
+            training_n=_batch_n
         )
-        model_ref._training_n.append(_batch_n)
 
         # Get validation losses during training
         # if validation data was provided
         if validation_dataloader is not None:
-            model_ref.validation_loss
-            model_ref.validation_n
 
             with torch.no_grad():
 
@@ -164,9 +162,9 @@ def train_embedding_submodels(
                         )[0]
                     )
 
-            model_ref._validation_n.append(_val_n)
-            model_ref._validation_loss.append(
-                np.mean(np.array(_val_loss), axis=0)
+            model_ref.append_loss(
+                validation_loss=np.mean(np.array(_val_loss), axis=0),
+                validation_n=_val_n
             )
 
         # Shuffle stratified time data

@@ -241,6 +241,22 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
 
         self.assertEqual(stub.prior_network, (4, 3))
 
+    def test_h5_train_checkpoint(self):
+
+        ae = get_model(
+            'static',
+            velocity=self.velocity
+        )(self.prior, use_prior_weights=True)
+
+        ae.train_model([X_tensor], 1)
+        self.assertEqual(ae.current_epoch, 0)
+        ae.save(self.temp_file_name)
+
+        loaded = read(self.temp_file_name)
+        self.assertEqual(loaded.current_epoch, 0)
+        loaded.train_model([X_tensor], 2)
+        self.assertEqual(loaded.current_epoch, 1)
+
     def test_h5_dynamic(self):
 
         ae = get_model(
@@ -345,8 +361,8 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
-        ae._training_loss = [1., 1., 1.]
-        ae._validation_loss = [2., 2., 2.]
+        ae._training_loss = np.array([1., 1., 1.])
+        ae._validation_loss = np.array([2., 2., 2.])
 
         ae.save(self.temp_file_name)
         ae.eval()
@@ -507,8 +523,8 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             output_activation='softplus'
         )
 
-        biophysical._training_loss = [(1., 1., 1.), (1., 1., 1.)]
-        biophysical._validation_loss = [(2., 2., 2.), (2., 2., 2.)]
+        biophysical._training_loss = np.array([(1., 1., 1.), (1., 1., 1.)])
+        biophysical._validation_loss = np.array([(2., 2., 2.), (2., 2., 2.)])
         biophysical.current_epoch = 3
 
         biophysical.save(self.temp_file_name)
@@ -786,6 +802,10 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
 class TestSerializerVelocity(TestSerializer):
 
     velocity = True
+
+    @unittest.skip
+    def test_h5_train_checkpoint(self):
+        pass
 
 
 class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):

@@ -276,7 +276,7 @@ class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
             model_type=('default_decoder', 'test_decoder')
         )
 
-        self.assertEqual(loss_df.shape, (4, 12))
+        self.assertEqual(loss_df.shape, (4, 13))
         self.assertEqual(res_df.shape, (1, 3))
 
 
@@ -323,7 +323,7 @@ class TestDecoderClassifiers(unittest.TestCase):
             model_type=('default_decoder', 'classifier')
         )
 
-        self.assertEqual(loss_df.shape, (4, 12))
+        self.assertEqual(loss_df.shape, (4, 13))
         self.assertEqual(res_df.shape, (1, 3))
 
 

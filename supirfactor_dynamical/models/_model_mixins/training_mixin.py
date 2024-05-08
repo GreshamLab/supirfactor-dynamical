@@ -29,7 +29,7 @@ class _TrainingMixin:
     device = 'cpu'
 
     training_time = None
-    current_epoch = 0
+    current_epoch = -1
 
     _training_loss = None
     _validation_loss = None
@@ -58,16 +58,16 @@ class _TrainingMixin:
     @property
     def training_loss(self):
         if self._training_loss is None:
-            self._training_loss = []
+            return np.array([])
 
-        return np.array(self._training_loss)
+        return self._training_loss
 
     @property
     def validation_loss(self):
         if self._validation_loss is None:
-            self._validation_loss = []
+            return np.array([])
 
-        return np.array(self._validation_loss)
+        return self._validation_loss
 
     @property
     def training_loss_df(self):
@@ -79,17 +79,23 @@ class _TrainingMixin:
 
     @property
     def training_n(self):
-        if self._training_n is None:
-            self._training_n = []
+        if (
+            self._training_n is not None and
+            self._training_n.ndim == 0
+        ):
+            self._training_n = self._training_n.reshape(-1)
 
-        return np.array(self._training_n)
+        return self._training_n
 
     @property
     def validation_n(self):
-        if self._validation_n is None:
-            self._validation_n = []
+        if (
+            self._validation_n is not None and
+            self._validation_n.ndim == 0
+        ):
+            self._validation_n = self._validation_n.reshape(-1)
 
-        return np.array(self._validation_n)
+        return self._validation_n
 
     def train_model(
         self,
@@ -136,7 +142,7 @@ class _TrainingMixin:
             self.validation_loss
             self.validation_n
 
-        for epoch_num in tqdm.trange(self.current_epoch, epochs):
+        for epoch_num in tqdm.trange(self.current_epoch + 1, epochs):
 
             self.train()
 
@@ -156,20 +162,23 @@ class _TrainingMixin:
                 _batch_losses.append(mse)
                 _batch_n = _batch_n + _nobs(train_x)
 
-            self._training_loss.append(
-                np.mean(np.array(_batch_losses), axis=0)
+            self.append_loss(
+                training_loss=np.mean(np.array(_batch_losses), axis=0),
+                training_n=_batch_n
             )
-            self._training_n.append(_batch_n)
 
             # Get validation losses during training
             # if validation data was provided
             if validation_dataloader is not None:
 
-                self._validation_loss.append(
-                    self._calculate_validation_loss(
-                        validation_dataloader,
-                        loss_function
-                    )
+                _vloss, _vn = self._calculate_validation_loss(
+                    validation_dataloader,
+                    loss_function
+                )
+
+                self.append_loss(
+                    validation_loss=_vloss,
+                    validation_n=_vn
                 )
 
             # Shuffle stratified time data
@@ -262,9 +271,13 @@ class _TrainingMixin:
 
                     _validation_n = _validation_n + _nobs(val_x)
 
-                self._validation_n.append(_validation_n)
-
-            return np.mean(np.array(_validation_batch_losses), axis=0)
+            return (
+                np.mean(
+                    np.array(_validation_batch_losses),
+                    axis=0
+                ),
+                _validation_n
+            )
 
     def set_dropouts(
         self,
@@ -540,6 +553,68 @@ class _TrainingMixin:
         if reset or self.training_time is None:
             self.training_time = time.time()
 
+    def append_loss(
+        self,
+        training_loss=None,
+        training_n=None,
+        validation_loss=None,
+        validation_n=None
+    ):
+
+        if training_loss is not None:
+
+            training_loss = np.asanyarray(training_loss).reshape(1, -1)
+
+            if self._training_loss is None:
+                self._training_loss = training_loss
+            else:
+                self._training_loss = np.append(
+                    self.training_loss,
+                    training_loss,
+                    axis=0
+                )
+
+        if training_n is not None:
+
+            training_n = np.asanyarray(training_n).reshape(1, -1)
+
+            if self._training_n is None:
+                self._training_n = training_n
+            else:
+                self._training_n = np.append(
+                    self.training_n,
+                    training_n,
+                    axis=0
+                )
+
+        if validation_loss is not None:
+
+            validation_loss = np.asanyarray(validation_loss).reshape(1, -1)
+
+            if self._validation_loss is None:
+                self._validation_loss = np.asanyarray(
+                    validation_loss
+                )
+            else:
+                self._validation_loss = np.append(
+                    self.validation_loss,
+                    validation_loss,
+                    axis=0
+                )
+
+        if validation_n is not None:
+
+            validation_n = np.asanyarray(validation_n).reshape(1, -1)
+
+            if self._validation_n is None:
+                self._validation_n = validation_n
+            else:
+                self._validation_n = np.append(
+                    self.validation_n,
+                    validation_n,
+                    axis=0
+                )
+
     def _loss_df(self, loss_array):
 
         if loss_array.size == 0:
@@ -547,13 +622,12 @@ class _TrainingMixin:
         elif loss_array.ndim == 1:
             loss_array = loss_array.reshape(-1, 1)
 
-        _loss = pd.DataFrame(loss_array.T)
+        _loss = pd.DataFrame(loss_array).T
 
-        if _loss.shape[0] == 1:
-            _loss.insert(0, 'loss_model', self.type_name)
-
-        elif self._loss_type_names is not None:
+        if self._loss_type_names is not None:
             _loss.insert(0, 'loss_model', self._loss_type_names)
+        else:
+            _loss.insert(0, 'loss_model', self.type_name)
 
         return _loss
 

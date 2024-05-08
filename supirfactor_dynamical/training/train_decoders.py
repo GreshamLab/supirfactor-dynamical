@@ -58,10 +58,8 @@ def train_decoder_submodels(
 
     to(model, device=model.device)
 
-    # Set training time and create loss lists
+    # Set training time
     model_ref.set_training_time()
-    model_ref.training_loss
-    model_ref.training_n
 
     [model_ref._check_label(x) for x in decoder_models]
 
@@ -87,7 +85,7 @@ def train_decoder_submodels(
     if not isinstance(loss_function, (tuple, list)):
         loss_function = [loss_function] * len(optimizers)
 
-    for epoch_num in tqdm.trange(model_ref.current_epoch, epochs):
+    for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
 
         model.train()
 
@@ -120,16 +118,14 @@ def train_decoder_submodels(
 
             _batch_losses.append(_decoder_losses)
 
-        model_ref._training_loss.append(
-            np.mean(np.array(_batch_losses), axis=0)
+        model_ref.append_loss(
+            training_loss=np.mean(np.array(_batch_losses), axis=0),
+            training_n=_batch_n
         )
-        model_ref._training_n.append(_batch_n)
 
         # Get validation losses during training
         # if validation data was provided
         if validation_dataloader is not None:
-            model_ref.validation_loss
-            model_ref.validation_n
 
             with torch.no_grad():
 
@@ -161,9 +157,9 @@ def train_decoder_submodels(
 
                     _val_loss.append(_batch_loss)
 
-            model_ref._validation_n.append(_val_n)
-            model_ref._validation_loss.append(
-                np.mean(np.array(_val_loss), axis=0)
+            model_ref.append_loss(
+                validation_loss=np.mean(np.array(_val_loss), axis=0),
+                validation_n=_val_n
             )
 
         # Shuffle stratified time data
