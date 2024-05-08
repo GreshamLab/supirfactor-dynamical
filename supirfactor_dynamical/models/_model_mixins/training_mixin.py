@@ -79,21 +79,21 @@ class _TrainingMixin:
 
     @property
     def training_n(self):
-        if (
-            self._training_n is not None and
-            self._training_n.ndim == 0
-        ):
-            self._training_n = self._training_n.reshape(-1)
+        # Check dims for backward compatibility
+        if self._training_n is None:
+            pass
+        elif self._training_n.ndim < 2:
+            self._training_n = self._training_n.reshape(-1, 1)
 
         return self._training_n
 
     @property
     def validation_n(self):
-        if (
-            self._validation_n is not None and
-            self._validation_n.ndim == 0
-        ):
-            self._validation_n = self._validation_n.reshape(-1)
+        # Check dims for backward compatibility
+        if self._validation_n is None:
+            pass
+        elif self._validation_n.ndim < 2:
+            self._validation_n = self._validation_n.reshape(-1, 1)
 
         return self._validation_n
 

@@ -93,7 +93,17 @@ class TestMultiEncoderMixin(unittest.TestCase):
             len(self.model.encoder), 2
         )
 
+        self.assertEqual(
+            id(self.model._module_bag['default_encoder']),
+            id(self.model.encoder)
+        )
+
         self.model.select_submodel('lots_o_layers')
+
+        self.assertEqual(
+            id(self.model._module_bag['lots_o_layers']),
+            id(self.model.encoder)
+        )
 
         self.assertEqual(
             self.model.active_encoder, 'lots_o_layers'
@@ -145,8 +155,41 @@ class TestMultiEncoderMixin(unittest.TestCase):
         decoder_weight = torch.clone(self.model._decoder[0].weight.detach())
 
         self.model.freeze_submodel('encoder', unfreeze=True)
+
+        for p in self.model.encoder.parameters():
+            self.assertTrue(p.requires_grad)
+
         self.model.freeze_submodel('decoder')
 
+        self.model.train_model(self.count_data, 20)
+
+        torch.testing.assert_close(
+            decoder_weight,
+            self.model._decoder[0].weight
+        )
+
+        with self.assertRaises(AssertionError):
+            torch.testing.assert_close(
+                torch.tensor(A.T),
+                self.model.encoder[0].weight
+            )
+
+    def test_param_train(self):
+
+        for p in self.model.encoder.parameters():
+            self.assertTrue(p.requires_grad)
+
+        torch.testing.assert_close(
+            torch.tensor(A.T),
+            self.model.encoder[0].weight
+        )
+
+        if len(self.model._intermediate) > 0:
+            intermediate_weight = torch.clone(
+                self.model._intermediate[0].weight.detach()
+            )
+
+        decoder_weight = torch.clone(self.model._decoder[0].weight.detach())
         self.model.train_model(self.count_data, 10)
 
         with self.assertRaises(AssertionError):
@@ -155,7 +198,15 @@ class TestMultiEncoderMixin(unittest.TestCase):
                 self.model.encoder[0].weight
             )
 
-        torch.testing.assert_close(
-            decoder_weight,
-            self.model._decoder[0].weight
-        )
+        with self.assertRaises(AssertionError):
+            torch.testing.assert_close(
+                decoder_weight,
+                self.model._decoder[0].weight
+            )
+
+        if len(self.model._intermediate) > 0:
+            with self.assertRaises(AssertionError):
+                torch.testing.assert_close(
+                    intermediate_weight,
+                    self.model._intermediate[0].weight
+                )
