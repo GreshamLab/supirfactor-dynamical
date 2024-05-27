@@ -103,7 +103,8 @@ class _TrainingMixin:
         epochs,
         validation_dataloader=None,
         loss_function=torch.nn.MSELoss(),
-        optimizer=None
+        optimizer=None,
+        post_epoch_hook=None
     ):
         """
         Train this model
@@ -187,6 +188,9 @@ class _TrainingMixin:
             _shuffle_time_data(validation_dataloader)
 
             self.current_epoch = epoch_num
+
+            if post_epoch_hook is not None:
+                post_epoch_hook(self)
 
         to(self, 'cpu')
         self.eval()

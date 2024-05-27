@@ -137,10 +137,9 @@ class _H5ADLoader:
         if not isinstance(obs_col, (tuple, list, pd.Index)):
             obs_col = [obs_col]
 
-        _invalid_cols = [o not in _obs.columns for o in obs_col]
-        if any(_invalid_cols):
+        if any([o not in _obs.columns for o in obs_col]):
             raise ValueError(
-                f"Key(s) {_invalid_cols} "
+                f"Key(s) {[o for o in obs_col if o not in _obs.columns]} "
                 f"not present in obs: {_obs.columns}"
             )
 
