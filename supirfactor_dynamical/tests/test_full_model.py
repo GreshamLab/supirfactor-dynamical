@@ -617,7 +617,8 @@ class TestDynamicalModel(unittest.TestCase):
             num_epoch,
             train_x,
             optimizer,
-            loss_function
+            loss_function,
+            target_x=None
         ):
 
             self.assertEqual(

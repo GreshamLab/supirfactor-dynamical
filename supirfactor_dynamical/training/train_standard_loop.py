@@ -15,7 +15,9 @@ def train_model(
     validation_dataloader=None,
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
-    post_epoch_hook=None
+    post_epoch_hook=None,
+    input_data_index=None,
+    output_data_index=None
 ):
     """
     Train this model
@@ -67,13 +69,25 @@ def train_model(
         _batch_n = 0
         for train_x in training_dataloader:
 
+            if output_data_index is not None:
+                target_x = model.output_data(
+                    train_x[output_data_index]
+                )
+                to(target_x, model_ref.device)
+            else:
+                target_x = None
+
+            if input_data_index is not None:
+                train_x = train_x[input_data_index]
+
             train_x = to(train_x, model_ref.device)
 
             mse = model_ref._training_step(
                 epoch_num,
                 train_x,
                 optimizer,
-                loss_function
+                loss_function,
+                target_x=target_x
             )
 
             _batch_losses.append(mse)

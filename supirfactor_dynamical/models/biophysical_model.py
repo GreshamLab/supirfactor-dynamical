@@ -408,7 +408,8 @@ class SupirFactorBiophysical(
         epoch_num,
         train_x,
         optimizer,
-        loss_function
+        loss_function,
+        target_x=None
     ):
         """
         Do a training step for the transcription model

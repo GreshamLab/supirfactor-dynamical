@@ -191,7 +191,9 @@ class _TrainingMixin:
     def _calculate_validation_loss(
         self,
         validation_dataloader,
-        loss_function
+        loss_function,
+        input_data_index=None,
+        output_data_index=None
     ):
         # Get validation losses during training
         # if validation data was provided
@@ -203,12 +205,24 @@ class _TrainingMixin:
             with torch.no_grad():
                 for val_x in validation_dataloader:
 
+                    if output_data_index is not None:
+                        val_target_x = self.output_data(
+                            val_x[output_data_index]
+                        )
+                        to(val_target_x, self.device)
+                    else:
+                        val_target_x = None
+
+                    if input_data_index is not None:
+                        val_x = val_x[input_data_index]
+
                     val_x = to(val_x, self.device)
 
                     _validation_batch_losses.append(
                         self._calculate_all_losses(
                             val_x,
-                            loss_function
+                            loss_function,
+                            target_data=val_target_x
                         )
                     )
 
