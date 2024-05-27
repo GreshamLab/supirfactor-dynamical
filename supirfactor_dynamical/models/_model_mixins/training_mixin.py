@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import pandas as pd
-import tqdm
 import time
 
 from supirfactor_dynamical._utils import (
@@ -128,79 +127,19 @@ class _TrainingMixin:
         :rtype: np.ndarray, np.ndarray
         """
 
-        to(self, self.device)
-
-        optimizer = self.process_optimizer(
-            optimizer
+        from supirfactor_dynamical.training.train_standard_loop import (
+            train_model
         )
 
-        # Set training time and create loss lists
-        self.set_training_time()
-        self.training_loss
-        self.training_n
-
-        if validation_dataloader is not None:
-            self.validation_loss
-            self.validation_n
-
-        for epoch_num in tqdm.trange(self.current_epoch + 1, epochs):
-
-            self.train()
-
-            _batch_losses = []
-            _batch_n = 0
-            for train_x in training_dataloader:
-
-                train_x = to(train_x, self.device)
-
-                mse = self._training_step(
-                    epoch_num,
-                    train_x,
-                    optimizer,
-                    loss_function
-                )
-
-                _batch_losses.append(mse)
-                _batch_n = _batch_n + _nobs(train_x)
-
-            self.append_loss(
-                training_loss=np.mean(np.array(_batch_losses), axis=0),
-                training_n=_batch_n
-            )
-
-            # Get validation losses during training
-            # if validation data was provided
-            if validation_dataloader is not None:
-
-                _vloss, _vn = self._calculate_validation_loss(
-                    validation_dataloader,
-                    loss_function
-                )
-
-                self.append_loss(
-                    validation_loss=_vloss,
-                    validation_n=_vn
-                )
-
-            # Shuffle stratified time data
-            # is a noop unless the underlying DataSet is a TimeDataset
-            _shuffle_time_data(training_dataloader)
-            _shuffle_time_data(validation_dataloader)
-
-            self.current_epoch = epoch_num
-
-            if post_epoch_hook is not None:
-                post_epoch_hook(self)
-
-        to(self, 'cpu')
-        self.eval()
-
-        self.r2(
+        return train_model(
+            self,
             training_dataloader,
-            validation_dataloader
+            epochs,
+            validation_dataloader=validation_dataloader,
+            loss_function=loss_function,
+            optimizer=optimizer,
+            post_epoch_hook=post_epoch_hook
         )
-
-        return self
 
     def _training_step(
         self,

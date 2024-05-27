@@ -1,14 +1,14 @@
-from .models import (
+from ..models import (
     _CLASS_DICT,
     TFMetaAutoencoder,
     TFRNNDecoder
 )
 
-from .models._base_model import (
+from ..models._base_model import (
     _TFMixin
 )
 
-from . import evaluate_results
+from ..postprocessing import evaluate_results
 
 DROPOUT_KWARGS = [
     ('input_dropout_rate', 0.5),

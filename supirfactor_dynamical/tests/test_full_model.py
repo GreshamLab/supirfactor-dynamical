@@ -14,7 +14,7 @@ from supirfactor_dynamical import (
     get_model
 )
 
-from supirfactor_dynamical.train import (
+from supirfactor_dynamical.training import (
     model_training
 )
 

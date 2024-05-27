@@ -26,7 +26,7 @@ from .postprocessing import (
     process_combined_results
 )
 
-from .train import (
+from .training import (
     model_training,
     joint_model_training,
     pretrain_and_tune_dynamic_model
