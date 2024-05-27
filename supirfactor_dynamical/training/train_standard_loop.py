@@ -104,7 +104,9 @@ def train_model(
 
             _vloss, _vn = model_ref._calculate_validation_loss(
                 validation_dataloader,
-                loss_function
+                loss_function,
+                input_data_index=input_data_index,
+                output_data_index=output_data_index
             )
 
             model_ref.append_loss(
