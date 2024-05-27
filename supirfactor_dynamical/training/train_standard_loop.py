@@ -70,9 +70,7 @@ def train_model(
         for train_x in training_dataloader:
 
             if output_data_index is not None:
-                target_x = model_ref.output_data(
-                    train_x[output_data_index]
-                )
+                target_x = train_x[output_data_index]
                 to(target_x, model_ref.device)
             else:
                 target_x = None

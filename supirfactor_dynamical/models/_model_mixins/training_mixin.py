@@ -206,9 +206,7 @@ class _TrainingMixin:
                 for val_x in validation_dataloader:
 
                     if output_data_index is not None:
-                        val_target_x = self.output_data(
-                            val_x[output_data_index]
-                        )
+                        val_target_x = val_x[output_data_index]
                         to(val_target_x, self.device)
                     else:
                         val_target_x = None
