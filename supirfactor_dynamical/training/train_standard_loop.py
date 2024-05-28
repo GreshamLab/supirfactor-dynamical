@@ -54,11 +54,9 @@ def train_model(
 
     # Set training time and create loss lists
     model_ref.set_training_time()
-    model_ref.training_loss
     model_ref.training_n
 
     if validation_dataloader is not None:
-        model_ref.validation_loss
         model_ref.validation_n
 
     for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
@@ -127,7 +125,9 @@ def train_model(
 
     model_ref.r2(
         training_dataloader,
-        validation_dataloader
+        validation_dataloader,
+        input_data_index=input_data_index,
+        target_data_index=output_data_index
     )
 
     return model

@@ -93,18 +93,24 @@ class _MultiSubmoduleMixin:
 
         if encoder is not None:
             self._check_label(encoder)
-            self.encoder = self.module_bag[encoder]
-            self.active_encoder = encoder
+
+            if self.active_encoder != encoder:
+                self.encoder = self.module_bag[encoder]
+                self.active_encoder = encoder
 
         if decoder is not None:
             self._check_label(decoder)
-            self._decoder = self.module_bag[decoder]
-            self.active_decoder = decoder
+
+            if self.active_decoder != decoder:
+                self._decoder = self.module_bag[decoder]
+                self.active_decoder = decoder
 
         if intermediate is not None:
             self._check_label(intermediate)
-            self._intermediate = self.module_bag[intermediate]
-            self.active_intermediate = intermediate
+
+            if self.active_intermediate != intermediate:
+                self._intermediate = self.module_bag[intermediate]
+                self.active_intermediate = intermediate
 
         self.train(self.training)
 

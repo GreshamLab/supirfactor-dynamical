@@ -336,7 +336,9 @@ class _TrainingMixin:
         self,
         training_dataloader,
         validation_dataloader=None,
-        multioutput='uniform_truncated_average'
+        multioutput='uniform_truncated_average',
+        input_data_index=None,
+        target_data_index=None
     ):
         """
         Calculate unweighted-average R2 score and store in the model object
@@ -355,13 +357,17 @@ class _TrainingMixin:
         self.training_r2 = r2_score(
             training_dataloader,
             self,
-            multioutput=multioutput
+            multioutput=multioutput,
+            input_data_idx=input_data_index,
+            target_data_idx=target_data_index
         )
 
         self.validation_r2 = r2_score(
             validation_dataloader,
             self,
-            multioutput=multioutput
+            multioutput=multioutput,
+            input_data_idx=input_data_index,
+            target_data_idx=target_data_index
         )
 
         return self.training_r2, self.validation_r2
