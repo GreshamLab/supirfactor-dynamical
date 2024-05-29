@@ -123,15 +123,15 @@ class _H5ADLoader:
 
             return torch.sparse_csr_tensor(
                 torch.tensor(
-                    self._data_reference['indptr'],
+                    self._data_reference['indptr'][:],
                     dtype=torch.int64
                 ),
                 torch.tensor(
-                    self._data_reference['indices'],
+                    self._data_reference['indices'][:],
                     dtype=torch.int64
                 ),
                 torch.Tensor(
-                    self._data_reference['data']
+                    self._data_reference['data'][:]
                 ),
                 size=(self._data_shape)
             )
