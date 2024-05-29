@@ -160,18 +160,31 @@ class _MultiSubmoduleMixin:
             (self.active_decoder == module_name)
         )
 
+    def active_modules(self):
+        return (
+            self.active_encoder,
+            self.active_intermediate,
+            self.active_decoder
+        )
+
     def save(
         self,
         file_name,
         **kwargs
     ):
 
+        # Implementation detail
+        # save expects default modules
+        _modules = self.active_modules()
         self.default_submodules()
 
         super().save(
             file_name,
             **kwargs
         )
+
+        # Restore existing modules
+        self.select_submodels(*_modules)
 
     def save_submodel_state(
         self,

@@ -52,12 +52,8 @@ def train_model(
         optimizer
     )
 
-    # Set training time and create loss lists
+    # Set training time
     model_ref.set_training_time()
-    model_ref.training_n
-
-    if validation_dataloader is not None:
-        model_ref.validation_n
 
     for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
 

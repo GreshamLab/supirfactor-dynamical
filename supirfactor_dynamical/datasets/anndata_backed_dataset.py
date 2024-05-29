@@ -1,3 +1,5 @@
+import warnings
+import gc
 import math
 import torch
 import torch.utils.data
@@ -21,6 +23,7 @@ def _batched_len(things, batch_length):
 def _batched_n(things, n_batches):
 
     n = len(things)
+
     batch_length = math.floor(n / n_batches)
     extra = n - batch_length * n_batches
 
@@ -110,20 +113,23 @@ class _H5ADLoader:
         _left = indptr[0]
         _right = indptr[-1]
 
-        return torch.sparse_csr_tensor(
-            torch.tensor(
-                indptr - _left,
-                dtype=torch.int64
-            ),
-            torch.tensor(
-                self._data_reference['indices'][_left:_right],
-                dtype=torch.int64
-            ),
-            torch.Tensor(
-                self._data_reference['data'][_left:_right]
-            ),
-            size=(end - start, self._data_shape[1])
-        ).to_dense()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            return torch.sparse_csr_tensor(
+                torch.tensor(
+                    indptr - _left,
+                    dtype=torch.int64
+                ),
+                torch.tensor(
+                    self._data_reference['indices'][_left:_right],
+                    dtype=torch.int64
+                ),
+                torch.Tensor(
+                    self._data_reference['data'][_left:_right]
+                ),
+                size=(end - start, self._data_shape[1])
+            ).to_dense()
 
     def _load_dense(self, start, end):
         return torch.Tensor(
@@ -229,24 +235,23 @@ class H5ADDatasetIterable(
         ):
             return
 
-        if self._data_sparse_format:
-            self._data_loaded_chunk = self._load_sparse(
-                self.file_chunks[chunk][0],
-                self.file_chunks[chunk][-1] + 1
-            )
-        else:
-            self._data_loaded_chunk = self._load_dense(
-                self.file_chunks[chunk][0],
-                self.file_chunks[chunk][-1] + 1
-            )
+        elif self._data_loaded_chunk is not None:
+            del self._data_loaded_chunk
+            gc.collect()
 
-        self._data_loaded_chunk = self._data_loaded_chunk[
-            self.file_chunks[chunk] - self.file_chunks[chunk][0],
-            :
-        ]
+        if self._data_sparse_format:
+            loader = self._load_sparse
+        else:
+            loader = self._load_dense
+
+        self._data_loaded_chunk = loader(
+            self.file_chunks[chunk][0],
+            self.file_chunks[chunk][-1] + 1
+        )
 
     def get_chunk_order(self, chunk):
-        self._chunk_index_order = np.arange(self._data_loaded_chunk.shape[0])
+        self._chunk_index_order = self.file_chunks[chunk].copy()
+        self._chunk_index_order -= self._chunk_index_order[0]
         self.rng.shuffle(self._chunk_index_order)
 
     def clear_chunks(self):
@@ -263,22 +268,35 @@ class H5ADDatasetIterable(
         if worker_info is None:
             return iter(self.generator())
 
+        # Too many workers not enough chunks
+        elif worker_info.id >= len(self.file_chunks):
+            return iter([])
+
+        # Too many workers not enough chunks
+        elif worker_info.num_workers > len(self.file_chunks):
+            return iter(
+                self.generator([worker_info.id])
+            )
+
+        # Break up chunks for workers
         else:
             return iter(
                 self.generator(
-                    list(_batched_n(
-                        np.arange(len(self.file_chunks)),
-                        worker_info.num_workers
-                    ))[worker_info.id]
+                    list(
+                        _batched_n(
+                            np.arange(len(self.file_chunks)),
+                            worker_info.num_workers
+                        )
+                    )[worker_info.id]
                 )
             )
 
     def generator(self, worker_chunks=None):
 
         if worker_chunks is None:
-            worker_chunks = self.file_chunks
+            worker_chunks = range(len(self.file_chunks))
 
-        for c in range(len(worker_chunks)):
+        for c in worker_chunks:
 
             self.load_chunk(c)
             self.get_chunk_order(c)

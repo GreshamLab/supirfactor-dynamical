@@ -854,12 +854,32 @@ class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):
             ]
         )
 
+        loaded_model.select_submodel(
+            'testy',
+            'intermediate'
+        )
+
         self._compare_module(
             model,
             loaded_model
         )
 
+        model.select_submodel(
+            'default_intermediate',
+            'intermediate'
+        )
+
+        loaded_model.select_submodel(
+            'default_intermediate',
+            'intermediate'
+        )
+
         self._compare_module(
             model.module_bag['testy'],
             loaded_model.module_bag['testy']
+        )
+
+        self._compare_module(
+            model,
+            loaded_model
         )
