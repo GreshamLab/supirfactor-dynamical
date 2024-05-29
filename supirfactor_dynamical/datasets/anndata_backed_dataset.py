@@ -44,11 +44,21 @@ class _H5ADLoader:
     _data_reference = None
     _data_shape = None
     _data_sparse_format = False
-    _data_sparse_indptr = None
+    _data_sparse_memory = None
     _data_row_index = None
 
     file_name = None
     layer = None
+
+    @property
+    def _data_sparse(self):
+        if not self._data_sparse_format:
+            return None
+
+        if self._data_sparse_memory is None:
+            self._data_sparse_memory = self._read_sparse()
+
+        return self._data_sparse_memory
 
     def __init__(
         self,
@@ -61,6 +71,7 @@ class _H5ADLoader:
 
         self._filehandle = h5py.File(file_name)
 
+        # Handle 'X'
         if layer == 'X':
             self._data_reference = self._filehandle['X']
         elif layer == 'obs':
@@ -70,12 +81,9 @@ class _H5ADLoader:
 
         self._data_shape = self._get_shape(self._data_reference)
         self._data_sparse_format = self._get_issparse(self._data_reference)
-
-        if self._data_sparse_format:
-            self._data_sparse_indptr = self._data_reference['indptr'][:]
-
         self._data_row_index = np.arange(self._data_shape[0])
 
+        # Deal with both bool and numeric index masks
         if obs_include_mask is not None:
             self._data_row_index = np.sort(
                 self._data_row_index[obs_include_mask]
@@ -108,28 +116,41 @@ class _H5ADLoader:
         else:
             raise ValueError(f"{_encoding} unknown")
 
-    def _load_sparse(self, start, end):
-        indptr = self._data_sparse_indptr[start:end+1]
-        _left = indptr[0]
-        _right = indptr[-1]
+    def _read_sparse(self):
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
             return torch.sparse_csr_tensor(
                 torch.tensor(
-                    indptr - _left,
+                    self._data_reference['indptr'],
                     dtype=torch.int64
                 ),
                 torch.tensor(
-                    self._data_reference['indices'][_left:_right],
+                    self._data_reference['indices'],
                     dtype=torch.int64
                 ),
                 torch.Tensor(
-                    self._data_reference['data'][_left:_right]
+                    self._data_reference['data']
                 ),
-                size=(end - start, self._data_shape[1])
-            ).to_dense()
+                size=(self._data_shape)
+            )
+
+    def _load_sparse(self, start, end):
+
+        end = min(end, self._data_shape[0])
+
+        if start >= end:
+            raise ValueError
+
+        _indices = self._data_sparse.crow_indices()[start:end+1]
+
+        return torch.sparse_csr_tensor(
+            _indices - _indices[0],
+            self._data_sparse.col_indices()[_indices[0]:_indices[-1]],
+            self._data_sparse.values()[_indices[0]:_indices[-1]],
+            size=((end-start, self._data_shape[1]))
+        ).to_dense()
 
     def _load_dense(self, start, end):
         return torch.Tensor(
