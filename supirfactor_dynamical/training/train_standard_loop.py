@@ -60,12 +60,14 @@ def train_model(
         model_ref.train()
 
         _batch_losses = []
-        _batch_n = 0
+        _batch_n = []
         for train_x in training_dataloader:
 
             if output_data_index is not None:
-                target_x = train_x[output_data_index]
-                to(target_x, model_ref.device)
+                target_x = to(
+                    train_x[output_data_index],
+                    model_ref.device
+                )
             else:
                 target_x = None
 
@@ -83,11 +85,15 @@ def train_model(
             )
 
             _batch_losses.append(mse)
-            _batch_n = _batch_n + _nobs(train_x)
+            _batch_n.append(_nobs(train_x))
 
         model_ref.append_loss(
-            training_loss=np.mean(np.array(_batch_losses), axis=0),
-            training_n=_batch_n
+            training_loss=np.average(
+                np.array(_batch_losses),
+                axis=0,
+                weights=np.array(_batch_n)
+            ),
+            training_n=np.sum(_batch_n)
         )
 
         # Get validation losses during training

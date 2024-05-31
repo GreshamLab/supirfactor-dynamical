@@ -200,7 +200,7 @@ class _TrainingMixin:
         if validation_dataloader is not None:
 
             _validation_batch_losses = []
-            _validation_n = 0
+            _validation_n = []
 
             with torch.no_grad():
                 for val_x in validation_dataloader:
@@ -224,14 +224,15 @@ class _TrainingMixin:
                         )
                     )
 
-                    _validation_n = _validation_n + _nobs(val_x)
+                    _validation_n.append(_nobs(val_x))
 
             return (
-                np.mean(
+                np.average(
                     np.array(_validation_batch_losses),
-                    axis=0
+                    axis=0,
+                    weights=np.array(_validation_n)
                 ),
-                _validation_n
+                np.sum(_validation_n)
             )
 
     def set_dropouts(
