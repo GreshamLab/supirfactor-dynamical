@@ -26,3 +26,7 @@ from .anndata_backed_dataset import (
     H5ADDatasetStratified,
     H5ADDatasetObsStratified
 )
+
+from .stratified_file_dataset import (
+    StratifiedFilesDataset
+)
