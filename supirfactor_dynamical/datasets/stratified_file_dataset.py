@@ -89,17 +89,62 @@ class _H5ADFileLoder:
                 size=_H5ADFileLoder._get_shape(ref)
             ).to_dense()
 
+    @staticmethod
     def _load_dense(ref):
         return torch.Tensor(ref[:])
+
+    @staticmethod
+    def _get_obs_cats(
+        obs_df,
+        cols,
+        col_level_dict,
+        one_hot=False
+    ):
+
+        if cols is None:
+            return None
+
+        obs_codes = []
+
+        for col in cols:
+
+            # Make sure the categories are unified from a master
+            # dataframe
+            if (
+                col_level_dict is not None and
+                col in col_level_dict.keys()
+            ):
+                obs_df[col] = obs_df[col].cat.set_categories(
+                    col_level_dict[col]
+                )
+
+            obs_codes.append(
+                torch.LongTensor(
+                    obs_df[col].cat.codes.values.copy()
+                )
+            )
+
+        # Cast to one-hot
+        if one_hot:
+            for i, col in enumerate(cols):
+                obs_codes[i] = torch.nn.functional.one_hot(
+                    obs_codes[i],
+                    num_classes=len(obs_df[col].cat.categories)
+                ).type(
+                    torch.Tensor
+                )
+
+        return obs_codes
 
 
 class StratifiedFilesDataset(
     _H5ADFileLoder,
-    torch.utils.data.IterableDataset
+    torch.utils.data.IterDataPipe
 ):
 
     file_metadata = None
     rng = None
+    prefetch = False
 
     file_name_column = None
     file_data_layer = 'X'
@@ -116,8 +161,12 @@ class StratifiedFilesDataset(
     loaded_data = None
     loaded_data_order = None
     loaded_n = 0
+    loaded_data_index = None
+    job = None
 
     iter_position = 0
+    worker_id = None
+    num_workers = None
 
     def __init__(
         self,
@@ -128,7 +177,8 @@ class StratifiedFilesDataset(
         file_data_layer='X',
         yield_obs_cats=None,
         obs_categories=None,
-        one_hot_obs_cats=True
+        one_hot_obs_cats=True,
+        epoch_len=None
     ):
 
         self.file_metadata = file_data.copy()
@@ -150,10 +200,17 @@ class StratifiedFilesDataset(
         ].value_counts()
 
         self.max_files = _counts.iloc[0]
-        self.epoch_n = _counts.iloc[-1]
         self.num_strat_cats = len(_counts)
 
+        if epoch_len is None:
+            self.epoch_n = _counts.iloc[-1]
+        else:
+            self.epoch_n = epoch_len
+
         self._get_stratifications()
+
+    def set_random_state(self, random_state):
+        self.rng = np.random.default_rng(random_state)
 
     def _get_stratifications(self):
 
@@ -177,6 +234,9 @@ class StratifiedFilesDataset(
 
     def _load_stratification_files(self, i):
 
+        if self.loaded_data_index == i:
+            return
+
         if self.loaded_data is not None:
             self._delete_loaded_data()
 
@@ -199,85 +259,80 @@ class StratifiedFilesDataset(
 
         for i in range(len(self.loaded_data)):
             self.loaded_data[i][1] = self._get_obs_cats(
-                self.loaded_data[i][1]
+                self.loaded_data[i][1],
+                self.yield_obs_cats,
+                self.obs_categories,
+                one_hot=self.one_hot_obs_cats
             )
 
-    def _get_obs_cats(self, obs_df):
-
-        if self.yield_obs_cats is None:
-            return None
-
-        obs_codes = []
-
-        for col in self.yield_obs_cats:
-
-            # Make sure the categories are unified from a master
-            # dataframe
-            if (
-                self.obs_categories is not None and
-                col in self.obs_categories.keys()
-            ):
-                obs_df[col] = obs_df[col].cat.set_categories(
-                    self.obs_categories[col]
-                )
-
-            obs_codes.append(
-                torch.LongTensor(
-                    obs_df[col].cat.codes.values.copy()
-                )
-            )
-
-        # Cast to one-hot
-        if self.one_hot_obs_cats:
-            for i, col in enumerate(self.yield_obs_cats):
-                obs_codes[i] = torch.nn.functional.one_hot(
-                    obs_codes[i],
-                    num_classes=len(obs_df[col].cat.categories)
-                ).type(
-                    torch.Tensor
-                )
-
-        return obs_codes
+        self.loaded_data_index = i
 
     def _delete_loaded_data(self):
         del self.loaded_data
         del self.loaded_data_order
         self.loaded_n = 0
+        self.loaded_data_index = None
 
         gc.collect()
 
         self.loaded_data = None
         self.loaded_data_order = None
 
-    def __iter__(self):
+    def worker_info(self):
+
+        if self.worker_id is not None:
+            return self.worker_id, self.num_workers
+
         worker_info = torch.utils.data.get_worker_info()
 
         if worker_info is None:
             worker_id = 0
             num_workers = 1
         else:
-            worker_id = worker_info.id
-            num_workers = worker_info.num_workers
+            self.worker_id = worker_info.id
+            self.num_workers = worker_info.num_workers
+            worker_id = self.worker_id
+            num_workers = self.num_workers
 
-        if (self.iter_position + self.epoch_n) > self.max_files:
-            self._get_stratifications()
-            self.iter_position = 0
+        return worker_id, num_workers
 
-        # Loop through files
-        for i in range(self.epoch_n):
-            self.iter_position = self.iter_position + i
+    def worker_jobs(self):
 
-            if i % num_workers != worker_id:
-                continue
+        if self.job is None:
 
-            self._load_stratification_files(self.iter_position)
+            # Get jobs that this worker should do
+            worker_id, num_workers = self.worker_info()
 
-            # Loop through loaded_n (min number of observations)
+            # Assign stratification batch numbers to this worker
+            jobs = np.arange(0, self.max_files, num_workers)
+            jobs += worker_id
+            jobs = jobs[jobs < self.max_files]
+
+            def _gen():
+                while True:
+
+                    # Run through the jobs
+                    for j in jobs:
+                        self._load_stratification_files(j)
+                        yield j
+
+                    # Call the stratification reshuffler
+                    self._delete_loaded_data()
+                    self._get_stratifications()
+
+            self.job = _gen()
+
+    def __iter__(self):
+
+        self.worker_jobs()
+        next(self.job)
+
+        def _get_loaded_data():
             for j in range(self.loaded_n):
                 for k in range(self.num_strat_cats):
                     yield self.get_data(k, j)
 
-            self._delete_loaded_data()
+        return _get_loaded_data()
 
     def get_data(self, strat_id, loc):
 
