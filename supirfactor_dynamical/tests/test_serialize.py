@@ -420,7 +420,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )
 
         torch.testing.assert_close(
-            torch.eye(4),
+            torch.ones(4),
             loaded_ae.count_scaler
         )
 
@@ -430,7 +430,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )
 
         torch.testing.assert_close(
-            torch.eye(4),
+            torch.ones(4),
             loaded_ae.velocity_scaler
         )
 
@@ -440,7 +440,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )
 
         torch.testing.assert_close(
-            torch.eye(4),
+            torch.ones(4),
             loaded_ae.count_to_velocity_scaler
         )
 
@@ -450,7 +450,7 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         )
 
         torch.testing.assert_close(
-            torch.eye(4),
+            torch.ones(4),
             loaded_ae.velocity_to_count_scaler
         )
 

@@ -6,20 +6,34 @@ class _ScalingMixin:
     _count_inverse_scaler = None
     _velocity_inverse_scaler = None
 
-    count_to_velocity_scaler = None
-    velocity_to_count_scaler = None
+    _count_to_velocity_scaler = None
+    _velocity_to_count_scaler = None
 
     @property
     def count_scaler(self):
         if self._count_inverse_scaler is not None:
-            return torch.diag(self._count_inverse_scaler)
+            return self._count_inverse_scaler.to(self.device)
         else:
             return None
 
     @property
     def velocity_scaler(self):
         if self._velocity_inverse_scaler is not None:
-            return torch.diag(self._velocity_inverse_scaler)
+            return self._velocity_inverse_scaler.to(self.device)
+        else:
+            return None
+
+    @property
+    def count_to_velocity_scaler(self):
+        if self._count_to_velocity_scaler is not None:
+            return self._count_to_velocity_scaler.to(self.device)
+        else:
+            return None
+
+    @property
+    def velocity_to_count_scaler(self):
+        if self._velocity_to_count_scaler is not None:
+            return self._velocity_to_count_scaler.to(self.device)
         else:
             return None
 
@@ -56,12 +70,12 @@ class _ScalingMixin:
         elif velocity_scaling is not False:
             self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
 
-        self.count_to_velocity_scaler = self._zero_safe_div(
+        self._count_to_velocity_scaler = self._zero_safe_div(
             self._count_inverse_scaler,
             self._velocity_inverse_scaler
         )
 
-        self.velocity_to_count_scaler = self._zero_safe_div(
+        self._velocity_to_count_scaler = self._zero_safe_div(
             self._velocity_inverse_scaler,
             self._count_inverse_scaler
         )
@@ -70,36 +84,36 @@ class _ScalingMixin:
 
     def unscale_counts(self, x):
         if self._count_inverse_scaler is not None:
-            return torch.matmul(x, self.count_scaler)
+            return torch.mul(x, self.count_scaler[..., :])
         else:
             return x
 
     def unscale_velocity(self, x):
         if self._velocity_inverse_scaler is not None:
-            return torch.matmul(x, self.velocity_scaler)
+            return torch.mul(x, self.velocity_scaler[..., :])
         else:
             return x
 
     def rescale_velocity(self, x):
         if self._velocity_inverse_scaler is not None:
-            return torch.matmul(
+            return torch.mul(
                 x,
                 self._zero_safe_div(
                     None,
                     self._velocity_inverse_scaler
-                )
+                )[..., :]
             )
         else:
             return x
 
     def rescale_counts(self, x):
         if self._count_inverse_scaler is not None:
-            return torch.matmul(
+            return torch.mul(
                 x,
                 self._zero_safe_div(
                     None,
                     self._count_inverse_scaler
-                )
+                )[..., :]
             )
         else:
             return x
@@ -108,8 +122,11 @@ class _ScalingMixin:
         self,
         count
     ):
-        if self.count_to_velocity_scaler is not None:
-            return torch.matmul(count, self.count_to_velocity_scaler)
+        if self._count_to_velocity_scaler is not None:
+            return torch.mul(
+                count,
+                self.count_to_velocity_scaler[..., :]
+            )
         else:
             return count
 
@@ -117,8 +134,11 @@ class _ScalingMixin:
         self,
         velocity
     ):
-        if self.velocity_to_count_scaler is not None:
-            return torch.matmul(velocity, self.velocity_to_count_scaler)
+        if self._velocity_to_count_scaler is not None:
+            return torch.mul(
+                velocity,
+                self.velocity_to_count_scaler[..., :]
+            )
         else:
             return velocity
 
@@ -144,4 +164,4 @@ class _ScalingMixin:
             _z = torch.div(x, y)
             _z[y == 0] = 1
 
-        return torch.diag(_z)
+        return _z

@@ -506,7 +506,11 @@ class _TrainingMixin:
         :type file_name: str
         """
 
+        _current_device = next(self.parameters()).device
+
+        self.to('cpu')
         write(self, file_name, **kwargs)
+        self.to(_current_device)
 
     def set_training_time(
         self,
