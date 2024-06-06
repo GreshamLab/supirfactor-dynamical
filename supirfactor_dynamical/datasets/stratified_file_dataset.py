@@ -13,33 +13,52 @@ class _H5ADFileLoder:
         raise NotImplementedError
 
     @staticmethod
-    def load_file(file_name, layer):
+    def load_file(
+        file_name,
+        layer,
+        extra_layers=None,
+        append_obs=True
+    ):
 
         with h5py.File(file_name) as file_handle:
 
-            if layer == 'X':
-                _data_reference = file_handle['X']
-            elif layer == 'obs':
-                return read_dataframe(file_handle['obs'])
-            elif layer in file_handle['layers'].keys():
-                _data_reference = file_handle['layers'][layer]
-            elif layer in file_handle['obsm'].keys():
-                _data_reference = file_handle['obsm'][layer]
-            else:
-                raise ValueError(
-                    f"Cannot find {layer} in `layers` or `obsm`"
+            if layer == 'obs':
+                return _H5ADFileLoder.load_layer(file_handle, layer)
+
+            _data = [_H5ADFileLoder.load_layer(file_handle, layer)]
+
+            if extra_layers is not None:
+                _data = _data + [
+                    _H5ADFileLoder.load_layer(file_handle, _elayer)
+                    for _elayer in extra_layers
+                ]
+
+            if append_obs:
+                _data.append(
+                    _H5ADFileLoder.load_layer(file_handle, 'obs')
                 )
 
-            if _H5ADFileLoder._issparse(_data_reference):
-                return [
-                    _H5ADFileLoder._load_sparse(_data_reference),
-                    read_dataframe(file_handle['obs'])
-                ]
-            else:
-                return [
-                    _H5ADFileLoder._load_dense(_data_reference),
-                    read_dataframe(file_handle['obs'])
-                ]
+            return _data
+
+    @staticmethod
+    def load_layer(file_handle, layer):
+        if layer == 'X':
+            _data_reference = file_handle['X']
+        elif layer == 'obs':
+            return read_dataframe(file_handle['obs'])
+        elif layer in file_handle['layers'].keys():
+            _data_reference = file_handle['layers'][layer]
+        elif layer in file_handle['obsm'].keys():
+            _data_reference = file_handle['obsm'][layer]
+        else:
+            raise ValueError(
+                f"Cannot find {layer} in `layers` or `obsm`"
+            )
+
+        if _H5ADFileLoder._issparse(_data_reference):
+            return _H5ADFileLoder._load_sparse(_data_reference)
+        else:
+            return _H5ADFileLoder._load_dense(_data_reference)
 
     @staticmethod
     def _get_shape(ref):
@@ -102,7 +121,7 @@ class _H5ADFileLoder:
     ):
 
         if cols is None:
-            return None
+            return []
 
         obs_codes = []
 
@@ -148,6 +167,7 @@ class StratifiedFilesDataset(
 
     file_name_column = None
     file_data_layer = 'X'
+    yield_extra_layers = None
     stratification_column = None
 
     yield_obs_cats = None
@@ -175,6 +195,7 @@ class StratifiedFilesDataset(
         stratification_column='group',
         random_state=None,
         file_data_layer='X',
+        yield_extra_layers=None,
         yield_obs_cats=None,
         obs_categories=None,
         one_hot_obs_cats=True,
@@ -184,6 +205,7 @@ class StratifiedFilesDataset(
         self.file_metadata = file_data.copy()
         self.file_name_column = file_name_column
         self.file_data_layer = file_data_layer
+        self.yield_extra_layers = yield_extra_layers
 
         if not isinstance(yield_obs_cats, (tuple, list)):
             yield_obs_cats = [yield_obs_cats]
@@ -240,11 +262,18 @@ class StratifiedFilesDataset(
         if self.loaded_data is not None:
             self._delete_loaded_data()
 
+        # Load each file into a list [C, ]
         self.loaded_data = [
-            self.load_file(x[i], layer=self.file_data_layer)
+            self.load_file(
+                x[i],
+                layer=self.file_data_layer,
+                extra_layers=self.yield_extra_layers
+            )
             for x in self.strat_files
         ]
 
+        # Create a random access order index in list [C, ]
+        # for each category
         self.loaded_data_order = [
             np.arange(x[0].shape[0])
             for x in self.loaded_data
@@ -253,16 +282,24 @@ class StratifiedFilesDataset(
         for arr in self.loaded_data_order:
             self.rng.shuffle(arr)
 
+        # Use the smallest number of observations in any
+        # category as the number of observations to yield
+        # to DataLoader
         self.loaded_n = min(
             [x.shape[0] for x in self.loaded_data_order]
         )
 
+        # Break the obs dataframe in the final position
+        # into tensors and put them into the list
+        # if yield_obs_cats is not None
         for i in range(len(self.loaded_data)):
-            self.loaded_data[i][1] = self._get_obs_cats(
-                self.loaded_data[i][1],
-                self.yield_obs_cats,
-                self.obs_categories,
-                one_hot=self.one_hot_obs_cats
+            self.loaded_data[i].extend(
+                self._get_obs_cats(
+                    self.loaded_data[i].pop(-1),
+                    self.yield_obs_cats,
+                    self.obs_categories,
+                    one_hot=self.one_hot_obs_cats
+                )
             )
 
         self.loaded_data_index = i
@@ -336,22 +373,9 @@ class StratifiedFilesDataset(
 
     def get_data(self, strat_id, loc):
 
-        _data = self.loaded_data[strat_id][0][
-            self.loaded_data_order[strat_id][loc]
-        ]
-
-        if self.yield_obs_cats is None:
-            return _data
-
-        if self.loaded_data[strat_id][1] is None:
-            return _data
-
-        _sample = self.loaded_data_order[strat_id][loc]
-        _cat_data = tuple(
-            self.loaded_data[strat_id][1][k][
-                _sample
+        return tuple(
+            self.loaded_data[strat_id][i][
+                self.loaded_data_order[strat_id][loc]
             ]
-            for k in range(len(self.loaded_data[strat_id][1]))
+            for i in range(len(self.loaded_data[strat_id]))
         )
-
-        return (_data, ) + _cat_data
