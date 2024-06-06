@@ -4,7 +4,9 @@ import torch
 class _ScalingMixin:
 
     _count_inverse_scaler = None
+    _count_rescale_scaler = None
     _velocity_inverse_scaler = None
+    _velocity_rescale_scaler = None
 
     _count_to_velocity_scaler = None
     _velocity_to_count_scaler = None
@@ -17,9 +19,23 @@ class _ScalingMixin:
             return None
 
     @property
+    def count_rescaler(self):
+        if self._count_rescale_scaler is not None:
+            return self._count_rescale_scaler.to(self.device)
+        else:
+            return None
+
+    @property
     def velocity_scaler(self):
         if self._velocity_inverse_scaler is not None:
             return self._velocity_inverse_scaler.to(self.device)
+        else:
+            return None
+
+    @property
+    def velocity_rescaler(self):
+        if self._velocity_rescale_scaler is not None:
+            return self._velocity_rescale_scaler.to(self.device)
         else:
             return None
 
@@ -63,12 +79,20 @@ class _ScalingMixin:
 
         elif count_scaling is not False:
             self._count_inverse_scaler = self.to_tensor(count_scaling)
+            self._count_rescale_scaler = self._zero_safe_div(
+                None,
+                self._count_inverse_scaler
+            )
 
         if velocity_scaling is None:
             self._velocity_inverse_scaler = None
 
         elif velocity_scaling is not False:
             self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
+            self._velocity_rescale_scaler = self._zero_safe_div(
+                None,
+                self._velocity_inverse_scaler
+            )
 
         self._count_to_velocity_scaler = self._zero_safe_div(
             self._count_inverse_scaler,
@@ -96,25 +120,13 @@ class _ScalingMixin:
 
     def rescale_velocity(self, x):
         if self._velocity_inverse_scaler is not None:
-            return torch.mul(
-                x,
-                self._zero_safe_div(
-                    None,
-                    self._velocity_inverse_scaler
-                )[..., :]
-            )
+            return torch.mul(x, self.velocity_rescaler[..., :])
         else:
             return x
 
     def rescale_counts(self, x):
         if self._count_inverse_scaler is not None:
-            return torch.mul(
-                x,
-                self._zero_safe_div(
-                    None,
-                    self._count_inverse_scaler
-                )[..., :]
-            )
+            return torch.mul(x, self.count_rescaler[..., :])
         else:
             return x
 

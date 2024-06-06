@@ -92,7 +92,7 @@ def load_data_files_jtb_2023(
     velo_scaling = TruncRobustScaler(with_centering=False)
 
     print(f"Loading and processing data from {adata_file}")
-    adata = ad.read(adata_file)
+    adata = ad.read_h5ad(adata_file)
 
     if untreated_only:
         adata = adata[adata.obs['Pool'].isin([1, 2]), :].copy()
