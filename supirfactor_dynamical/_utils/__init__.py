@@ -20,6 +20,7 @@ from ._trunc_robust_scaler import (
 
 from .misc import (
     to,
+    to_tensor_device,
     argmax_last_dim,
     _add,
     _cat,

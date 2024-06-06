@@ -1,4 +1,5 @@
 import torch
+from supirfactor_dynamical._utils import to_tensor_device
 
 
 class _ScalingMixin:
@@ -14,42 +15,42 @@ class _ScalingMixin:
     @property
     def count_scaler(self):
         if self._count_inverse_scaler is not None:
-            return self._count_inverse_scaler.to(self.device)
+            return self._count_inverse_scaler
         else:
             return None
 
     @property
     def count_rescaler(self):
         if self._count_rescale_scaler is not None:
-            return self._count_rescale_scaler.to(self.device)
+            return self._count_rescale_scaler
         else:
             return None
 
     @property
     def velocity_scaler(self):
         if self._velocity_inverse_scaler is not None:
-            return self._velocity_inverse_scaler.to(self.device)
+            return self._velocity_inverse_scaler
         else:
             return None
 
     @property
     def velocity_rescaler(self):
         if self._velocity_rescale_scaler is not None:
-            return self._velocity_rescale_scaler.to(self.device)
+            return self._velocity_rescale_scaler
         else:
             return None
 
     @property
     def count_to_velocity_scaler(self):
         if self._count_to_velocity_scaler is not None:
-            return self._count_to_velocity_scaler.to(self.device)
+            return self._count_to_velocity_scaler
         else:
             return None
 
     @property
     def velocity_to_count_scaler(self):
         if self._velocity_to_count_scaler is not None:
-            return self._velocity_to_count_scaler.to(self.device)
+            return self._velocity_to_count_scaler
         else:
             return None
 
@@ -108,25 +109,49 @@ class _ScalingMixin:
 
     def unscale_counts(self, x):
         if self._count_inverse_scaler is not None:
-            return torch.mul(x, self.count_scaler[..., :])
+            return torch.mul(
+                x,
+                to_tensor_device(
+                    self.count_scaler,
+                    x
+                )[..., :]
+            )
         else:
             return x
 
     def unscale_velocity(self, x):
         if self._velocity_inverse_scaler is not None:
-            return torch.mul(x, self.velocity_scaler[..., :])
+            return torch.mul(
+                x,
+                to_tensor_device(
+                    self.velocity_scaler,
+                    x
+                )[..., :]
+            )
         else:
             return x
 
     def rescale_velocity(self, x):
         if self._velocity_inverse_scaler is not None:
-            return torch.mul(x, self.velocity_rescaler[..., :])
+            return torch.mul(
+                x,
+                to_tensor_device(
+                    self.velocity_rescaler,
+                    x
+                )[..., :]
+            )
         else:
             return x
 
     def rescale_counts(self, x):
         if self._count_inverse_scaler is not None:
-            return torch.mul(x, self.count_rescaler[..., :])
+            return torch.mul(
+                x,
+                to_tensor_device(
+                    self.count_rescaler,
+                    x
+                )[..., :]
+            )
         else:
             return x
 
@@ -137,7 +162,10 @@ class _ScalingMixin:
         if self._count_to_velocity_scaler is not None:
             return torch.mul(
                 count,
-                self.count_to_velocity_scaler[..., :]
+                to_tensor_device(
+                    self.count_to_velocity_scaler,
+                    count
+                )[..., :]
             )
         else:
             return count
@@ -149,7 +177,10 @@ class _ScalingMixin:
         if self._velocity_to_count_scaler is not None:
             return torch.mul(
                 velocity,
-                self.velocity_to_count_scaler[..., :]
+                to_tensor_device(
+                    self.velocity_to_count_scaler,
+                    velocity
+                )[..., :]
             )
         else:
             return velocity

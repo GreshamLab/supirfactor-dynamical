@@ -13,6 +13,30 @@ def to(obj, device):
         return obj.to(device)
 
 
+def to_tensor_device(obj, tensor):
+    """
+    Send a tensor or iterable of tensors to the
+    same device as another tensor
+
+    :param obj: Tensor(s) to send to a device
+    :type obj: torch.tensor, list, tuple
+    :param tensor: Tensor on the target device
+    :type tensor: torch.tensor
+    :return: Tensors(s) on the target device
+    :rtype: torch.tensor, tuple(torch.tensor)
+    """
+    if obj is None:
+        return None
+
+    if tensor is None:
+        return obj
+
+    _target_device = tensor.get_device()
+    _target_device = 'cpu' if _target_device == -1 else _target_device
+
+    return to(obj, _target_device)
+
+
 def argmax_last_dim(x):
     """
     Get the argmax for the last dimension of a tensor
