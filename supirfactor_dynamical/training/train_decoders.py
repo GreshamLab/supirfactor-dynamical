@@ -93,7 +93,7 @@ def train_decoder_submodels(
         _batch_n = 0
         for train_x in training_dataloader:
 
-            to(train_x, model.device)
+            train_x = to(train_x, model.device)
             if not isinstance(train_x, (tuple, list)):
                 train_x = [train_x] * len(decoder_models)
 
@@ -133,7 +133,7 @@ def train_decoder_submodels(
                 _val_n = 0
                 for val_x in validation_dataloader:
 
-                    to(val_x, model.device)
+                    val_x = to(val_x, model.device)
 
                     if not isinstance(val_x, (tuple, list)):
                         val_x = [val_x] * len(decoder_models)

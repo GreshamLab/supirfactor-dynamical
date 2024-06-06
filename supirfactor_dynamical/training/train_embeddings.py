@@ -99,7 +99,7 @@ def train_embedding_submodels(
         _batch_n = 0
         for train_x in training_dataloader:
 
-            to(train_x, model.device)
+            train_x = to(train_x, model.device)
             _embed_x, _train_x = _get_data(train_x)
             _batch_n = _batch_n + train_x.shape[0]
 
@@ -142,7 +142,7 @@ def train_embedding_submodels(
                 _val_n = 0
                 for val_x in validation_dataloader:
 
-                    to(val_x, model.device)
+                    val_x = to(val_x, model.device)
 
                     _embed_val_x, _val_x = _get_data(val_x)
                     _embed = _get_embedding(model, _embed_val_x)
