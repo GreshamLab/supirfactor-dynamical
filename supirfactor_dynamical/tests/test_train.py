@@ -6,10 +6,10 @@ import torch
 from torch.utils.data import DataLoader
 
 from supirfactor_dynamical import (
-    joint_model_training,
+    joint_dynamical_model_training as joint_model_training,
     TimeDataset,
     get_model,
-    model_training,
+    dynamical_model_training as model_training,
     pretrain_and_tune_dynamic_model,
     process_results_to_dataframes,
     process_combined_results

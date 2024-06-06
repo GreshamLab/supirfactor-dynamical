@@ -15,7 +15,7 @@ from supirfactor_dynamical import (
 )
 
 from supirfactor_dynamical.training import (
-    model_training
+    dynamical_model_training as model_training
 )
 
 from supirfactor_dynamical.models import (

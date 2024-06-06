@@ -378,7 +378,8 @@ class SupirFactorBiophysical(
         epochs,
         validation_dataloader=None,
         loss_function=torch.nn.MSELoss(),
-        optimizer=None
+        optimizer=None,
+        **kwargs
     ):
 
         # Create separate optimizers for the decay and transcription
@@ -400,7 +401,8 @@ class SupirFactorBiophysical(
             epochs,
             validation_dataloader,
             loss_function,
-            optimizer
+            optimizer,
+            **kwargs
         )
 
     def _training_step(

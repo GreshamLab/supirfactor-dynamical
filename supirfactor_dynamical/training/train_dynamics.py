@@ -36,6 +36,7 @@ def pretrain_and_tune_dynamic_model(
     prediction_loss_offset=None,
     model_type=TFRNNDecoder,
     return_erv=False,
+    post_epoch_hook=None,
     **kwargs
 ):
 
@@ -43,7 +44,7 @@ def pretrain_and_tune_dynamic_model(
         kwargs
     )
 
-    model, pretrain_results = model_training(
+    model, pretrain_results = dynamical_model_training(
         pretraining_training_dataloader,
         prior_network,
         epochs,
@@ -51,6 +52,7 @@ def pretrain_and_tune_dynamic_model(
         optimizer_params=optimizer_params,
         prediction_length=False,
         model_type=model_type,
+        post_epoch_hook=post_epoch_hook,
         **kwargs,
         **pretrain_dropout
     )
@@ -59,7 +61,7 @@ def pretrain_and_tune_dynamic_model(
 
     model.set_dropouts(**tune_dropout)
 
-    model, tuned_results, _final_erv = model_training(
+    model, tuned_results, _final_erv = dynamical_model_training(
         prediction_tuning_training_dataloader,
         prior_network,
         epochs,
@@ -69,6 +71,7 @@ def pretrain_and_tune_dynamic_model(
         prediction_loss_offset=prediction_loss_offset,
         model_type=model,
         return_erv=True,
+        post_epoch_hook=post_epoch_hook,
         **kwargs
     )
 
@@ -78,7 +81,7 @@ def pretrain_and_tune_dynamic_model(
         return model, pretrain_results, tuned_results
 
 
-def model_training(
+def dynamical_model_training(
     training_dataloader,
     prior_network,
     epochs,
@@ -89,6 +92,7 @@ def model_training(
     prediction_length=None,
     prediction_loss_offset=None,
     return_erv=False,
+    post_epoch_hook=None,
     **kwargs
 ):
 
@@ -140,7 +144,8 @@ def model_training(
         training_dataloader,
         epochs,
         validation_dataloader=validation_dataloader,
-        optimizer=optimizer_params
+        optimizer=optimizer_params,
+        post_epoch_hook=post_epoch_hook
     )
 
     model_obj.eval()
@@ -162,7 +167,7 @@ def model_training(
         return model_obj, result
 
 
-def joint_model_training(
+def joint_dynamical_model_training(
     static_training_dataloader,
     dynamic_training_dataloader,
     prior_network,
@@ -175,10 +180,11 @@ def joint_model_training(
     prediction_loss_offset=None,
     static_model_type=TFMetaAutoencoder,
     dynamic_model_type=TFRNNDecoder,
+    post_epoch_hook=None,
     **kwargs
 ):
 
-    ae_static, ae_results = model_training(
+    ae_static, ae_results = dynamical_model_training(
         static_training_dataloader,
         prior_network,
         epochs,
@@ -188,10 +194,11 @@ def joint_model_training(
         prediction_length=prediction_length,
         prediction_loss_offset=prediction_loss_offset,
         model_type=static_model_type,
+        post_epoch_hook=post_epoch_hook,
         **kwargs
     )
 
-    ae_dynamic, dyn_results = model_training(
+    ae_dynamic, dyn_results = dynamical_model_training(
         dynamic_training_dataloader,
         prior_network,
         epochs,
@@ -201,6 +208,7 @@ def joint_model_training(
         prediction_length=prediction_length,
         prediction_loss_offset=prediction_loss_offset,
         model_type=dynamic_model_type,
+        post_epoch_hook=post_epoch_hook,
         **kwargs
     )
 

@@ -27,9 +27,12 @@ from .postprocessing import (
 )
 
 from .training import (
-    model_training,
-    joint_model_training,
-    pretrain_and_tune_dynamic_model
+    dynamical_model_training,
+    joint_dynamical_model_training,
+    pretrain_and_tune_dynamic_model,
+    train_model,
+    train_decoder_submodels,
+    train_embedding_submodels
 )
 
 from ._io._loader import read
