@@ -28,11 +28,11 @@ class _TF_RNN_mixin(
 
     @property
     def recurrent_weights(self):
-        return self._intermediate.weight_hh_l0
+        return self._intermediate.weight_hh_l0.to('cpu')
 
     @property
     def decoder_weights(self):
-        return self._decoder[0].weight
+        return self._decoder[0].weight.to('cpu')
 
     def __init__(
         self,

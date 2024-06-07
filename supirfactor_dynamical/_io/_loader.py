@@ -1,4 +1,5 @@
 import h5py
+import os
 
 from ._network import read_network
 from ._args import (
@@ -48,7 +49,7 @@ def read(
 
     _pre_len = len(prefix)
 
-    with h5py.File(file_name, 'r') as f:
+    with h5py.File(os.path.expanduser(file_name), 'r') as f:
 
         _state_dict = _read_torch_state(
             f,

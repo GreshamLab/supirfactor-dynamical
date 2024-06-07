@@ -23,6 +23,8 @@ from supirfactor_dynamical._utils._math import (
 
 class _ModelStub():
 
+    _model_device = 'cpu'
+
     def eval(self):
         pass
 

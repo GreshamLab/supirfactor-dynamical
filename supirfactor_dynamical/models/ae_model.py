@@ -42,13 +42,13 @@ class TFMultilayerAutoencoder(
             return None
 
         return [
-            self._intermediate[3 * i].weight
+            self._intermediate[3 * i].weight.to('cpu')
             for i in range(len(self.intermediate_sizes))
         ]
 
     @property
     def decoder_weights(self):
-        return self._decoder[-2].weight
+        return self._decoder[-2].weight.to('cpu')
 
     def __init__(
         self,
@@ -162,11 +162,11 @@ class TFMetaAutoencoder(TFMultilayerAutoencoder):
 
     @property
     def intermediate_weights(self):
-        return self._intermediate[0].weight
+        return self._intermediate[0].weight.to('cpu')
 
     @property
     def decoder_weights(self):
-        return self._decoder[0].weight
+        return self._decoder[0].weight.to('cpu')
 
     def __init__(
         self,

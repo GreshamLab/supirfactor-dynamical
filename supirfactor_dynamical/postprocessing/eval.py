@@ -9,7 +9,10 @@ from supirfactor_dynamical._utils._math import (
     _false_positive,
     _f1_score
 )
-from supirfactor_dynamical._utils.misc import argmax_last_dim
+from supirfactor_dynamical._utils.misc import (
+    argmax_last_dim,
+    to
+)
 
 
 def r2_score(
@@ -33,28 +36,23 @@ def r2_score(
     with torch.no_grad():
         for data in dataloader:
 
-            if target_data_idx is None:
-                target_data = data
-            else:
-                target_data = data[target_data_idx]
-
-            if input_data_idx is None:
-                input_data = data
-            else:
-                input_data = data[input_data_idx]
-
-            output_data = model.output_data(target_data)
+            input_data, target_data = _extract_data(
+                data,
+                model,
+                input_data_idx,
+                target_data_idx
+            )
 
             _rss += _calculate_rss(
-                output_data,
+                target_data,
                 model._slice_data_and_forward(input_data),
             )
 
             _tss += _calculate_tss(
-                output_data
+                target_data
             )
 
-            _n = _n + output_data.shape[0]
+            _n = _n + target_data.shape[0]
 
             # Exclude very low variance features from
             # R2 calculation
@@ -102,17 +100,12 @@ def f1_score(
     with torch.no_grad():
         for data in dataloader:
 
-            if target_data_idx is None:
-                target_data = data
-            else:
-                target_data = data[target_data_idx]
-
-            if input_data_idx is None:
-                input_data = data
-            else:
-                input_data = data[input_data_idx]
-
-            target_data = model.output_data(target_data)
+            input_data, target_data = _extract_data(
+                data,
+                model,
+                input_data_idx,
+                target_data_idx
+            )
 
             if not targets_one_hot_encoded:
                 target_data = torch.nn.functional.one_hot(
@@ -164,3 +157,27 @@ def f1_score(
             raise ValueError(
                 f"Invalid multioutput = {multioutput}"
             )
+
+
+def _extract_data(
+    data,
+    model,
+    input_data_idx,
+    target_data_idx
+):
+
+    device = model._model_device
+
+    if target_data_idx is None:
+        target_data = to(data, device)
+    else:
+        target_data = to(data[target_data_idx], device)
+
+    if input_data_idx is None:
+        input_data = to(data, device)
+    else:
+        input_data = to(data[input_data_idx], device)
+
+    output_data = model.output_data(target_data)
+
+    return input_data, output_data

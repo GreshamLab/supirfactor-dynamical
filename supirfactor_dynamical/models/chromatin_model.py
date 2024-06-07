@@ -199,7 +199,7 @@ class ChromatinAwareModel(
 
     @property
     def decoder_weights(self):
-        return self.decoder[2].weight
+        return self.decoder[2].weight.to('cpu')
 
 
 class ChromatinModule(

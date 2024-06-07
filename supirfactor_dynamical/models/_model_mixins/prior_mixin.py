@@ -315,7 +315,7 @@ class _PriorMixin:
 
         try:
             with torch.no_grad():
-                x = x.numpy()
+                x = x.to('cpu').numpy()
 
         except AttributeError:
             pass

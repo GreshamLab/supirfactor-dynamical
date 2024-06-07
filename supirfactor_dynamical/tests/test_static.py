@@ -141,8 +141,12 @@ class TestTFAutoencoder(unittest.TestCase):
 
         self.ae.train_model(
             loader,
-            10
+            10,
+            final_device='cpu'
         )
+
+        print(self.ae.encoder_weights)
+        print(self.ae.encoder_weights.to('cpu'))
 
         self.assertEqual(len(self.ae.training_loss), 10)
         self.assertEqual(len(self.ae.validation_loss), 0)
@@ -189,7 +193,8 @@ class TestTFAutoencoder(unittest.TestCase):
         self.ae.train_model(
             loader,
             10,
-            validation_dataloader=vloader
+            validation_dataloader=vloader,
+            final_device='cpu'
         )
 
         self.assertEqual(len(self.ae.training_loss), 10)
@@ -235,7 +240,8 @@ class TestTFAutoencoder(unittest.TestCase):
 
         self.ae.train_model(
             loader,
-            20
+            20,
+            final_device='cpu'
         )
 
         self.ae.eval()
@@ -549,7 +555,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.ae.train_model(
             self.static_dataloader,
-            20
+            20,
+            final_device='cpu'
         )
 
         _ = self.ae.erv(self.static_dataloader)
@@ -564,7 +571,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.ae.train_model(
             self.dynamic_dataloader,
-            20
+            20,
+            final_device='cpu'
         )
         _ = self.ae.erv(self.dynamic_dataloader)
 
@@ -578,7 +586,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.ae.train_model(
             self.dynamic_dataloader,
-            20
+            20,
+            final_device='cpu'
         )
 
         _ = self.ae.erv(self.dynamic_dataloader)
@@ -593,7 +602,8 @@ class TestTFAutoencoderOffset(unittest.TestCase):
 
         self.ae.train_model(
             self.dynamic_dataloader,
-            20
+            20,
+            final_device='cpu'
         )
 
         predictions = self.ae.predict(

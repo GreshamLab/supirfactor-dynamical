@@ -191,7 +191,7 @@ class TestCoupledTraining(_SetupMixin, unittest.TestCase):
 
     def test_pretrain_tune_tuple_args(self):
 
-        results = pretrain_and_tune_dynamic_model(
+        _ = pretrain_and_tune_dynamic_model(
             self.dynamic_dataloader,
             self.dynamic_dataloader,
             self.prior,

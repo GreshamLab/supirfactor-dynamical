@@ -186,7 +186,7 @@ class TestMathUtils(unittest.TestCase):
         erv_expect = torch.ones(erv.shape)
         erv_expect[3, :] = 0.3823919
 
-        npt.assert_almost_equal(
+        torch.testing.assert_close(
             erv_expect,
             erv
         )
@@ -231,7 +231,6 @@ class TestMathUtils(unittest.TestCase):
             r2,
             decimal=5
         )
-
 
     def test_r2(self):
 

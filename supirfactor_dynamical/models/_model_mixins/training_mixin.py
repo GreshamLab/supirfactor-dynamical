@@ -47,6 +47,13 @@ class _TrainingMixin:
     hidden_dropout_rate = 0.0
 
     @property
+    def _model_device(self):
+        device = next(self.parameters()).device
+        if device == -1:
+            device = 'cpu'
+        return device
+
+    @property
     def _offset_data(self):
         return (
             self.output_t_plus_one or
@@ -103,7 +110,8 @@ class _TrainingMixin:
         validation_dataloader=None,
         loss_function=torch.nn.MSELoss(),
         optimizer=None,
-        post_epoch_hook=None
+        post_epoch_hook=None,
+        **kwargs
     ):
         """
         Train this model
@@ -138,7 +146,8 @@ class _TrainingMixin:
             validation_dataloader=validation_dataloader,
             loss_function=loss_function,
             optimizer=optimizer,
-            post_epoch_hook=post_epoch_hook
+            post_epoch_hook=post_epoch_hook,
+            **kwargs
         )
 
     def _training_step(
@@ -371,7 +380,7 @@ class _TrainingMixin:
             target_data_idx=target_data_index
         )
 
-        return self.training_r2, self.validation_r2
+        return to(self.training_r2, 'cpu'), to(self.validation_r2, 'cpu')
 
     def _slice_data_and_forward(
         self,
@@ -506,7 +515,7 @@ class _TrainingMixin:
         :type file_name: str
         """
 
-        _current_device = next(self.parameters()).device
+        _current_device = self._model_device
 
         self.to('cpu')
         write(self, file_name, **kwargs)

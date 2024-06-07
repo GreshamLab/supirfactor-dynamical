@@ -30,7 +30,7 @@ class _TFMixin(
 
     @property
     def encoder_weights(self):
-        return self.encoder[0].weight
+        return self.encoder[0].weight.to('cpu')
 
     @property
     def intermediate_weights(self):
@@ -42,7 +42,7 @@ class _TFMixin(
 
     @property
     def decoder_weights(self):
-        return self.decoder[0].weight
+        return self.decoder[0].weight.to('cpu')
 
     def _forward(
         self,
@@ -281,7 +281,7 @@ class _TFMixin(
 
         if as_data_frame and return_rss:
 
-            rss = self._to_dataframe(rss.numpy())
+            rss = self._to_dataframe(rss.to('cpu').numpy())
             full_rss = pd.DataFrame(
                 full_rss,
                 index=self.prior_network_labels[0]
@@ -290,7 +290,7 @@ class _TFMixin(
             return erv, rss, full_rss
 
         elif return_rss:
-            return erv, rss.numpy(), full_rss.numpy()
+            return erv, rss.to('cpu').numpy(), full_rss.to('cpu').numpy()
 
         else:
             return erv

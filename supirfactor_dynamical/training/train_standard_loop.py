@@ -17,7 +17,8 @@ def train_model(
     optimizer=None,
     post_epoch_hook=None,
     input_data_index=None,
-    output_data_index=None
+    output_data_index=None,
+    final_device=None
 ):
     """
     Train this model
@@ -122,7 +123,6 @@ def train_model(
         if post_epoch_hook is not None:
             post_epoch_hook(model_ref)
 
-    to(model_ref, 'cpu')
     model_ref.eval()
 
     model_ref.r2(
@@ -131,6 +131,9 @@ def train_model(
         input_data_index=input_data_index,
         target_data_index=output_data_index
     )
+
+    if final_device is not None:
+        to(model_ref, final_device)
 
     return model
 
