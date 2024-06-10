@@ -19,7 +19,8 @@ def train_decoder_submodels(
     validation_dataloader=None,
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
-    post_epoch_hook=None
+    post_epoch_hook=None,
+    loss_index=None
 ):
     """
     Train this model
@@ -120,7 +121,8 @@ def train_decoder_submodels(
 
         model_ref.append_loss(
             training_loss=np.mean(np.array(_batch_losses), axis=0),
-            training_n=_batch_n
+            training_n=_batch_n,
+            training_loss_idx=loss_index
         )
 
         # Get validation losses during training
@@ -159,7 +161,8 @@ def train_decoder_submodels(
 
             model_ref.append_loss(
                 validation_loss=np.mean(np.array(_val_loss), axis=0),
-                validation_n=_val_n
+                validation_n=_val_n,
+                validation_loss_idx=loss_index
             )
 
         # Shuffle stratified time data

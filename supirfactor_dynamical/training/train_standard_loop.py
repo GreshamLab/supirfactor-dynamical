@@ -18,7 +18,8 @@ def train_model(
     post_epoch_hook=None,
     input_data_index=None,
     output_data_index=None,
-    final_device=None
+    final_device=None,
+    loss_index=None
 ):
     """
     Train this model
@@ -94,7 +95,8 @@ def train_model(
                 axis=0,
                 weights=np.array(_batch_n)
             ),
-            training_n=np.sum(_batch_n)
+            training_n=np.sum(_batch_n),
+            training_loss_idx=loss_index
         )
 
         # Get validation losses during training
@@ -110,7 +112,8 @@ def train_model(
 
             model_ref.append_loss(
                 validation_loss=_vloss,
-                validation_n=_vn
+                validation_n=_vn,
+                validation_loss_idx=loss_index
             )
 
         # Shuffle stratified time data

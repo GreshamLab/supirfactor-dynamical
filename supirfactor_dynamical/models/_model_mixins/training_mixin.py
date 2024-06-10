@@ -528,67 +528,67 @@ class _TrainingMixin:
         if reset or self.training_time is None:
             self.training_time = time.time()
 
+    @staticmethod
+    def _process_loss(
+        existing_loss,
+        loss,
+        loss_idx=None
+    ):
+        if loss is None:
+            return existing_loss
+
+        loss = np.asanyarray(loss).reshape(1, -1)
+
+        if loss_idx is not None:
+            _n_losses = max(
+                np.max(loss_idx),
+                len(loss_idx),
+                loss.shape[1]
+            )
+            _loss = np.zeros((1, _n_losses))
+            _loss[loss_idx] = loss
+            loss = _loss
+
+        if existing_loss is None:
+            return loss
+        else:
+            return np.append(
+                existing_loss,
+                loss,
+                axis=0
+            )
+
     def append_loss(
         self,
         training_loss=None,
         training_n=None,
+        training_loss_idx=None,
         validation_loss=None,
-        validation_n=None
+        validation_n=None,
+        validation_loss_idx=None
     ):
 
-        if training_loss is not None:
+        self._training_loss = self._process_loss(
+            self._training_loss,
+            training_loss,
+            training_loss_idx
+        )
 
-            training_loss = np.asanyarray(training_loss).reshape(1, -1)
+        self._training_n = self._process_loss(
+            self._training_n,
+            training_n
+        )
 
-            if self._training_loss is None:
-                self._training_loss = training_loss
-            else:
-                self._training_loss = np.append(
-                    self.training_loss,
-                    training_loss,
-                    axis=0
-                )
+        self._validation_loss = self._process_loss(
+            self._validation_loss,
+            validation_loss,
+            validation_loss_idx
+        )
 
-        if training_n is not None:
-
-            training_n = np.asanyarray(training_n).reshape(1, -1)
-
-            if self._training_n is None:
-                self._training_n = training_n
-            else:
-                self._training_n = np.append(
-                    self.training_n,
-                    training_n,
-                    axis=0
-                )
-
-        if validation_loss is not None:
-
-            validation_loss = np.asanyarray(validation_loss).reshape(1, -1)
-
-            if self._validation_loss is None:
-                self._validation_loss = np.asanyarray(
-                    validation_loss
-                )
-            else:
-                self._validation_loss = np.append(
-                    self.validation_loss,
-                    validation_loss,
-                    axis=0
-                )
-
-        if validation_n is not None:
-
-            validation_n = np.asanyarray(validation_n).reshape(1, -1)
-
-            if self._validation_n is None:
-                self._validation_n = validation_n
-            else:
-                self._validation_n = np.append(
-                    self.validation_n,
-                    validation_n,
-                    axis=0
-                )
+        self._validation_n = self._process_loss(
+            self._validation_n,
+            validation_n
+        )
 
     def _loss_df(self, loss_array):
 
