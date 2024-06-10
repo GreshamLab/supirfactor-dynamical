@@ -18,6 +18,8 @@ from supirfactor_dynamical import (
     get_model
 )
 
+from supirfactor_dynamical._utils import to
+
 from supirfactor_dynamical._io._network import (
     _read_index,
     _write_index,
@@ -55,6 +57,8 @@ class _ModelStub:
 
 
 class _SetupMixin:
+
+    device = 'cpu'
 
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix='pytest')
@@ -186,7 +190,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
 
         stub = read(
             self.temp_file_name,
@@ -232,7 +238,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             velocity=self.velocity
         )((4, 3))
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
 
         stub = read(
             self.temp_file_name,
@@ -250,7 +258,10 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
 
         ae.train_model([X_tensor], 1)
         self.assertEqual(ae.current_epoch, 0)
+
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
 
         loaded = read(self.temp_file_name)
         self.assertEqual(loaded.current_epoch, 0)
@@ -267,7 +278,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
 
         stub = read(
             self.temp_file_name,
@@ -320,7 +333,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
 
         stub = read(
             self.temp_file_name,
@@ -364,7 +379,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
         ae._training_loss = np.array([1., 1., 1.])
         ae._validation_loss = np.array([2., 2., 2.])
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
         ae.eval()
 
         loaded_ae = read(self.temp_file_name)
@@ -408,7 +425,9 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.ones(4)
         )
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
         ae.eval()
 
         loaded_ae = read(self.temp_file_name)
@@ -465,7 +484,10 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             torch.tensor(self.inv_prior, dtype=torch.float32)
         )
 
+        to(ae, self.device)
         ae.save(self.temp_file_name)
+        to(ae, 'cpu')
+
         ae.eval()
 
         loaded_ae = read(self.temp_file_name)
@@ -527,7 +549,9 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         biophysical._validation_loss = np.array([(2., 2., 2.), (2., 2., 2.)])
         biophysical.current_epoch = 3
 
+        to(biophysical, self.device)
         biophysical.save(self.temp_file_name)
+        to(biophysical, 'cpu')
         biophysical.eval()
 
         loaded_biophysical = read(self.temp_file_name)
@@ -587,7 +611,9 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             output_activation='softplus'
         )
 
+        to(biophysical, self.device)
         biophysical.save(self.temp_file_name)
+        to(biophysical, 'cpu')
         biophysical.eval()
 
         loaded_biophysical = read(self.temp_file_name)
@@ -638,7 +664,9 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             velocity_scaling=np.arange(4, 8)
         )
 
+        to(biophysical, self.device)
         biophysical.save(self.temp_file_name)
+        to(biophysical, 'cpu')
         biophysical.eval()
 
         loaded_biophysical = read(self.temp_file_name)
@@ -695,7 +723,9 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             velocity_scaling=np.arange(3, 6)
         )
 
+        to(decay, self.device)
         decay.save(self.temp_file_name)
+        to(decay, 'cpu')
         decay.eval()
 
         loaded_decay = read(self.temp_file_name)
@@ -723,7 +753,9 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
             hidden_layer_width=10
         )
 
+        to(decay, self.device)
         decay.save(self.temp_file_name)
+        to(decay, 'cpu')
         decay.eval()
 
         loaded_decay = read(self.temp_file_name)
@@ -746,7 +778,9 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
             25
         )
 
+        to(model, self.device)
         model.save(self.temp_file_name)
+        to(model, 'cpu')
 
         loaded_model = read(self.temp_file_name)
         loaded_model.eval()
@@ -765,7 +799,9 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
             PEAK_TO_TF_PRIOR
         )
 
+        to(model, self.device)
         model.save(self.temp_file_name)
+        to(model, 'cpu')
 
         loaded_model = read(self.temp_file_name)
         loaded_model.eval()
@@ -788,7 +824,9 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
             )
         )
 
+        to(model, self.device)
         model.save(self.temp_file_name)
+        to(model, 'cpu')
 
         loaded_model = read(self.temp_file_name)
         loaded_model.eval()
@@ -839,7 +877,9 @@ class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):
             'intermediate'
         )
 
+        to(model, self.device)
         model.save(self.temp_file_name)
+        to(model, 'cpu')
 
         loaded_model = read(
             self.temp_file_name,
@@ -883,3 +923,13 @@ class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):
             model,
             loaded_model
         )
+
+
+class TestSerializerCUDA(TestSerializer):
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
+class TestBiophysicalCUDA(TestBiophysical):
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'

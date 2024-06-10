@@ -1,5 +1,8 @@
 import torch
-from supirfactor_dynamical._utils import to_tensor_device
+from supirfactor_dynamical._utils import (
+    to_tensor_device,
+    _to_tensor
+)
 
 
 class _ScalingMixin:
@@ -63,6 +66,8 @@ class _ScalingMixin:
         If count or velocity is scaled, fix the scaling so that
         they match.
 
+        Scale is defined as x_scaled = x / scale_factor
+
         Needed to calculate t+1 from count and velocity at t
 
         x_(t+1) = x(t) + dx/dx * (count_scaling / velocity_scaling)
@@ -79,7 +84,7 @@ class _ScalingMixin:
             self._count_inverse_scaler = None
 
         elif count_scaling is not False:
-            self._count_inverse_scaler = self.to_tensor(count_scaling)
+            self._count_inverse_scaler = _to_tensor(count_scaling)
             self._count_rescale_scaler = self._zero_safe_div(
                 None,
                 self._count_inverse_scaler
@@ -89,7 +94,7 @@ class _ScalingMixin:
             self._velocity_inverse_scaler = None
 
         elif velocity_scaling is not False:
-            self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
+            self._velocity_inverse_scaler = _to_tensor(velocity_scaling)
             self._velocity_rescale_scaler = self._zero_safe_div(
                 None,
                 self._velocity_inverse_scaler
@@ -108,6 +113,9 @@ class _ScalingMixin:
         return self
 
     def unscale_counts(self, x):
+        """
+        Take scaled counts and remove scaling
+        """
         if self._count_inverse_scaler is not None:
             return torch.mul(
                 x,
@@ -120,6 +128,9 @@ class _ScalingMixin:
             return x
 
     def unscale_velocity(self, x):
+        """
+        Take scaled velocity and remove scaling
+        """
         if self._velocity_inverse_scaler is not None:
             return torch.mul(
                 x,
@@ -132,6 +143,9 @@ class _ScalingMixin:
             return x
 
     def rescale_velocity(self, x):
+        """
+        Take unscaled velocity and scale it
+        """
         if self._velocity_inverse_scaler is not None:
             return torch.mul(
                 x,
@@ -144,6 +158,9 @@ class _ScalingMixin:
             return x
 
     def rescale_counts(self, x):
+        """
+        Take unscaled counts and scale them
+        """
         if self._count_inverse_scaler is not None:
             return torch.mul(
                 x,
@@ -159,6 +176,10 @@ class _ScalingMixin:
         self,
         count
     ):
+        """
+        Take scaled counts and modifiy them so that they
+        are scaled to velocity
+        """
         if self._count_to_velocity_scaler is not None:
             return torch.mul(
                 count,
@@ -174,6 +195,10 @@ class _ScalingMixin:
         self,
         velocity
     ):
+        """
+        Take scaled velocity and modify it so that its
+        scaled to counts
+        """
         if self._velocity_to_count_scaler is not None:
             return torch.mul(
                 velocity,
