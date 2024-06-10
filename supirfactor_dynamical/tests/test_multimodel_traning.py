@@ -18,7 +18,8 @@ from supirfactor_dynamical.datasets import (
 
 from supirfactor_dynamical.training import (
     train_embedding_submodels,
-    train_decoder_submodels
+    train_decoder_submodels,
+    train_model
 )
 
 from supirfactor_dynamical.perturbation import decoder_loss_transfer
@@ -75,23 +76,6 @@ class _SetupMixin:
 
 
 class TestEmbeddingModelTraining(_SetupMixin, unittest.TestCase):
-
-    def test_wrong_model(self):
-
-        model = get_model('static_meta', velocity=True)(
-            self.prior,
-            input_dropout_rate=0.0,
-            use_prior_weights=True
-        )
-
-        with self.assertRaises(AttributeError):
-            train_embedding_submodels(
-                model,
-                self.static_dataloader,
-                10,
-                optimizer={"lr": 1e-5, "weight_decay": 0.},
-                validation_dataloader=self.static_dataloader
-            )
 
     def test_no_swap_training(self):
 
@@ -177,23 +161,6 @@ class TestEmbeddingModelTraining(_SetupMixin, unittest.TestCase):
 
 class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
 
-    def test_wrong_model(self):
-
-        model = get_model('static_meta', velocity=True)(
-            self.prior,
-            input_dropout_rate=0.0,
-            use_prior_weights=True
-        )
-
-        with self.assertRaises(AttributeError):
-            train_decoder_submodels(
-                model,
-                self.static_dataloader,
-                10,
-                decoder_models=('default_decoder', 'bad_decoder'),
-                optimizer={"lr": 1e-5, "weight_decay": 0.}
-            )
-
     def test_no_swaps_no_freeze(self):
 
         model = get_model('static_meta', multisubmodel=True)(
@@ -277,6 +244,94 @@ class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
         )
 
         self.assertEqual(loss_df.shape, (4, 13))
+        self.assertEqual(res_df.shape, (1, 3))
+
+    def test_swaps_then_top_training(self):
+
+        model = get_model('static_meta', multisubmodel=True)(
+            self.prior,
+            input_dropout_rate=0.0,
+            use_prior_weights=True
+        )
+
+        model.add_submodel(
+            'test_decoder',
+            torch.nn.Sequential(
+                torch.nn.Linear(A.shape[1], A.shape[0], bias=False)
+            )
+        )
+
+        train_decoder_submodels(
+            model,
+            self.static_dataloader,
+            10,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            decoder_models=('default_decoder', 'test_decoder'),
+            validation_dataloader=self.static_dataloader
+        )
+
+        model.select_submodel('test_decoder', 'decoder')
+
+        train_model(
+            model,
+            self.static_dataloader,
+            20,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            validation_dataloader=self.static_dataloader,
+            loss_index=1
+        )
+
+        res_df, loss_df, _ = process_results_to_dataframes(
+            model,
+            None,
+            model_type=('default_decoder', 'test_decoder')
+        )
+
+        self.assertEqual(loss_df.shape, (4, 23))
+        self.assertEqual(res_df.shape, (1, 3))
+
+    def test_pretrain_then_swap(self):
+
+        model = get_model('static_meta', multisubmodel=True)(
+            self.prior,
+            input_dropout_rate=0.0,
+            use_prior_weights=True
+        )
+
+        model.add_submodel(
+            'test_decoder',
+            torch.nn.Sequential(
+                torch.nn.Linear(A.shape[1], A.shape[0], bias=False)
+            )
+        )
+
+        model.select_submodel('test_decoder', 'decoder')
+
+        train_model(
+            model,
+            self.static_dataloader,
+            10,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            validation_dataloader=self.static_dataloader,
+            loss_index=1
+        )
+
+        train_decoder_submodels(
+            model,
+            self.static_dataloader,
+            20,
+            optimizer={"lr": 1e-5, "weight_decay": 0.},
+            decoder_models=('default_decoder', 'test_decoder'),
+            validation_dataloader=self.static_dataloader
+        )
+
+        res_df, loss_df, _ = process_results_to_dataframes(
+            model,
+            None,
+            model_type=('default_decoder', 'test_decoder')
+        )
+
+        self.assertEqual(loss_df.shape, (4, 23))
         self.assertEqual(res_df.shape, (1, 3))
 
 

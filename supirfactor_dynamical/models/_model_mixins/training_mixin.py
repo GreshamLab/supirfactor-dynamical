@@ -540,13 +540,17 @@ class _TrainingMixin:
         loss = np.asanyarray(loss).reshape(1, -1)
 
         if loss_idx is not None:
+            loss_idx = np.asanyarray(loss_idx).reshape(-1)
+
             _n_losses = max(
-                np.max(loss_idx),
+                np.max(loss_idx) + 1,
                 len(loss_idx),
-                loss.shape[1]
+                loss.shape[1],
+                existing_loss.shape[1] if existing_loss is not None else 0
             )
+
             _loss = np.zeros((1, _n_losses))
-            _loss[loss_idx] = loss
+            _loss[:, loss_idx] = loss
             loss = _loss
 
         if existing_loss is None:
