@@ -83,9 +83,9 @@ class _H5ADFileLoader:
 
     @staticmethod
     def load_layer(file_handle, layer, obs_include_mask=None):
-        if layer == 'X':
-            _data_reference = file_handle['X']
-        elif layer == 'obs':
+
+        # Get OBS dataframe
+        if layer == 'obs':
             df = read_dataframe(file_handle['obs'])
 
             if obs_include_mask is not None:
@@ -95,20 +95,32 @@ class _H5ADFileLoader:
                 ]
 
             return df
+
+        # Check for X layer
+        elif layer == 'X':
+            _data_reference = file_handle['X']
+
+        # Check for layer key in .layers
         elif layer in file_handle['layers'].keys():
             _data_reference = file_handle['layers'][layer]
+
+        # Check for layer key in .obsm
         elif layer in file_handle['obsm'].keys():
             _data_reference = file_handle['obsm'][layer]
+
+        # Couldn't find anything
         else:
             raise ValueError(
                 f"Cannot find {layer} in `layers` or `obsm`"
             )
 
-        if _H5ADFileLoader._issparse(_data_reference):
+        if sparse_type := _H5ADFileLoader._issparse(_data_reference):
             return _H5ADFileLoader._load_sparse(
                 _data_reference,
-                obs_include_mask
+                sparse_type,
+                obs_include_mask,
             )
+
         else:
             return _H5ADFileLoader._load_dense(
                 _data_reference,
@@ -133,21 +145,31 @@ class _H5ADFileLoader:
         if _encoding == 'array':
             return False
         elif _encoding == 'csr_matrix':
-            return True
+            return 'csr'
         elif _encoding == 'csc_matrix':
-            raise RuntimeError(
-                "Sparse data must be CSR because sampling "
-                "is row-wise"
-            )
+            return 'csc'
         else:
             raise ValueError(f"{_encoding} unknown")
 
     @staticmethod
-    def _load_sparse(ref, obs_mask=None):
+    def _load_sparse(ref, sparse_type='csr', obs_mask=None):
+
+        if sparse_type == 'csr':
+            _sp_func = sps.csr_array
+            _torch_func = torch.sparse_csr_tensor
+        elif sparse_type == 'csc':
+            _sp_func = sps.csc_array
+            _torch_func = torch.sparse_csc_tensor
+        else:
+            raise ValueError(
+                f"Sparse type {sparse_type} unknown"
+            )
 
         if obs_mask is not None:
 
-            arr = sps.csr_array(
+            # Create and slice a sparse python object
+            # because torch doesn't support slicing
+            arr = _sp_func(
                 (
                     ref['data'][:],
                     ref['indices'][:],
@@ -159,7 +181,7 @@ class _H5ADFileLoader:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
-                arr = torch.sparse_csr_tensor(
+                arr = _torch_func(
                     torch.tensor(
                         arr.indptr,
                         dtype=torch.int64
@@ -178,7 +200,7 @@ class _H5ADFileLoader:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
 
-                arr = torch.sparse_csr_tensor(
+                arr = _torch_func(
                     torch.tensor(
                         ref['indptr'][:],
                         dtype=torch.int64
@@ -311,21 +333,12 @@ class StratifySingleFileDataset(
             file_name,
             layer=file_data_layer,
             extra_layers=yield_extra_layers,
-            append_obs=True
+            append_obs=True,
+            obs_include_mask=obs_include_mask
         )
         self.yields_tuple = len(self.loaded_data) > 1
 
         obs = self.loaded_data.pop(-1)
-
-        if obs_include_mask is not None:
-            idx = np.arange(obs.shape[0])
-            idx = idx[obs_include_mask]
-            for i in range(len(self.loaded_data)):
-                self.loaded_data[i] = self.loaded_data[i][
-                    idx,
-                    ...
-                ]
-            obs = obs.iloc[idx, :].copy()
 
         if yield_obs_cats is not None:
             self.loaded_data.extend(

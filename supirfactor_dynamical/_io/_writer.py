@@ -88,6 +88,7 @@ def _write_state(
             else:
                 _d = getattr(model_object, s_arg)
 
+            # Make sure tensors are on CPU
             try:
                 _d = _d.to('cpu')
             except AttributeError:
