@@ -24,9 +24,10 @@ def _write_torch_state(
     keys = []
 
     for k, data in torch_object.state_dict().items():
+
         f.create_dataset(
             prefix + k,
-            data=data.numpy()
+            data=data.to('cpu').numpy()
         )
         keys.append(k)
 

@@ -88,6 +88,11 @@ def _write_state(
             else:
                 _d = getattr(model_object, s_arg)
 
+            try:
+                _d = _d.to('cpu')
+            except AttributeError:
+                pass
+
             f.create_dataset(
                 prefix + s_arg,
                 data=np.array(_d)

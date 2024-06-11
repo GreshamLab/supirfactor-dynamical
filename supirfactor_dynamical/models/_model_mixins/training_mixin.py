@@ -517,9 +517,9 @@ class _TrainingMixin:
 
         _current_device = self._model_device
 
-        self.to('cpu')
+        to(self, 'cpu')
         write(self, file_name, **kwargs)
-        self.to(_current_device)
+        to(self, _current_device)
 
     def set_training_time(
         self,
