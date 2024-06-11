@@ -22,6 +22,9 @@ from supirfactor_dynamical.datasets import (
     H5ADDatasetObsStratified,
     StackIterableDataset
 )
+from supirfactor_dynamical.datasets.stratified_file_dataset import (
+    StratifySingleFileDataset
+)
 
 from supirfactor_dynamical.datasets.anndata_backed_dataset import (
     _batched_len,
@@ -713,3 +716,174 @@ class TestADObsBacked(unittest.TestCase):
                 data[1].shape,
                 (2, 7)
             )
+
+
+class TestMemoryDenseStratified(unittest.TestCase):
+
+    dataset = None
+    num_workers = 0
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            X
+        )
+        self.adata.obs['time'] = T
+
+        _strats = np.tile(["A", "B", "C"], 34)[0:100]
+        _strats[[3, 6, 10]] = 'D'
+        self.adata.obs['strat'] = _strats
+        self.adata.obs['strat'] = self.adata.obs['strat'].astype('category')
+        self.adata.obs['other_strat'] = ['F'] * 49 + ['G'] * 50 + ['F']
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)
+
+    def test_load_h5(self):
+
+        dataset = StratifySingleFileDataset(
+            self.filename,
+            ['strat'],
+            yield_obs_cats=['strat']
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.loaded_data),
+            2
+        )
+
+        self.assertEqual(
+            len(dataset.loaded_data[0]),
+            100
+        )
+
+        self.assertEqual(
+            self.adata.obs['strat'].value_counts().reindex(
+                ['A', 'B', 'C', 'D']
+            ).values.tolist(),
+            list(map(len, dataset.stratification_group_indexes))
+        )
+
+        _classes = []
+
+        for i, (v, c) in enumerate(dataset):
+            self.assertEqual(
+                v.shape,
+                (4,)
+            )
+            self.assertEqual(
+                c.shape,
+                (4,)
+            )
+            _classes.append(c)
+
+        _classes = np.vstack(_classes).sum(0).astype(int)
+        self.assertEqual(i, 11)
+
+        npt.assert_equal(
+            _classes,
+            [3, 3, 3, 3]
+        )
+
+    def test_h5_mask(self):
+
+        dataset = StratifySingleFileDataset(
+            self.filename,
+            ['strat'],
+            yield_obs_cats=['strat'],
+            obs_include_mask=np.arange(50)
+        )
+        self.dataset = dataset
+
+        self.assertEqual(
+            len(dataset.loaded_data),
+            2
+        )
+
+        self.assertEqual(
+            len(dataset.loaded_data[0]),
+            50
+        )
+
+        self.assertEqual(
+            [15, 16, 16, 3],
+            list(map(len, dataset.stratification_group_indexes))
+        )
+
+        _classes = []
+
+        for i, (v, c) in enumerate(dataset):
+            self.assertEqual(
+                v.shape,
+                (4,)
+            )
+            self.assertEqual(
+                c.shape,
+                (4,)
+            )
+            _classes.append(c)
+
+        _classes = np.vstack(_classes).sum(0).astype(int)
+        self.assertEqual(i, 11)
+
+        npt.assert_equal(
+            _classes,
+            [3, 3, 3, 3]
+        )
+
+    def test_dual_strat(self):
+
+        dataset = StratifySingleFileDataset(
+            self.filename,
+            ['strat', 'other_strat'],
+            discard_categories=['D'],
+            yield_obs_cats=['strat', 'other_strat']
+        )
+
+        self.assertEqual(
+            len(dataset.loaded_data),
+            3
+        )
+
+        self.assertEqual(
+            len(dataset.loaded_data[0]),
+            100
+        )
+
+        self.assertEqual(
+            [16, 16, 15, 17, 16, 17],
+            list(map(len, dataset.stratification_group_indexes))
+        )
+
+        self.assertEqual(
+            97,
+            sum(map(len, dataset.stratification_group_indexes))
+        )
+
+        _classes = []
+
+        for i, (v, c, c2) in enumerate(dataset):
+            self.assertEqual(
+                v.shape,
+                (4,)
+            )
+            self.assertEqual(
+                c.shape,
+                (4,)
+            )
+            self.assertEqual(
+                c2.shape,
+                (2,)
+            )
+            _classes.append(c)
+
+        _classes = np.vstack(_classes).sum(0).astype(int)
+
+        npt.assert_equal(
+            _classes,
+            [30, 30, 30, 0]
+        )

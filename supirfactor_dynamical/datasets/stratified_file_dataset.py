@@ -7,10 +7,33 @@ import gc
 from anndata._io.h5ad import read_dataframe
 
 
-class _H5ADFileLoder:
+class _H5ADFileLoader:
 
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError
+    file_data_layer = 'X'
+
+    yield_extra_layers = None
+    yield_obs_cats = None
+
+    one_hot_obs_cats = True
+    obs_categories = None
+
+    def __init__(
+        self,
+        file_data_layer='X',
+        yield_extra_layers=None,
+        yield_obs_cats=None,
+        obs_categories=None,
+        one_hot_obs_cats=True
+    ):
+        self.file_data_layer = file_data_layer
+        self.yield_extra_layers = yield_extra_layers
+
+        if not isinstance(yield_obs_cats, (tuple, list)):
+            yield_obs_cats = [yield_obs_cats]
+
+        self.yield_obs_cats = yield_obs_cats
+        self.one_hot_obs_cats = one_hot_obs_cats
+        self.obs_categories = obs_categories
 
     @staticmethod
     def load_file(
@@ -23,19 +46,19 @@ class _H5ADFileLoder:
         with h5py.File(file_name) as file_handle:
 
             if layer == 'obs':
-                return _H5ADFileLoder.load_layer(file_handle, layer)
+                return _H5ADFileLoader.load_layer(file_handle, layer)
 
-            _data = [_H5ADFileLoder.load_layer(file_handle, layer)]
+            _data = [_H5ADFileLoader.load_layer(file_handle, layer)]
 
             if extra_layers is not None:
                 _data = _data + [
-                    _H5ADFileLoder.load_layer(file_handle, _elayer)
+                    _H5ADFileLoader.load_layer(file_handle, _elayer)
                     for _elayer in extra_layers
                 ]
 
             if append_obs:
                 _data.append(
-                    _H5ADFileLoder.load_layer(file_handle, 'obs')
+                    _H5ADFileLoader.load_layer(file_handle, 'obs')
                 )
 
             return _data
@@ -55,10 +78,10 @@ class _H5ADFileLoder:
                 f"Cannot find {layer} in `layers` or `obsm`"
             )
 
-        if _H5ADFileLoder._issparse(_data_reference):
-            return _H5ADFileLoder._load_sparse(_data_reference)
+        if _H5ADFileLoader._issparse(_data_reference):
+            return _H5ADFileLoader._load_sparse(_data_reference)
         else:
-            return _H5ADFileLoder._load_dense(_data_reference)
+            return _H5ADFileLoader._load_dense(_data_reference)
 
     @staticmethod
     def _get_shape(ref):
@@ -105,7 +128,7 @@ class _H5ADFileLoder:
                 torch.Tensor(
                     ref['data'][:]
                 ),
-                size=_H5ADFileLoder._get_shape(ref)
+                size=_H5ADFileLoader._get_shape(ref)
             ).to_dense()
 
     @staticmethod
@@ -155,9 +178,143 @@ class _H5ADFileLoder:
 
         return obs_codes
 
+    @staticmethod
+    def get_stratification_indices(
+        obs,
+        stratification_columns,
+        discard_categories=None
+    ):
+
+        obs = obs[stratification_columns].copy()
+        obs['row_idx_loc'] = np.arange(obs.shape[0])
+
+        indices = []
+
+        for vals, idxes in obs.groupby(
+            stratification_columns,
+            observed=False
+        )['row_idx_loc']:
+
+            if discard_categories is None:
+                pass
+            elif (
+                isinstance(vals, tuple) and
+                any(v in discard_categories for v in vals)
+            ):
+                continue
+            elif vals in discard_categories:
+                continue
+
+            if len(idxes) > 0:
+                indices.append(
+                    idxes.values
+                )
+
+        return indices
+
+
+class StratifySingleFileDataset(
+    _H5ADFileLoader,
+    torch.utils.data.IterDataPipe
+):
+
+    loaded_data = None
+    yields_tuple = None
+
+    stratification_group_indexes = None
+    min_strat_size = None
+    n_strat_groups = None
+
+    def __init__(
+        self,
+        file_name,
+        stratification_columns,
+        obs_include_mask=None,
+        discard_categories=None,
+        random_state=None,
+        file_data_layer='X',
+        yield_extra_layers=None,
+        yield_obs_cats=None,
+        obs_categories=None,
+        one_hot_obs_cats=True
+    ):
+
+        self.loaded_data = self.load_file(
+            file_name,
+            layer=file_data_layer,
+            extra_layers=yield_extra_layers,
+            append_obs=True
+        )
+        self.yields_tuple = len(self.loaded_data) > 1
+
+        obs = self.loaded_data.pop(-1)
+
+        if obs_include_mask is not None:
+            idx = np.arange(obs.shape[0])
+            idx = idx[obs_include_mask]
+            for i in range(len(self.loaded_data)):
+                self.loaded_data[i] = self.loaded_data[i][
+                    idx,
+                    ...
+                ]
+            obs = obs.iloc[idx, :].copy()
+
+        if yield_obs_cats is not None:
+            self.loaded_data.extend(
+                self._get_obs_cats(
+                    obs,
+                    yield_obs_cats,
+                    obs_categories,
+                    one_hot=one_hot_obs_cats
+                )
+            )
+
+        self.stratification_group_indexes = self.get_stratification_indices(
+            obs,
+            stratification_columns,
+            discard_categories=discard_categories
+        )
+        self.min_strat_size = min(
+            len(x)
+            for x in self.stratification_group_indexes
+            if len(x) > 0
+        )
+        self.n_strat_groups = len(self.stratification_group_indexes)
+
+        self.rng = np.random.default_rng(random_state)
+        self.shuffle()
+
+    def __iter__(self):
+
+        def _get_loaded_data():
+            for j in range(self.min_strat_size):
+                for k in range(self.n_strat_groups):
+                    yield self.get_data(
+                        self.stratification_group_indexes[k][j]
+                    )
+
+            self.shuffle()
+
+        return _get_loaded_data()
+
+    def get_data(self, loc):
+
+        if self.yields_tuple:
+            return tuple(
+                self.loaded_data[i][loc, ...]
+                for i in range(len(self.loaded_data))
+            )
+        else:
+            return self.loaded_data[0][loc, ...]
+
+    def shuffle(self):
+
+        for i in self.stratification_group_indexes:
+            self.rng.shuffle(i)
+
 
 class StratifiedFilesDataset(
-    _H5ADFileLoder,
+    _H5ADFileLoader,
     torch.utils.data.IterDataPipe
 ):
 
@@ -202,17 +359,16 @@ class StratifiedFilesDataset(
         epoch_len=None
     ):
 
+        super().__init__(
+            file_data_layer=file_data_layer,
+            yield_extra_layers=yield_extra_layers,
+            yield_obs_cats=yield_obs_cats,
+            obs_categories=obs_categories,
+            one_hot_obs_cats=one_hot_obs_cats
+        )
+
         self.file_metadata = file_data.copy()
         self.file_name_column = file_name_column
-        self.file_data_layer = file_data_layer
-        self.yield_extra_layers = yield_extra_layers
-
-        if not isinstance(yield_obs_cats, (tuple, list)):
-            yield_obs_cats = [yield_obs_cats]
-
-        self.yield_obs_cats = yield_obs_cats
-        self.one_hot_obs_cats = one_hot_obs_cats
-        self.obs_categories = obs_categories
 
         self.stratification_column = stratification_column
         self.rng = np.random.default_rng(random_state)
