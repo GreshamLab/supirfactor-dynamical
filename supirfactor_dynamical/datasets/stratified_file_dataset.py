@@ -2,6 +2,7 @@ import h5py
 import warnings
 import torch
 import numpy as np
+import scipy.sparse as sps
 import gc
 
 from anndata._io.h5ad import read_dataframe
@@ -39,6 +40,7 @@ class _H5ADFileLoader:
     def load_file(
         file_name,
         layer,
+        obs_include_mask=None,
         extra_layers=None,
         append_obs=True
     ):
@@ -46,29 +48,53 @@ class _H5ADFileLoader:
         with h5py.File(file_name) as file_handle:
 
             if layer == 'obs':
-                return _H5ADFileLoader.load_layer(file_handle, layer)
+                return _H5ADFileLoader.load_layer(
+                    file_handle,
+                    layer,
+                    obs_include_mask
+                )
 
-            _data = [_H5ADFileLoader.load_layer(file_handle, layer)]
+            _data = [_H5ADFileLoader.load_layer(
+                file_handle,
+                layer,
+                obs_include_mask
+            )]
 
             if extra_layers is not None:
                 _data = _data + [
-                    _H5ADFileLoader.load_layer(file_handle, _elayer)
+                    _H5ADFileLoader.load_layer(
+                        file_handle,
+                        _elayer,
+                        obs_include_mask
+                    )
                     for _elayer in extra_layers
                 ]
 
             if append_obs:
                 _data.append(
-                    _H5ADFileLoader.load_layer(file_handle, 'obs')
+                    _H5ADFileLoader.load_layer(
+                        file_handle,
+                        'obs',
+                        obs_include_mask
+                    )
                 )
 
             return _data
 
     @staticmethod
-    def load_layer(file_handle, layer):
+    def load_layer(file_handle, layer, obs_include_mask=None):
         if layer == 'X':
             _data_reference = file_handle['X']
         elif layer == 'obs':
-            return read_dataframe(file_handle['obs'])
+            df = read_dataframe(file_handle['obs'])
+
+            if obs_include_mask is not None:
+                df = df.iloc[
+                    np.arange(df.shape[0])[obs_include_mask],
+                    :
+                ]
+
+            return df
         elif layer in file_handle['layers'].keys():
             _data_reference = file_handle['layers'][layer]
         elif layer in file_handle['obsm'].keys():
@@ -79,9 +105,15 @@ class _H5ADFileLoader:
             )
 
         if _H5ADFileLoader._issparse(_data_reference):
-            return _H5ADFileLoader._load_sparse(_data_reference)
+            return _H5ADFileLoader._load_sparse(
+                _data_reference,
+                obs_include_mask
+            )
         else:
-            return _H5ADFileLoader._load_dense(_data_reference)
+            return _H5ADFileLoader._load_dense(
+                _data_reference,
+                obs_include_mask
+            )
 
     @staticmethod
     def _get_shape(ref):
@@ -111,29 +143,65 @@ class _H5ADFileLoader:
             raise ValueError(f"{_encoding} unknown")
 
     @staticmethod
-    def _load_sparse(ref):
+    def _load_sparse(ref, obs_mask=None):
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+        if obs_mask is not None:
 
-            return torch.sparse_csr_tensor(
-                torch.tensor(
-                    ref['indptr'][:],
-                    dtype=torch.int64
-                ),
-                torch.tensor(
+            arr = sps.csr_array(
+                (
+                    ref['data'][:],
                     ref['indices'][:],
-                    dtype=torch.int64
+                    ref['indptr'][:]
                 ),
-                torch.Tensor(
-                    ref['data'][:]
-                ),
-                size=_H5ADFileLoader._get_shape(ref)
-            ).to_dense()
+                shape=_H5ADFileLoader._get_shape(ref)
+            )[obs_mask, :]
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+
+                arr = torch.sparse_csr_tensor(
+                    torch.tensor(
+                        arr.indptr,
+                        dtype=torch.int64
+                    ),
+                    torch.tensor(
+                        arr.indices,
+                        dtype=torch.int64
+                    ),
+                    torch.Tensor(
+                        arr.data
+                    ),
+                    size=arr.shape
+                )
+
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+
+                arr = torch.sparse_csr_tensor(
+                    torch.tensor(
+                        ref['indptr'][:],
+                        dtype=torch.int64
+                    ),
+                    torch.tensor(
+                        ref['indices'][:],
+                        dtype=torch.int64
+                    ),
+                    torch.Tensor(
+                        ref['data'][:]
+                    ),
+                    size=_H5ADFileLoader._get_shape(ref)
+                )
+
+        gc.collect()
+        return arr.to_dense()
 
     @staticmethod
-    def _load_dense(ref):
-        return torch.Tensor(ref[:])
+    def _load_dense(ref, obs_mask=None):
+        if obs_mask is None:
+            return torch.Tensor(ref[:])
+        else:
+            return torch.Tensor(ref[obs_mask, ...])
 
     @staticmethod
     def _get_obs_cats(

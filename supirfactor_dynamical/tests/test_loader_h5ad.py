@@ -887,3 +887,28 @@ class TestMemoryDenseStratified(unittest.TestCase):
             _classes,
             [30, 30, 30, 0]
         )
+
+
+class TestMemorySparseStratified(TestMemoryDenseStratified):
+
+    dataset = None
+    num_workers = 0
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tempdir = tempfile.TemporaryDirectory()
+        cls.filename = os.path.join(cls.tempdir.name, "tests.h5ad")
+
+    def setUp(self) -> None:
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+        self.adata.obs['time'] = T
+
+        _strats = np.tile(["A", "B", "C"], 34)[0:100]
+        _strats[[3, 6, 10]] = 'D'
+        self.adata.obs['strat'] = _strats
+        self.adata.obs['strat'] = self.adata.obs['strat'].astype('category')
+        self.adata.obs['other_strat'] = ['F'] * 49 + ['G'] * 50 + ['F']
+        self.adata.layers['tst'] = self.adata.X.copy()
+        self.adata.write(self.filename)
