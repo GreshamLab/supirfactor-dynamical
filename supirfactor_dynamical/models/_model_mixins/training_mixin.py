@@ -159,6 +159,7 @@ class _TrainingMixin:
         retain_graph=False,
         input_x=None,
         target_x=None,
+        loss_weight=None,
         **kwargs
     ):
 
@@ -172,6 +173,9 @@ class _TrainingMixin:
             input_x,
             target_x
         )
+
+        if loss_weight is not None:
+            mse = mse * loss_weight
 
         mse.backward(retain_graph=retain_graph)
         optimizer.step()

@@ -322,7 +322,8 @@ class TestDecoderModelTraining(_SetupMixin, unittest.TestCase):
             20,
             optimizer={"lr": 1e-5, "weight_decay": 0.},
             decoder_models=('default_decoder', 'test_decoder'),
-            validation_dataloader=self.static_dataloader
+            validation_dataloader=self.static_dataloader,
+            training_loss_weights=1.
         )
 
         res_df, loss_df, _ = process_results_to_dataframes(

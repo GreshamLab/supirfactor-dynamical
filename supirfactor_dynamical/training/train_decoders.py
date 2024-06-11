@@ -20,7 +20,8 @@ def train_decoder_submodels(
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
     post_epoch_hook=None,
-    loss_index=None
+    loss_index=None,
+    training_loss_weights=None
 ):
     """
     Train this model
@@ -86,6 +87,9 @@ def train_decoder_submodels(
     if not isinstance(loss_function, (tuple, list)):
         loss_function = [loss_function] * len(optimizers)
 
+    if not isinstance(training_loss_weights, (tuple, list)):
+        training_loss_weights = [training_loss_weights] * len(optimizers)
+
     for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
 
         model.train()
@@ -100,10 +104,11 @@ def train_decoder_submodels(
 
             _decoder_losses = []
             _batch_n = _batch_n + train_x[0].shape[0]
-            for x, lf, _target_x in zip(
+            for x, lf, _target_x, loss_weight in zip(
                 decoder_models,
                 loss_function,
-                train_x
+                train_x,
+                training_loss_weights
             ):
                 model_ref.select_submodel(x, 'decoder')
 
@@ -113,7 +118,8 @@ def train_decoder_submodels(
                         train_x[encoder_data_index],
                         optimizers[x],
                         lf,
-                        target_x=_target_x
+                        target_x=_target_x,
+                        loss_weight=loss_weight
                     )
                 )
 
