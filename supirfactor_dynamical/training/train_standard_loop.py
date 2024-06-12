@@ -57,7 +57,9 @@ def train_model(
     # Set training time
     model_ref.set_training_time()
 
-    for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
+    for epoch_num in (
+        pbar := tqdm.trange(model_ref.current_epoch + 1, epochs)
+    ):
 
         model_ref.train()
 
@@ -122,6 +124,7 @@ def train_model(
         _shuffle_time_data(validation_dataloader)
 
         model_ref.current_epoch = epoch_num
+        pbar.set_description(f"[{epoch_num}]: n={np.sum(_batch_n)}")
 
         if post_epoch_hook is not None:
             post_epoch_hook(model_ref)
