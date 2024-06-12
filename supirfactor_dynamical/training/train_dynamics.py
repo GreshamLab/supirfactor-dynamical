@@ -44,10 +44,13 @@ def pretrain_and_tune_dynamic_model(
         kwargs
     )
 
+    if not isinstance(epochs, (tuple, list)):
+        epochs = (epochs, 2 * epochs)
+
     model, pretrain_results = dynamical_model_training(
         pretraining_training_dataloader,
         prior_network,
-        epochs,
+        epochs[0],
         validation_dataloader=pretraining_validation_dataloader,
         optimizer_params=optimizer_params,
         prediction_length=False,
@@ -64,7 +67,7 @@ def pretrain_and_tune_dynamic_model(
     model, tuned_results, _final_erv = dynamical_model_training(
         prediction_tuning_training_dataloader,
         prior_network,
-        epochs,
+        epochs[1],
         validation_dataloader=prediction_tuning_validation_dataloader,
         optimizer_params=optimizer_params,
         prediction_length=prediction_length,
@@ -124,10 +127,9 @@ def dynamical_model_training(
             **kwargs
         )
 
-    if hasattr(model_obj, 'set_scaling'):
-        model_obj.set_scaling(
-            **scaling_params
-        )
+    model_obj.set_scaling(
+        **scaling_params
+    )
 
     if prediction_length is not None and not model_obj._velocity_model:
         offset_plus_one = True
