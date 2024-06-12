@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from .._utils import (
     _calculate_erv,
     _calculate_rss,
-    _unsqueeze
+    _unsqueeze,
+    to
 )
 
 from ._model_mixins import (
@@ -263,6 +264,8 @@ class _TFMixin(
 
             for data_x in data_loader:
 
+                data_x = to(data_x, self._model_device)
+
                 _full, _partial = self._calculate_error(
                     self.input_data(data_x),
                     self.output_data(data_x, no_loss_offset=True),
@@ -276,24 +279,31 @@ class _TFMixin(
             # full model RSS and the reduced model RSS
             erv = _calculate_erv(full_rss, rss)
 
+        # Turn tensors into DataFrames or ndarrays
         if as_data_frame:
             erv = self._to_dataframe(erv)
+        else:
+            erv = to(erv, 'cpu', numpy=True)
 
-        if as_data_frame and return_rss:
+        if not return_rss:
+            return erv
 
-            rss = self._to_dataframe(rss.to('cpu').numpy())
+        rss = rss.to('cpu').numpy()
+        full_rss = full_rss.to('cpu').numpy()
+
+        if as_data_frame:
+
+            rss = self._to_dataframe(
+                rss
+            )
             full_rss = pd.DataFrame(
                 full_rss,
                 index=self.prior_network_labels[0]
             )
-
             return erv, rss, full_rss
 
-        elif return_rss:
-            return erv, rss.to('cpu').numpy(), full_rss.to('cpu').numpy()
-
         else:
-            return erv
+            return erv, rss, full_rss
 
     def _calculate_error(
         self,

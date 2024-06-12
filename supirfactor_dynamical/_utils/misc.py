@@ -1,13 +1,16 @@
 import torch
 
 
-def to(obj, device):
+def to(obj, device, numpy=False):
 
     if obj is None:
         return None
 
     if isinstance(obj, (tuple, list)):
         return tuple(to(thing, device) for thing in obj)
+
+    elif numpy:
+        return obj.to('cpu').detach().numpy()
 
     else:
         return obj.to(device)

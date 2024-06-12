@@ -314,8 +314,7 @@ class _PriorMixin:
         """
 
         try:
-            with torch.no_grad():
-                x = x.to('cpu').numpy()
+            x = x.to('cpu').numpy()
 
         except AttributeError:
             pass
