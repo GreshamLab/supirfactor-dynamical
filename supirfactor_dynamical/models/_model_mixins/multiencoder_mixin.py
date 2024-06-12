@@ -126,10 +126,13 @@ class _MultiSubmoduleMixin:
             _model_ref = self._intermediate
         elif model_type == 'decoder':
             _model_ref = self._decoder
+        elif model_type in self.module_bag.labels:
+            _model_ref = self.module_bag[model_type]
         else:
             raise ValueError(
-                f"model_type must be `encoder`, `decoder`, or "
-                f"`intermediate`; {model_type} provided"
+                f"model_type must be `encoder`, `decoder`, "
+                f"`intermediate`, or one of the module names "
+                f"({', '.join(self.module_labels)}); {model_type} provided"
             )
 
         for param in _model_ref.parameters():

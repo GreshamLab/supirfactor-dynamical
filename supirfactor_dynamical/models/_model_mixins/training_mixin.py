@@ -216,18 +216,20 @@ class _TrainingMixin:
             _validation_n = []
 
             with torch.no_grad():
+                device = self._model_device
+
                 for val_x in validation_dataloader:
 
                     if output_data_index is not None:
                         val_target_x = val_x[output_data_index]
-                        val_target_x = to(val_target_x, self.device)
+                        val_target_x = to(val_target_x, device)
                     else:
                         val_target_x = None
 
                     if input_data_index is not None:
                         val_x = val_x[input_data_index]
 
-                    val_x = to(val_x, self.device)
+                    val_x = to(val_x, device)
 
                     _validation_batch_losses.append(
                         self._calculate_all_losses(
@@ -637,12 +639,13 @@ class _TrainingMixin:
         """
 
         self.eval()
+        device = self._model_device
 
         # Recursive call if x is a DataLoader
         if isinstance(x, DataLoader):
             results = [
                 self(
-                    batch_x,
+                    to(batch_x, device),
                     **kwargs
                 )
                 for batch_x in x
@@ -652,20 +655,29 @@ class _TrainingMixin:
                 return results[0]
 
             if isinstance(results[0], torch.Tensor):
-                return _cat(results, 0)
+                return to(_cat(results, 0), 'cpu')
 
             else:
                 return tuple(
-                    _cat([results[i][j] for i in range(len(results))], 0)
+                    to(
+                        _cat(
+                            [results[i][j] for i in range(len(results))],
+                            0
+                        ),
+                        'cpu'
+                    )
                     for j in range(len(results[0]))
                 )
 
         elif not torch.is_tensor(x):
             x = torch.Tensor(x)
 
-        return self(
-            x,
-            **kwargs
+        return to(
+            self(
+                to(x, device),
+                **kwargs
+            ),
+            'cpu'
         )
 
     @torch.inference_mode()

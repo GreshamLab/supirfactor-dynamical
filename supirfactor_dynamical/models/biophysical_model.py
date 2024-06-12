@@ -585,7 +585,7 @@ class SupirFactorBiophysical(
 
         del predict_velo
 
-        rss = torch.zeros((self.g, self.k))
+        rss = torch.zeros((self.g, self.k), device=self._model_device)
         # For each node in the latent layer,
         # zero all values in the data and then
         # decode to full expression data

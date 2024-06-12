@@ -240,8 +240,7 @@ class TestTFAutoencoder(unittest.TestCase):
 
         self.ae.train_model(
             loader,
-            20,
-            final_device='cpu'
+            20
         )
 
         self.ae.eval()
@@ -252,7 +251,9 @@ class TestTFAutoencoder(unittest.TestCase):
             h[h < 0] = 0
 
             npt.assert_almost_equal(
-                self.ae.latent_layer(X_tensor).numpy(),
+                self.ae.latent_layer(
+                    X_tensor.to(self.ae._model_device)
+                ).to('cpu').numpy(),
                 h,
                 decimal=3
             )
@@ -271,7 +272,9 @@ class TestTFAutoencoder(unittest.TestCase):
         )
 
         for i in range(3):
-            h_partial = self.ae.latent_layer(X_tensor).numpy()
+            h_partial = self.ae.latent_layer(
+                X_tensor.to(self.ae._model_device)
+            ).to('cpu').numpy()
             h_partial[:, i] = 0
 
             y_partial = _forward_from_latent(h_partial)

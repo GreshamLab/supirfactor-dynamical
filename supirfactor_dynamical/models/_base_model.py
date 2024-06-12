@@ -255,16 +255,18 @@ class _TFMixin(
         :rtype: np.ndarray, np.ndarray, np.ndarray
         """
 
+        device = self._model_device
+
         with torch.no_grad():
 
             self.eval()
 
-            full_rss = torch.zeros(self.g)
-            rss = torch.zeros((self.g, self.k))
+            full_rss = torch.zeros(self.g, device=device)
+            rss = torch.zeros((self.g, self.k), device=device)
 
             for data_x in data_loader:
 
-                data_x = to(data_x, self._model_device)
+                data_x = to(data_x, device)
 
                 _full, _partial = self._calculate_error(
                     self.input_data(data_x),
@@ -325,7 +327,7 @@ class _TFMixin(
             output_data
         )
 
-        rss = torch.zeros((self.g, self.k))
+        rss = torch.zeros((self.g, self.k), device=self._model_device)
         # For each node in the latent layer,
         # zero all values in the data and then
         # decode to full expression data

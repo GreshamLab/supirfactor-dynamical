@@ -144,28 +144,35 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        x = self.dynamical_model(XTV_tensor[..., 0])[0]
+        x = self.dynamical_model(
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device)
+        )[0]
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
         (xp, xn) = self.dynamical_model(
-            XTV_tensor[..., 0],
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device),
             return_submodels=True
         )[0]
+
+        x = x.to('cpu').detach()
+        xp = xp.to('cpu').detach()
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
         if self.decay_model is False:
             torch.testing.assert_close(
-                xp.detach(),
-                x.detach()
+                xp,
+                x
             )
         else:
-            self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            xn = xn.to('cpu').detach()
+
+            self.assertTrue(np.all(xp.numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-            self.assertTrue(np.all(xn.detach().numpy() <= 0))
+            self.assertTrue(np.all(xn.numpy() <= 0))
 
             torch.testing.assert_close(
-                xn.detach() + xp.detach(),
-                x.detach()
+                xn + xp,
+                x
             )
 
     def test_predict_wrapper(self):
@@ -211,29 +218,36 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        x = self.dynamical_model(XTV_tensor[..., 0])[0]
+        x = self.dynamical_model(
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device)
+        )[0]
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
 
         (xp, xn) = self.dynamical_model(
-            XTV_tensor[..., 0],
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device),
             return_submodels=True
         )[0]
+
+        x = x.to('cpu').detach()
+        xp = xp.to('cpu').detach()
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
         if self.decay_model is False:
             torch.testing.assert_close(
-                xp.detach(),
-                x.detach()
+                xp,
+                x
             )
         else:
-            self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            xn = xn.to('cpu').detach()
+
+            self.assertTrue(np.all(xp.numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-            self.assertTrue(np.all(xn.detach().numpy() <= 0))
+            self.assertTrue(np.all(xn.numpy() <= 0))
 
             torch.testing.assert_close(
-                xn.detach() + xp.detach(),
-                x.detach()
+                xn + xp,
+                x
             )
 
     def test_training_scale(self):
@@ -246,11 +260,13 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        x = self.dynamical_model(XTV_tensor[..., 0])[0]
+        x = self.dynamical_model(
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device)
+        )[0]
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
 
         (xp, xn) = self.dynamical_model(
-            XTV_tensor[..., 0],
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device),
             return_submodels=True
         )[0]
 
@@ -258,17 +274,17 @@ class TestDynamicalModel(unittest.TestCase):
 
         if self.decay_model is False:
             npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
+                xp.to('cpu').detach().numpy(),
+                x.to('cpu').detach().numpy()
             )
         else:
-            self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertTrue(np.all(xp.to('cpu').detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-            self.assertTrue(np.all(xn.detach().numpy() <= 0))
+            self.assertTrue(np.all(xn.to('cpu').detach().numpy() <= 0))
 
             npt.assert_almost_equal(
-                xn.detach().numpy() + xp.detach().numpy(),
-                x.detach().numpy()
+                xn.to('cpu').detach().numpy() + xp.to('cpu').detach().numpy(),
+                x.to('cpu').detach().numpy()
             )
 
     def test_train_loop(self):
@@ -695,3 +711,11 @@ class TestDynamicalModelOptimizeDecay(TestDynamicalModelTuneDecay):
 class TestDynamicalModelOptimizeDecayDelay(TestDynamicalModelOptimizeDecay):
 
     decay_delay = 5
+
+
+class TestDynamicalModelCUDA(TestDynamicalModel):
+
+    def setUp(self) -> None:
+        super().setUp()
+        if torch.cuda.is_available():
+            self.dynamical_model.device = 'cuda'

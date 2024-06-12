@@ -41,8 +41,8 @@ class _PriorMixin:
             _mask = ~self.prior_network_labels[1].isin(self._drop_tf)
 
             x = x @ torch.diag(
-                torch.Tensor(_mask.astype(int))
-            ).to(self.device)
+                torch.Tensor(_mask.astype(int)).to(self._model_device)
+            )
 
         x = self.hidden_dropout(x)
 
