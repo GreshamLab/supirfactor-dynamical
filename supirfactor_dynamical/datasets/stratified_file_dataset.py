@@ -367,8 +367,17 @@ class StratifySingleFileDataset(
 
     def __iter__(self):
 
+        worker_info = torch.utils.data.get_worker_info()
+
+        if worker_info is not None:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+        else:
+            worker_id = 0
+            num_workers = 1
+
         def _get_loaded_data():
-            for j in range(self.min_strat_size):
+            for j in np.arange(self.min_strat_size)[worker_id::num_workers]:
                 for k in range(self.n_strat_groups):
                     yield self.get_data(
                         self.stratification_group_indexes[k][j]

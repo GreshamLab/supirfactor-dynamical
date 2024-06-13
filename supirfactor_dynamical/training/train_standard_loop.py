@@ -124,7 +124,7 @@ def train_model(
         _shuffle_time_data(validation_dataloader)
 
         model_ref.current_epoch = epoch_num
-        pbar.set_description(f"[{epoch_num}]: n={np.sum(_batch_n)}")
+        pbar.set_description(f"[{epoch_num} n={np.sum(_batch_n)}]")
 
         if post_epoch_hook is not None:
             post_epoch_hook(model_ref)

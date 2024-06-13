@@ -65,20 +65,19 @@ def train_decoder_submodels(
 
     [model_ref._check_label(x) for x in decoder_models]
 
-    if freeze_embeddings:
-        model_ref.freeze_submodel('encoder')
-        model_ref.freeze_submodel('intermediate')
-        optimizers = {
-            x: model_ref.process_optimizer(
+    if freeze_embeddings is True:
+        freeze_embeddings = decoder_models
+
+    optimizers = {}
+    for x in decoder_models:
+        model_ref.select_submodel(x, 'decoder')
+
+        if freeze_embeddings and x in freeze_embeddings:
+            optimizers[x] = model_ref.process_optimizer(
                 optimizer,
                 params=model_ref.module_bag[x].parameters()
             )
-            for x in decoder_models
-        }
-    else:
-        optimizers = {}
-        for x in decoder_models:
-            model_ref.select_submodel(x, 'decoder')
+        else:
             optimizers[x] = model_ref.process_optimizer(
                 optimizer,
                 params=model_ref.active_parameters()
@@ -90,7 +89,9 @@ def train_decoder_submodels(
     if not isinstance(training_loss_weights, (tuple, list)):
         training_loss_weights = [training_loss_weights] * len(optimizers)
 
-    for epoch_num in tqdm.trange(model_ref.current_epoch + 1, epochs):
+    for epoch_num in (
+        pbar := tqdm.trange(model_ref.current_epoch + 1, epochs)
+    ):
 
         model.train()
 
@@ -104,6 +105,8 @@ def train_decoder_submodels(
 
             _decoder_losses = []
             _batch_n = _batch_n + train_x[0].shape[0]
+
+            # Run through each decoder in order
             for x, lf, _target_x, loss_weight in zip(
                 decoder_models,
                 loss_function,
@@ -111,6 +114,10 @@ def train_decoder_submodels(
                 training_loss_weights
             ):
                 model_ref.select_submodel(x, 'decoder')
+
+                if freeze_embeddings and x in freeze_embeddings:
+                    model_ref.freeze_submodel('encoder')
+                    model_ref.freeze_submodel('intermediate')
 
                 _decoder_losses.append(
                     model_ref._training_step(
@@ -122,6 +129,10 @@ def train_decoder_submodels(
                         loss_weight=loss_weight
                     )
                 )
+
+                if freeze_embeddings and x in freeze_embeddings:
+                    model_ref.freeze_submodel('encoder', unfreeze=True)
+                    model_ref.freeze_submodel('intermediate', unfreeze=True)
 
             _batch_losses.append(_decoder_losses)
 
@@ -177,6 +188,7 @@ def train_decoder_submodels(
         _shuffle_time_data(validation_dataloader)
 
         model_ref.current_epoch = epoch_num
+        pbar.set_description(f"[{epoch_num} n={np.sum(_batch_n)}]")
 
         if post_epoch_hook is not None:
             post_epoch_hook(model_ref)
