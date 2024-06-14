@@ -3,7 +3,7 @@ import torch
 import copy
 from torch.utils.data import DataLoader
 
-from .time_dataset import TimeDataset
+from .time_dataset import TimeDataset, TimeDatasetIter
 
 
 class StackIterableDataset(

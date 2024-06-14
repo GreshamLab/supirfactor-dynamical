@@ -7,7 +7,7 @@ import math
 from scipy.sparse import issparse
 
 
-class TimeDataset(torch.utils.data.Dataset):
+class _TimeDataMixin:
 
     n = 0
     n_steps = None
@@ -310,25 +310,6 @@ class TimeDataset(torch.utils.data.Dataset):
 
         return indexes[:seq_length]
 
-    def __getitem__(self, i):
-
-        if self.strat_idxes is not None:
-            _data_index = self.shuffle_idxes[i]
-
-        else:
-            _data_index = i
-
-        if self.return_times:
-            return (
-                self._get_data(self.data, _data_index),
-                torch.Tensor(self.time_vector[_data_index])
-            )
-        else:
-            return self._get_data(self.data, _data_index)
-
-    def __len__(self):
-        return self.n
-
     def get_data_time(
         self,
         t_start=None,
@@ -421,3 +402,70 @@ class TimeDataset(torch.utils.data.Dataset):
     def _n_samples(data):
 
         return data.shape[0]
+
+
+class TimeDataset(
+    _TimeDataMixin,
+    torch.utils.data.Dataset
+):
+
+    def __getitem__(self, i):
+
+        if self.strat_idxes is not None:
+            _data_index = self.shuffle_idxes[i]
+
+        else:
+            _data_index = i
+
+        if self.return_times:
+            return (
+                self._get_data(self.data, _data_index),
+                torch.Tensor(self.time_vector[_data_index])
+            )
+        else:
+            return self._get_data(self.data, _data_index)
+
+    def __len__(self):
+        return self.n
+
+
+class TimeDatasetIter(
+    _TimeDataMixin,
+    torch.utils.data.IterDataPipe
+):
+
+    """
+    TimeDataset for multiple workers
+    """
+
+    def __iter__(self):
+
+        worker_info = torch.utils.data.get_worker_info()
+
+        if worker_info is not None:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+        else:
+            worker_id = 0
+            num_workers = 1
+
+        def _time_generator():
+
+            for i in np.arange(self.n)[worker_id::num_workers]:
+                if self.strat_idxes is not None:
+                    _data_index = self.shuffle_idxes[i]
+
+                else:
+                    _data_index = i
+
+                if self.return_times:
+                    yield (
+                        self._get_data(self.data, _data_index),
+                        torch.Tensor(self.time_vector[_data_index])
+                    )
+                else:
+                    yield self._get_data(self.data, _data_index)
+
+            self.shuffle()
+
+        return _time_generator()

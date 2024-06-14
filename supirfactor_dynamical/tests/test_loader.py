@@ -14,7 +14,8 @@ from ._stubs import (
 )
 
 from supirfactor_dynamical.datasets import (
-    TimeDataset
+    TimeDataset,
+    TimeDatasetIter
 )
 
 
@@ -502,3 +503,79 @@ class TestTimeDatasetSparse(TestTimeDataset):
             sps.csr_matrix(X)
         )
         self.adata.obs['time'] = T
+
+
+class TestTimeDatasetDataloader(unittest.TestCase):
+
+    def setUp(self):
+
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+
+        self.adata.obs['time'] = T
+        self.dataset = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1
+        )
+
+    def test_dataloader_run(self):
+
+        dl = DataLoader(
+            self.dataset,
+            2,
+            drop_last=True
+        )
+
+        for data in dl:
+
+            self.assertEqual(data.shape, (2, 4, 4))
+
+
+class TestTimeDatasetIterDataloader(unittest.TestCase):
+
+    def setUp(self):
+
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+
+        self.adata.obs['time'] = T
+        self.dataset = TimeDatasetIter(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1
+        )
+
+    def test_dataloader_serial(self):
+
+        dl = DataLoader(
+            self.dataset,
+            2,
+            drop_last=True
+        )
+
+        for data in dl:
+
+            self.assertEqual(data.shape, (2, 4, 4))
+
+    def test_dataloader_parallel(self):
+
+        dl = DataLoader(
+            self.dataset,
+            2
+        )
+
+        _n = 0
+        for data in dl:
+
+            _n = _n + data.shape[0]
+
+            self.assertEqual(data.shape[1:], (4, 4))
+
+        self.assertEqual(_n, self.adata.X.shape[0] / 4)
