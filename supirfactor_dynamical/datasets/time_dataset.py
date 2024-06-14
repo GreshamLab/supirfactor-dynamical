@@ -431,7 +431,7 @@ class TimeDataset(
 
 class TimeDatasetIter(
     _TimeDataMixin,
-    torch.utils.data.IterDataPipe
+    torch.utils.data.IterableDataset
 ):
 
     """
