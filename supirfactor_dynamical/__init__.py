@@ -16,6 +16,7 @@ from ._utils import (
 
 from .datasets import (
     TimeDataset,
+    TimeDatasetIter,
     H5ADDatasetStratified,
     H5ADDatasetObsStratified
 )
