@@ -305,7 +305,7 @@ class _H5ADFileLoader:
 
 class StratifySingleFileDataset(
     _H5ADFileLoader,
-    torch.utils.data.IterDataPipe
+    torch.utils.data.IterableDataset
 ):
 
     loaded_data = None
@@ -405,7 +405,7 @@ class StratifySingleFileDataset(
 
 class StratifiedFilesDataset(
     _H5ADFileLoader,
-    torch.utils.data.IterDataPipe
+    torch.utils.data.IterableDataset
 ):
 
     file_metadata = None
