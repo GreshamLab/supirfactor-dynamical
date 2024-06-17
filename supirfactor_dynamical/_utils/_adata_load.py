@@ -109,7 +109,14 @@ def load_data_files_jtb_2023(
                 counts_layer
             )
 
-        data = [count_scaling.fit_transform(count_data).A]
+            count_data = count_scaling.fit_transform(count_data)
+
+            try:
+                count_data = count_data.A
+            except AttributeError:
+                pass
+
+        data = [count_data]
 
     else:
         data = []
@@ -140,7 +147,8 @@ def load_data_files_jtb_2023(
         velocity_data = _get_data_from_ad(
             adata,
             decay_velocity_layers,
-            np.multiply
+            np.multiply,
+            densify=True
         )
         velocity_data *= -1
 

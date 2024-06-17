@@ -86,8 +86,8 @@ def process_results_to_dataframes(
             results_object.all_scores[n]
             for n in score_cols
         ] + [
-            model_object.training_r2,
-            model_object.validation_r2
+            model_object.training_r2.item(),
+            model_object.validation_r2.item()
         ]
 
         loss_df = pd.concat([

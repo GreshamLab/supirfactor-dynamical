@@ -139,11 +139,11 @@ def _get_data_from_ad(
 ):
 
     if isinstance(layers, (tuple, list)):
-        _output = _get_data_from_ad(adata, layers[0]).copy()
+        _output = _get_data_from_ad(adata, layers[0], densify=densify).copy()
         for layer in layers[1:]:
             agg_func(
                 _output,
-                _get_data_from_ad(adata, layer),
+                _get_data_from_ad(adata, layer, densify=densify),
                 out=_output,
                 **kwargs
             )
