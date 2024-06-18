@@ -1,16 +1,24 @@
 from .models import (
     TFAutoencoder,
     TFMetaAutoencoder,
+    TFMultilayerAutoencoder,
     TFRNNDecoder,
     TFLSTMDecoder,
     TFGRUDecoder,
     SupirFactorBiophysical,
+    ChromatinAwareModel,
     get_model
 )
 
 from ._utils import (
-    TruncRobustScaler,
-    TimeDataset
+    TruncRobustScaler
+)
+
+from .datasets import (
+    TimeDataset,
+    TimeDatasetIter,
+    H5ADDatasetStratified,
+    H5ADDatasetObsStratified
 )
 
 from .postprocessing import (
@@ -19,13 +27,16 @@ from .postprocessing import (
     process_combined_results
 )
 
-from .train import (
-    model_training,
-    joint_model_training,
-    pretrain_and_tune_dynamic_model
+from .training import (
+    dynamical_model_training,
+    joint_dynamical_model_training,
+    pretrain_and_tune_dynamic_model,
+    train_model,
+    train_decoder_submodels,
+    train_embedding_submodels
 )
 
-from ._utils._loader import read
+from ._io._loader import read
 
 from .perturbation import (
     predict_perturbation,

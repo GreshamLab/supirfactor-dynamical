@@ -1,28 +1,34 @@
 import pandas as pd
 import numpy as np
+import torch
+import warnings
 
 from inferelator.postprocessing import ResultsProcessor
+from supirfactor_dynamical._utils import argmax_last_dim
+from supirfactor_dynamical.postprocessing.eval import f1_score
+
+# Silence the most idiotic thing
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+
 
 _LOSS_COLS = ["Model_Type", "Loss_Type"]
 _RESULT_COLS = ["R2_training", "R2_validation"]
 
 
 def evaluate_results(
-    model_weights,
     model_erv,
     prior_network,
     gold_standard_network
 ):
 
     result = ResultsProcessor(
-        [model_weights],
+        [model_erv],
         [model_erv],
         metric="combined"
     ).summarize_network(
         None,
         gold_standard_network,
-        prior_network,
-        full_model_betas=model_weights
+        prior_network
     )
 
     result.model_file_name = None
@@ -55,13 +61,19 @@ def process_results_to_dataframes(
     else:
         score_cols = results_object.all_names
 
+    if not isinstance(model_type, (tuple, list)):
+        model_type = [model_type]
+    else:
+        _n = int(_n / len(model_type))
+
     loss_leaders = {
         k: pd.concat(
             [
                 pd.DataFrame(
-                    [leader_values + [model_type, k]],
+                    [leader_values + [j, k]],
                     columns=leader_columns + _LOSS_COLS
                 )
+                for j in model_type
             ] * _n,
             ignore_index=True
         )
@@ -70,12 +82,12 @@ def process_results_to_dataframes(
 
     if model_object is not None:
 
-        result_line = [model_type] + [
+        result_line = [model_type[0]] + [
             results_object.all_scores[n]
             for n in score_cols
         ] + [
-            model_object.training_r2,
-            model_object.validation_r2
+            model_object.training_r2.item(),
+            model_object.validation_r2.item()
         ]
 
         loss_df = pd.concat([
@@ -95,7 +107,7 @@ def process_results_to_dataframes(
         ])
 
     else:
-        result_line = [model_type] + [
+        result_line = [model_type[0]] + [
             results_object.all_scores[n]
             for n in score_cols
         ] + [
@@ -115,32 +127,99 @@ def process_results_to_dataframes(
         hasattr(model_object, "training_r2_over_time")
     ):
 
-        time_dependent_loss = pd.concat([
-            pd.concat(
-                (
-                    loss_leaders[k].iloc[[0], :],
-                    pd.DataFrame(
-                        o,
-                        columns=np.arange(1, len(o) + 1)
-                    )
-                ),
-                axis=1
-            ) for k, o in zip(
-                [
-                    'training',
-                    'validation'
-                ],
-                [
-                    model_object.training_r2_over_time,
-                    model_object.validation_r2_over_time
-                ]
-            ) if o is not None
-        ])
+        try:
+            time_dependent_loss = pd.concat([
+                pd.concat(
+                    (
+                        loss_leaders[k].iloc[[0], :],
+                        pd.DataFrame(
+                            o,
+                            columns=np.arange(1, len(o) + 1)
+                        )
+                    ),
+                    axis=1
+                ) for k, o in zip(
+                    [
+                        'training',
+                        'validation'
+                    ],
+                    [
+                        model_object.training_r2_over_time,
+                        model_object.validation_r2_over_time
+                    ]
+                ) if o is not None
+            ])
+        except ValueError:
+            time_dependent_loss = None
 
     else:
         time_dependent_loss = None
 
     return results, loss_df, time_dependent_loss
+
+
+def add_classification_metrics_to_dataframe(
+    result_df,
+    model_object,
+    training_dataloader,
+    validation_dataloader=None,
+    column_prefix="",
+    target_data_idx=1,
+    input_data_idx=0,
+    add_class_counts=False
+):
+
+    model_object.eval()
+
+    if len(column_prefix) > 0:
+        column_prefix = "_" + column_prefix
+
+    result_df['f1_training' + column_prefix] = f1_score(
+        training_dataloader,
+        model_object,
+        target_data_idx=target_data_idx,
+        input_data_idx=input_data_idx
+    ).item()
+
+    if validation_dataloader is not None:
+        result_df['f1_validation' + column_prefix] = f1_score(
+            training_dataloader,
+            model_object,
+            target_data_idx=target_data_idx,
+            input_data_idx=input_data_idx
+        ).item()
+
+    if add_class_counts:
+        _predicts, _actuals, _labels = _get_classes(
+            model_object,
+            training_dataloader,
+            target_data_idx=target_data_idx,
+            input_data_idx=input_data_idx
+        )
+
+        result_df[
+            ("training" + column_prefix + "_actual_" + _labels).tolist()
+        ] = _actuals.numpy()
+        result_df[
+            ("training" + column_prefix + "_predict_" + _labels).tolist()
+        ] = _predicts.numpy()
+
+        if validation_dataloader is not None:
+            _predicts, _actuals, _labels = _get_classes(
+                model_object,
+                training_dataloader,
+                target_data_idx=target_data_idx,
+                input_data_idx=input_data_idx
+            )
+
+            result_df[
+                ("validation" + column_prefix + "_actual_" + _labels).tolist()
+            ] = _actuals.numpy()
+            result_df[
+                ("validation" + column_prefix + "_predict_" + _labels).tolist()
+            ] = _predicts.numpy()
+
+    return result_df
 
 
 def process_combined_results(
@@ -182,6 +261,36 @@ def process_combined_results(
     )
 
     return r
+
+
+def _get_classes(
+    model,
+    data,
+    target_data_idx=None,
+    input_data_idx=None
+):
+
+    _training_classes = 0
+    _actual_classes = 0
+    for d in data:
+        _predicts = model(d[input_data_idx])
+        _n_class = _predicts.shape[-1]
+        _training_classes += torch.bincount(
+            argmax_last_dim(_predicts),
+            minlength=_n_class
+        )
+        _actual_classes += torch.bincount(
+            argmax_last_dim(d[target_data_idx]),
+            minlength=_n_class
+        )
+
+    try:
+        _labels = data.dataset.datasets[target_data_idx]._data_labels
+        _labels = _labels.str.lower().str.replace(" ", "_")
+    except AttributeError:
+        _labels = pd.Series([f'{x}' for x in range(_n_class)])
+
+    return _training_classes, _actual_classes, _labels
 
 
 def _combine_weights(*args):

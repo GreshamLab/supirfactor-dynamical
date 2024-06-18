@@ -1,7 +1,9 @@
 numpy
 scipy
+anndata
 pandas>=1.0.0
 inferelator
 tqdm
 torch
+torcheval
 tables

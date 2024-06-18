@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 import pandas as pd
 
 from torch.utils.data import DataLoader
@@ -7,7 +6,8 @@ from torch.utils.data import DataLoader
 from .._utils import (
     _calculate_erv,
     _calculate_rss,
-    _unsqueeze
+    _unsqueeze,
+    to
 )
 
 from ._model_mixins import (
@@ -21,16 +21,17 @@ class _TFMixin(
     _ScalingMixin
 ):
 
-    gene_loss_sum_axis = 0
     type_name = "base"
 
     hidden_final = None
 
     _velocity_model = False
+    _multisubmodel_model = False
+    _multimodal_data_model = False
 
     @property
     def encoder_weights(self):
-        return self.encoder[0].weight
+        return self.encoder[0].weight.to('cpu')
 
     @property
     def intermediate_weights(self):
@@ -42,7 +43,7 @@ class _TFMixin(
 
     @property
     def decoder_weights(self):
-        return self.decoder[0].weight
+        return self.decoder[0].weight.to('cpu')
 
     def _forward(
         self,
@@ -205,83 +206,6 @@ class _TFMixin(
             )
 
     @torch.inference_mode()
-    def output_weights(
-        self,
-        as_dataframe=False,
-        mask=None
-    ):
-        """
-        Return a 2D [G x K] array or DataFrame with decoder weights
-
-        :param as_dataframe: Return pandas DataFrame with labels
-            (if labels exist), defaults to False
-        :type as_dataframe: bool, optional
-        :param mask: 2D mask for weights (False prunes weight to zero),
-            defaults to None
-        :type mask: np.ndarray, optional
-        :return: 2D [G x K] model weights as a numpy array or pandas DataFrame
-        :rtype: np.ndarray, pd.DataFrame
-        """
-
-        # Get G x K decoder weights
-        with torch.no_grad():
-            w = self.decoder_weights.numpy()
-            w[np.abs(w) <= np.finfo(np.float32).eps] = 0
-
-        if mask is not None:
-            w[~mask] = 0
-
-        if as_dataframe:
-            return self._to_dataframe(w)
-
-        else:
-            return w
-
-    @torch.inference_mode()
-    def pruned_model_weights(
-        self,
-        erv=None,
-        data_loader=None,
-        erv_threshold=1e-4,
-        as_dataframe=False
-    ):
-        """
-        Gets output weights pruned to zeros based on an
-        explained relative variance threshold
-
-        :param erv: Precalculated ERV dataframe/array [G x K],
-            defaults to None
-        :type erv: np.ndarray, pd.DataFrame, optional
-        :param data_loader: Dataloader to calcualte ERV,
-            defaults to None
-        :type data_loader: torch.utils.data.DataLoader, optional
-        :param erv_threshold: Threshold for trimming based on ERV,
-            defaults to 1e-4
-        :type erv_threshold: float, optional
-        :param as_dataframe: Return as dataframe instead of array,
-            defaults to False
-        :type as_dataframe: bool, optional
-        :return: Model weights trimmed to zero
-        :rtype: pd.DataFrame, np.ndarray
-        """
-
-        if erv is not None:
-            erv_mask = erv >= erv_threshold
-        elif data_loader is not None:
-            erv_mask = self.erv(data_loader) >= erv_threshold
-        else:
-            raise ValueError(
-                "Pass erv or data_loader to `pruned_model_weights`"
-            )
-
-        out_weights = self.output_weights(
-            as_dataframe=as_dataframe,
-            mask=erv_mask
-        )
-
-        return out_weights
-
-    @torch.inference_mode()
     def latent_layer(self, x):
         """
         Get detached tensor representing the latent layer values
@@ -331,14 +255,18 @@ class _TFMixin(
         :rtype: np.ndarray, np.ndarray, np.ndarray
         """
 
+        device = self._model_device
+
         with torch.no_grad():
 
             self.eval()
 
-            full_rss = torch.zeros(self.g)
-            rss = torch.zeros((self.g, self.k))
+            full_rss = torch.zeros(self.g, device=device)
+            rss = torch.zeros((self.g, self.k), device=device)
 
             for data_x in data_loader:
+
+                data_x = to(data_x, device)
 
                 _full, _partial = self._calculate_error(
                     self.input_data(data_x),
@@ -353,24 +281,31 @@ class _TFMixin(
             # full model RSS and the reduced model RSS
             erv = _calculate_erv(full_rss, rss)
 
+        # Turn tensors into DataFrames or ndarrays
         if as_data_frame:
             erv = self._to_dataframe(erv)
+        else:
+            erv = to(erv, 'cpu', numpy=True)
 
-        if as_data_frame and return_rss:
+        if not return_rss:
+            return erv
 
-            rss = self._to_dataframe(rss.numpy())
+        rss = rss.to('cpu').numpy()
+        full_rss = full_rss.to('cpu').numpy()
+
+        if as_data_frame:
+
+            rss = self._to_dataframe(
+                rss
+            )
             full_rss = pd.DataFrame(
                 full_rss,
                 index=self.prior_network_labels[0]
             )
-
             return erv, rss, full_rss
 
-        elif return_rss:
-            return erv, rss.numpy(), full_rss.numpy()
-
         else:
-            return erv
+            return erv, rss, full_rss
 
     def _calculate_error(
         self,
@@ -392,7 +327,7 @@ class _TFMixin(
             output_data
         )
 
-        rss = torch.zeros((self.g, self.k))
+        rss = torch.zeros((self.g, self.k), device=self._model_device)
         # For each node in the latent layer,
         # zero all values in the data and then
         # decode to full expression data

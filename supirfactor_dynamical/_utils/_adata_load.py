@@ -1,12 +1,15 @@
 import anndata as ad
 import numpy as np
-import pandas as pd
+
 
 from pandas.api.types import is_float_dtype
 
 from sklearn.preprocessing import StandardScaler
 from supirfactor_dynamical import TruncRobustScaler
-
+from supirfactor_dynamical._io.load_data import (
+    load_standard_data,
+    _get_data_from_ad
+)
 from inferelator.preprocessing import ManagePriors
 from inferelator.preprocessing.simulate_data import (
     _sim_ints,
@@ -33,15 +36,66 @@ def load_data_files_jtb_2023(
     decay_velocity=False,
     shuffle_time=False,
     shuffle_data=False,
+    untreated_only=False,
     counts_layer='X',
     velocity_layers=('rapamycin_velocity', 'cell_cycle_velocity'),
     decay_velocity_layers=('decay_constants', 'denoised')
 ):
+    """
+    Helper to load the data used in the associated manuscript:
+    https://www.biorxiv.org/content/10.1101/2023.09.21.558277v1
+
+    :param adata_file: Prepared adata file with counts in counts_layer
+        saved as an '.h5ad' file.
+    :type adata_file: str
+    :param prior_file: Priors TSV file, defaults to None
+    :type prior_file: str, optional
+    :param gold_standard_file: Gold standard TSV file, defaults to None
+    :type gold_standard_file: str, optional
+    :param counts: Return array contains counts,
+        defaults to True
+    :type counts: bool, optional
+    :param velocity: Return array contains preprocessed velocities,
+        defaults to False
+    :type velocity: bool, optional
+    :param decay_velocity: Return array contains preprocessed
+        decay-specific velocities, calculated from decay_constants and
+        denoised expression, defaults to False
+    :type decay_velocity: bool, optional
+    :param shuffle_time: Shuffle time metadata, defaults to False
+    :type shuffle_time: bool, optional
+    :param shuffle_data: Turn array data into white noise,
+        defaults to False
+    :type shuffle_data: bool, optional
+    :param untreated_only: Return only untreated cells,
+        in pools 1 & 2, defaults to False
+    :type untreated_only: bool, optional
+    :param counts_layer: Layer with count data,
+        defaults to 'X'
+    :type counts_layer: str, optional
+    :param velocity_layers: Layer with preprocessed velocity data,
+        defaults to ('rapamycin_velocity', 'cell_cycle_velocity')
+    :type velocity_layers: tuple, optional
+    :param decay_velocity_layers: Layers with preprocessed decay rates,
+        and expression data, defaults to ('decay_constants', 'denoised')
+    :type decay_velocity_layers: tuple, optional
+    :return:
+        Array data,
+        Time lookup dict,
+        Prior dataframe,
+        Gold standard dataframe,
+        Count scaler,
+        Velocity scaler
+    :rtype: _type_
+    """
     count_scaling = TruncRobustScaler(with_centering=False)
     velo_scaling = TruncRobustScaler(with_centering=False)
 
     print(f"Loading and processing data from {adata_file}")
-    adata = ad.read(adata_file)
+    adata = ad.read_h5ad(adata_file)
+
+    if untreated_only:
+        adata = adata[adata.obs['Pool'].isin([1, 2]), :].copy()
 
     if counts:
 
@@ -50,16 +104,26 @@ def load_data_files_jtb_2023(
                 adata.layers['counts']
             ).astype(float)
         else:
-            count_data = _get_data(adata, counts_layer)
+            count_data = _get_data_from_ad(
+                adata,
+                counts_layer
+            )
 
-        data = [count_scaling.fit_transform(count_data).A]
+            count_data = count_scaling.fit_transform(count_data)
+
+            try:
+                count_data = count_data.A
+            except AttributeError:
+                pass
+
+        data = [count_data]
 
     else:
         data = []
 
     if velocity:
 
-        velocity_data = _get_data(adata, velocity_layers)
+        velocity_data = _get_data_from_ad(adata, velocity_layers)
 
         if shuffle_data:
             velocity_data = _shuffle_data(
@@ -75,12 +139,17 @@ def load_data_files_jtb_2023(
         )
     elif decay_velocity:
         velo_scaling.fit(
-            _get_data(adata, velocity_layers)
+            _get_data_from_ad(adata, velocity_layers)
         )
 
     if decay_velocity:
 
-        velocity_data = _get_data(adata, decay_velocity_layers, np.multiply)
+        velocity_data = _get_data_from_ad(
+            adata,
+            decay_velocity_layers,
+            np.multiply,
+            densify=True
+        )
         velocity_data *= -1
 
         if shuffle_data:
@@ -114,32 +183,12 @@ def load_data_files_jtb_2023(
         for k in _SHUFFLE_TIMES.keys():
             time_lookup[k][-1] = _SHUFFLE_TIMES[k]
 
-    if prior_file is not None:
-        print(f"Loading and processing priors from {prior_file}")
-        prior = pd.read_csv(
-            prior_file,
-            sep="\t",
-            index_col=0
-        ).reindex(
-            adata.var_names,
-            axis=0
-        ).fillna(
-            0
-        ).astype(int)
-
-        prior = prior.loc[:, prior.sum(axis=0) > 0].copy()
-    else:
-        prior = None
-
-    if gold_standard_file is not None:
-        print(f"Loading gold standard from {gold_standard_file}")
-        gs = pd.read_csv(
-            gold_standard_file,
-            sep="\t",
-            index_col=0
-        )
-    else:
-        gs = None
+    _, _, prior, gs = load_standard_data(
+        data_file=None,
+        prior_file=prior_file,
+        gold_standard_file=gold_standard_file,
+        genes=adata.var_names
+    )
 
     return (
         data,
@@ -149,39 +198,6 @@ def load_data_files_jtb_2023(
         count_scaling,
         velo_scaling
     )
-
-
-def _get_data(
-    adata,
-    layers,
-    agg_func=np.add,
-    densify=False,
-    **kwargs
-):
-
-    if isinstance(layers, (tuple, list)):
-        _output = _get_data(adata, layers[0]).copy()
-        for layer in layers[1:]:
-            agg_func(
-                _output,
-                _get_data(adata, layer),
-                out=_output,
-                **kwargs
-            )
-
-    elif layers == 'X':
-        _output = adata.X
-
-    else:
-        _output = adata.layers[layers]
-
-    if densify:
-        try:
-            _output = _output.A
-        except AttributeError:
-            pass
-
-    return _output
 
 
 def _shuffle_prior(prior, seed=100):

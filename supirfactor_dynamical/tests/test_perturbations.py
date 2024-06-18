@@ -98,9 +98,8 @@ class TestPerturbBiophysical(_SetupMixin):
 
         vdecay_2 = self.dynamical_model(
             in_data,
-            0,
-            return_decays=True
-        )
+            0
+        )[2]
 
         torch.testing.assert_close(
             vdecay,
@@ -113,10 +112,8 @@ class TestPerturbBiophysical(_SetupMixin):
 
         in_data = self.dynamical_model.input_data(XTV_tensor)
 
-        velo, dr = self.dynamical_model(
+        velo, _, dr, _ = self.dynamical_model(
             in_data,
-            return_velocities=True,
-            return_decays=True,
             return_submodels=True,
             unmodified_counts=True
         )
@@ -152,9 +149,7 @@ class TestPerturbBiophysical(_SetupMixin):
         model_fit = self.dynamical_model(
             in_data,
             n_time_steps=0,
-            return_velocities=True,
             return_submodels=True,
-            return_counts=True
         )
 
         predicts = predict_perturbation(
@@ -193,8 +188,6 @@ class TestPerturbBiophysical(_SetupMixin):
         model_fit = self.dynamical_model(
             in_data,
             n_time_steps=5,
-            return_velocities=True,
-            return_counts=True,
             return_submodels=True
         )
 
@@ -251,12 +244,12 @@ class TestPerturbBiophysical(_SetupMixin):
         )
 
         torch.testing.assert_close(
-            outs[0],
+            outs[0][0],
             perturbs[0][0]
         )
 
         torch.testing.assert_close(
-            outs[1],
+            outs[0][1],
             perturbs[0][1]
         )
 
@@ -267,10 +260,7 @@ class TestPerturbBiophysical(_SetupMixin):
         model_fit = self.dynamical_model(
             in_data,
             n_time_steps=5,
-            return_velocities=True,
-            return_counts=True,
             return_submodels=True,
-            return_decays=True,
             unmodified_counts=True
         )
 

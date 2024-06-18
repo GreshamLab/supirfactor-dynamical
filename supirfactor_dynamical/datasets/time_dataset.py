@@ -1,15 +1,18 @@
 import torch
 import numpy as np
 import warnings
+import collections
+import math
 
-from scipy.sparse import isspmatrix
+from scipy.sparse import issparse
 
 
-class TimeDataset(torch.utils.data.Dataset):
+class _TimeDataMixin:
 
     n = 0
     n_steps = None
     with_replacement = True
+    return_times = False
 
     rng = None
     data = None
@@ -22,6 +25,7 @@ class TimeDataset(torch.utils.data.Dataset):
     t_min = None
     t_max = None
     t_step = None
+    wrap_times = False
 
     strat_idxes = None
     shuffle_idxes = None
@@ -53,7 +57,7 @@ class TimeDataset(torch.utils.data.Dataset):
 
             if x is not None:
                 self.n = min(map(len, self.strat_idxes))
-                self.n *= int(np.floor(self.n_steps / x))
+                self.n *= int(max(np.floor(self.n_steps / x), 1))
 
     def __init__(
         self,
@@ -65,22 +69,43 @@ class TimeDataset(torch.utils.data.Dataset):
         sequence_length=None,
         random_seed=500,
         with_replacement=True,
-        shuffle_time_vector=None
+        shuffle_time_vector=None,
+        wrap_times=False,
+        return_times=False
     ):
 
-        # Only keep data that's usable
-        # erase the rest
+        self.time_vector = time_vector
+        self.t_min = t_min
+        self.t_max = t_max
+        self.t_step = t_step
+
+        self.data = self._to_tensor(data_reference)
+        self._intial_time_processing()
+
+        self.rng = np.random.default_rng(random_seed)
+        self.return_times = return_times
+        self.shuffle_time_limits = shuffle_time_vector
+        self.with_replacement = with_replacement
+        self.wrap_times = wrap_times
+
+        self._initial_index_processing(sequence_length)
+
+    def _intial_time_processing(
+        self
+    ):
+
         _data_keep_idx = np.logical_and(
-            t_min <= time_vector,
-            time_vector < t_max
+            self.t_min <= self.time_vector,
+            self.time_vector < self.t_max
         )
 
         if not np.all(_data_keep_idx):
-            self.data = data_reference[_data_keep_idx, :]
-            self.time_vector = time_vector[_data_keep_idx]
-        else:
-            self.data = data_reference
-            self.time_vector = time_vector
+            self.data = self._get_data(
+                self.data,
+                _data_keep_idx,
+                keep_sparse=True
+            )
+            self.time_vector = self.time_vector[_data_keep_idx]
 
         # Make sure it's not a pandas series
         try:
@@ -88,23 +113,9 @@ class TimeDataset(torch.utils.data.Dataset):
         except AttributeError:
             pass
 
-        if not torch.is_tensor(self.data) and not isspmatrix(self.data):
-            self.data = torch.tensor(
-                self.data,
-                dtype=torch.float32
-            )
+    def _initial_index_processing(self, sequence_length):
 
-        self.with_replacement = with_replacement
-        self.rng = np.random.default_rng(random_seed)
-
-        if shuffle_time_vector is not None:
-            self.shuffle_time_limits = shuffle_time_vector
-
-        if t_step is not None:
-
-            self.t_min = t_min
-            self.t_max = t_max
-            self.t_step = t_step
+        if self.t_step is not None:
 
             # Create a list of arrays, where each element
             # is an array of indices to observations for that
@@ -114,12 +125,11 @@ class TimeDataset(torch.utils.data.Dataset):
             self.n = min(map(len, self.strat_idxes))
             self.n_steps = len(self.strat_idxes)
             self.sequence_length = sequence_length
-
             self.shuffle()
 
         else:
 
-            self.n = self.data.shape[0]
+            self.n = self._n_samples(self.data)
             self.strat_idxes = None
 
         if self.n == 0:
@@ -130,6 +140,12 @@ class TimeDataset(torch.utils.data.Dataset):
             )
 
     def _generate_stratified_indices(self):
+
+        if self.t_min is None or self.t_max is None or self.t_step is None:
+            raise ValueError(
+                f"Cannot create indices from t_min {self.t_min} "
+                f"t_max {self.t_max} and t_step {self.t_step}"
+            )
 
         return [
             np.where(
@@ -217,31 +233,60 @@ class TimeDataset(torch.utils.data.Dataset):
 
         # For each time interval, reshuffle by random selection
         # to length of n
-        _idxes = [
-            self.rng.choice(
-                x,
-                size=n,
-                replace=with_replacement
+        _idxes = np.ascontiguousarray(
+            np.array([
+                self.rng.choice(
+                    x,
+                    size=n,
+                    replace=with_replacement
+                )
+                for x in self.strat_idxes
+            ]).T
+        )
+
+        if self.wrap_times:
+            return np.array(
+                [
+                    self._get_wrap_indices(
+                        seq_length,
+                        _idxes[i],
+                        n_wraps=math.ceil(seq_length / len(self.strat_idxes))
+                    )
+                    for i in range(n)
+                ]
             )
-            for x in self.strat_idxes
-        ]
+
+        else:
+            return np.array(
+                [
+                    self._get_no_wrap_indices(
+                        seq_length,
+                        _idxes[i]
+                    )
+                    for i in range(n)
+                ]
+            )
+
+    def _get_no_wrap_indices(
+        self,
+        seq_length,
+        indexes
+    ):
 
         # If L is shorter than the total number of time intervals,
         # randomly select a starting time on data sequence
         # to get L observations from the shuffled indices
-        if seq_length < len(self.strat_idxes):
+        if seq_length < len(indexes):
 
-            start_position = np.arange(
+            start_position = self.rng.integers(
+                0,
                 len(self.strat_idxes) - seq_length + 1,
             )
 
-            def _get_sequence():
-                start = self.rng.choice(start_position)
-                return slice(start, start + seq_length)
+            return indexes[start_position:start_position + seq_length]
 
-        elif seq_length == len(self.strat_idxes):
-            def _get_sequence():
-                return slice(None)
+        elif seq_length == len(indexes):
+            return indexes
 
         else:
             raise ValueError(
@@ -249,24 +294,21 @@ class TimeDataset(torch.utils.data.Dataset):
                 f"from {len(self.strat_idxes)} bins"
             )
 
-        return [
-            np.array([
-                x[i] for x in _idxes[_get_sequence()]
-            ]) for i in range(n)
-        ]
+    def _get_wrap_indices(
+        self,
+        seq_length,
+        indexes,
+        n_wraps=1
+    ):
 
-    def __getitem__(self, i):
+        indexes = collections.deque(indexes)
+        indexes.rotate(self.rng.integers(
+            0,
+            len(self.strat_idxes),
+        ))
+        indexes = np.array(indexes * n_wraps)
 
-        if self.strat_idxes is not None:
-            _data_index = self.shuffle_idxes[i]
-
-        else:
-            _data_index = i
-
-        return self._get_data(_data_index)
-
-    def __len__(self):
-        return self.n
+        return indexes[:seq_length]
 
     def get_data_time(
         self,
@@ -285,7 +327,7 @@ class TimeDataset(torch.utils.data.Dataset):
             self.time_vector < t_stop
         )
 
-        return self._get_data(_data_idx)
+        return self._get_data(self.data, _data_idx)
 
     def get_times_in_order(
         self
@@ -308,7 +350,7 @@ class TimeDataset(torch.utils.data.Dataset):
         def _timeiterator():
             for i in range(n_steps):
                 yield torch.stack([
-                    self._get_data(a[i:i + seq_length])
+                    self._get_data(self.data, a[i:i + seq_length])
                     for a in all_time_indexes
                 ])
 
@@ -319,7 +361,7 @@ class TimeDataset(torch.utils.data.Dataset):
     ):
 
         _aggregate_data = torch.stack([
-            self._get_data(self.strat_idxes[i]).mean(axis=0)
+            self._get_data(self.data, self.strat_idxes[i]).mean(axis=0)
             for i in range(self.n_steps)
         ])
 
@@ -331,23 +373,99 @@ class TimeDataset(torch.utils.data.Dataset):
         else:
             return _aggregate_data
 
-    def _get_data(
-        self,
-        idx
-    ):
+    @staticmethod
+    def _get_data(data, idx, keep_sparse=False):
 
-        data = self.data[idx, ...]
+        _data = data[idx, :]
 
-        if isspmatrix(data):
-            data = data.A
+        if issparse(_data) and not keep_sparse:
 
-            if data.shape[0] == 1:
-                data = data.ravel()
-
-        if not torch.is_tensor(data):
-            data = torch.tensor(
-                data,
-                dtype=torch.float32
+            _data = torch.Tensor(
+                _data.A.reshape(-1) if _data.shape[0] == 1 else _data.A
             )
 
-        return data
+        return _data
+
+    @staticmethod
+    def _to_tensor(data):
+
+        if torch.is_tensor(data):
+            return data
+
+        elif not issparse(data):
+            return torch.Tensor(data)
+
+        else:
+            return data
+
+    @staticmethod
+    def _n_samples(data):
+
+        return data.shape[0]
+
+
+class TimeDataset(
+    _TimeDataMixin,
+    torch.utils.data.Dataset
+):
+
+    def __getitem__(self, i):
+
+        if self.strat_idxes is not None:
+            _data_index = self.shuffle_idxes[i]
+
+        else:
+            _data_index = i
+
+        if self.return_times:
+            return (
+                self._get_data(self.data, _data_index),
+                torch.Tensor(self.time_vector[_data_index])
+            )
+        else:
+            return self._get_data(self.data, _data_index)
+
+    def __len__(self):
+        return self.n
+
+
+class TimeDatasetIter(
+    _TimeDataMixin,
+    torch.utils.data.IterableDataset
+):
+
+    """
+    TimeDataset for multiple workers
+    """
+
+    def __iter__(self):
+
+        worker_info = torch.utils.data.get_worker_info()
+
+        if worker_info is not None:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+        else:
+            worker_id = 0
+            num_workers = 1
+
+        def _time_generator():
+
+            for i in np.arange(self.n)[worker_id::num_workers]:
+                if self.strat_idxes is not None:
+                    _data_index = self.shuffle_idxes[i]
+
+                else:
+                    _data_index = i
+
+                if self.return_times:
+                    yield (
+                        self._get_data(self.data, _data_index),
+                        torch.Tensor(self.time_vector[_data_index])
+                    )
+                else:
+                    yield self._get_data(self.data, _data_index)
+
+            self.shuffle()
+
+        return _time_generator()

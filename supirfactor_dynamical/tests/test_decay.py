@@ -127,11 +127,12 @@ class TestDecayModule(unittest.TestCase):
 
 class TestDecaySimple(TestDecayModule):
 
-    expected_decay_size = (4, )
+    expected_decay_size = (1, 1, 4)
 
     def setUp(self):
         super().setUp()
 
         self.decay = DecayModuleSimple(
-            np.full(4, 0.1)
+            n_genes=4,
+            initial_values=np.full(4, 0.1)
         )

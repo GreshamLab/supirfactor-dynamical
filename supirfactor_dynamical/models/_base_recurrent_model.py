@@ -1,11 +1,11 @@
 import torch
 
 from ._base_model import _TFMixin
-from ._base_trainer import (
+from ._model_mixins import (
     _TrainingMixin,
     _TimeOffsetMixinRecurrent
 )
-from .._utils import _aggregate_r2
+from ..postprocessing import r2_score
 
 
 class _TF_RNN_mixin(
@@ -15,18 +15,24 @@ class _TF_RNN_mixin(
     _TrainingMixin
 ):
 
-    gene_loss_sum_axis = (0, 1)
-
     training_r2_over_time = None
     validation_r2_over_time = None
 
+    _serialize_args = [
+        'prior_network',
+        'input_dropout_rate',
+        'hidden_dropout_rate',
+        'activation',
+        'output_activation'
+    ]
+
     @property
     def recurrent_weights(self):
-        return self._intermediate.weight_hh_l0
+        return self._intermediate.weight_hh_l0.to('cpu')
 
     @property
     def decoder_weights(self):
-        return self._decoder[0].weight
+        return self._decoder[0].weight.to('cpu')
 
     def __init__(
         self,
@@ -78,6 +84,8 @@ class _TF_RNN_mixin(
             activation=output_activation
         )
 
+        self.output_activation = output_activation
+
         self.set_dropouts(
             input_dropout_rate,
             hidden_dropout_rate
@@ -91,24 +99,21 @@ class _TF_RNN_mixin(
     def r2_over_time(
         self,
         training_dataloader,
-        validation_dataloader=None
+        validation_dataloader=None,
+        multioutput='uniform_truncated_average'
     ):
 
         self.eval()
 
         self.training_r2_over_time = [
-            _aggregate_r2(
-                self._calculate_r2_score([x])
-            )
+            r2_score([x], self, multioutput=multioutput)
             for x in training_dataloader.dataset.get_times_in_order()
         ]
 
         if validation_dataloader is not None:
 
             self.validation_r2_over_time = [
-                _aggregate_r2(
-                    self._calculate_r2_score([x])
-                )
+                r2_score([x], self, multioutput=multioutput)
                 for x in validation_dataloader.dataset.get_times_in_order()
             ]
 

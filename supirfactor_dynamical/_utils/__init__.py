@@ -1,9 +1,13 @@
 from ._math import (
-    _aggregate_r2,
     _calculate_r2,
     _calculate_erv,
     _calculate_rss,
-    _calculate_tss
+    _calculate_tss,
+    _false_positive,
+    _true_negative,
+    _true_positive,
+    _false_negative,
+    _f1_score
 )
 
 from ._utils import (
@@ -15,11 +19,17 @@ from ._trunc_robust_scaler import (
 )
 
 from .misc import (
+    to,
+    to_tensor_device,
+    argmax_last_dim,
     _add,
     _cat,
-    _unsqueeze
+    _unsqueeze,
+    _nobs,
+    _to_tensor
 )
 
-from .time_dataset import (
-    TimeDataset
+from .time_offsets import (
+    _get_data_offsets,
+    _check_data_offsets
 )

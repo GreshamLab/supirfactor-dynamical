@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from scipy.sparse import csr_matrix
 
 from supirfactor_dynamical._utils._trunc_robust_scaler import TruncRobustScaler
 
@@ -18,6 +19,13 @@ X = np.abs(_rng.random((100, 4))).astype(np.float32)
 X = X[np.argsort(X[:, 0]), :]
 Y = X @ A
 T = np.repeat(np.arange(4), 25)
+X_SP = csr_matrix(X)
+
+PEAKS = _rng.choice([0, 1], size=(100, 25), p=[0.95, 0.05])
+PEAKS_SP = csr_matrix(PEAKS)
+
+G_TO_PEAK_PRIOR = _rng.choice([0, 1], size=(4, 25), p=[0.75, 0.25])
+PEAK_TO_TF_PRIOR = _rng.choice([0, 1], size=(25, 3), p=[0.75, 0.25])
 
 X_tensor = torch.Tensor(X)
 

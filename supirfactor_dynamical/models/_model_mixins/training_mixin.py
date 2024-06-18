@@ -1,18 +1,18 @@
 import torch
 import numpy as np
 import pandas as pd
-import tqdm
 import time
 
-from .._utils import (
-    _calculate_rss,
-    _calculate_tss,
-    _calculate_r2,
-    _aggregate_r2,
-    _cat
+from supirfactor_dynamical._utils import (
+    to,
+    _cat,
+    _nobs,
+    _to_tensor
 )
 
-from ._writer import write
+from supirfactor_dynamical._io._writer import write
+from supirfactor_dynamical._utils import _check_data_offsets
+from supirfactor_dynamical.postprocessing.eval import r2_score
 
 from torch.utils.data import DataLoader
 
@@ -25,10 +25,15 @@ DEFAULT_OPTIMIZER_PARAMS = {
 
 class _TrainingMixin:
 
+    device = 'cpu'
+
     training_time = None
+    current_epoch = -1
 
     _training_loss = None
     _validation_loss = None
+    _training_n = None
+    _validation_n = None
     _loss_type_names = None
 
     training_r2 = None
@@ -42,6 +47,13 @@ class _TrainingMixin:
     hidden_dropout_rate = 0.0
 
     @property
+    def _model_device(self):
+        device = next(self.parameters()).device
+        if device == -1:
+            device = 'cpu'
+        return device
+
+    @property
     def _offset_data(self):
         return (
             self.output_t_plus_one or
@@ -52,16 +64,16 @@ class _TrainingMixin:
     @property
     def training_loss(self):
         if self._training_loss is None:
-            self._training_loss = []
+            return np.array([])
 
-        return np.array(self._training_loss)
+        return self._training_loss
 
     @property
     def validation_loss(self):
         if self._validation_loss is None:
-            self._validation_loss = []
+            return np.array([])
 
-        return np.array(self._validation_loss)
+        return self._validation_loss
 
     @property
     def training_loss_df(self):
@@ -71,13 +83,35 @@ class _TrainingMixin:
     def validation_loss_df(self):
         return self._loss_df(self.validation_loss)
 
+    @property
+    def training_n(self):
+        # Check dims for backward compatibility
+        if self._training_n is None:
+            pass
+        elif self._training_n.ndim < 2:
+            self._training_n = self._training_n.reshape(-1, 1)
+
+        return self._training_n
+
+    @property
+    def validation_n(self):
+        # Check dims for backward compatibility
+        if self._validation_n is None:
+            pass
+        elif self._validation_n.ndim < 2:
+            self._validation_n = self._validation_n.reshape(-1, 1)
+
+        return self._validation_n
+
     def train_model(
         self,
         training_dataloader,
         epochs,
         validation_dataloader=None,
         loss_function=torch.nn.MSELoss(),
-        optimizer=None
+        optimizer=None,
+        post_epoch_hook=None,
+        **kwargs
     ):
         """
         Train this model
@@ -101,60 +135,20 @@ class _TrainingMixin:
         :rtype: np.ndarray, np.ndarray
         """
 
-        optimizer = self.process_optimizer(
-            optimizer
+        from supirfactor_dynamical.training.train_standard_loop import (
+            train_model
         )
 
-        # Set training time and create loss lists
-        self.set_training_time()
-        self.training_loss
-
-        if validation_dataloader is not None:
-            self.validation_loss
-
-        for epoch_num in tqdm.trange(epochs):
-
-            self.train()
-
-            _batch_losses = []
-            for train_x in training_dataloader:
-
-                mse = self._training_step(
-                    epoch_num,
-                    train_x,
-                    optimizer,
-                    loss_function
-                )
-
-                _batch_losses.append(mse)
-
-            self._training_loss.append(
-                np.mean(np.array(_batch_losses), axis=0)
-            )
-
-            # Get validation losses during training
-            # if validation data was provided
-            if validation_dataloader is not None:
-
-                self._validation_loss.append(
-                    self._calculate_validation_loss(
-                        validation_dataloader,
-                        loss_function
-                    )
-                )
-
-            # Shuffle stratified time data
-            # is a noop unless the underlying DataSet is a TimeDataset
-            _shuffle_time_data(training_dataloader)
-            _shuffle_time_data(validation_dataloader)
-
-        self.eval()
-        self.r2(
+        return train_model(
+            self,
             training_dataloader,
-            validation_dataloader
+            epochs,
+            validation_dataloader=validation_dataloader,
+            loss_function=loss_function,
+            optimizer=optimizer,
+            post_epoch_hook=post_epoch_hook,
+            **kwargs
         )
-
-        return self
 
     def _training_step(
         self,
@@ -163,13 +157,25 @@ class _TrainingMixin:
         optimizer,
         loss_function,
         retain_graph=False,
+        input_x=None,
+        target_x=None,
+        loss_weight=None,
         **kwargs
     ):
-        mse = self._calculate_loss(
-            train_x,
-            loss_function,
-            **kwargs
+
+        if input_x is None:
+            input_x = self._slice_data_and_forward(train_x, **kwargs)
+
+        if target_x is None:
+            target_x = self.output_data(train_x)
+
+        mse = loss_function(
+            input_x,
+            target_x
         )
+
+        if loss_weight is not None:
+            mse = mse * loss_weight
 
         mse.backward(retain_graph=retain_graph)
         optimizer.step()
@@ -181,67 +187,74 @@ class _TrainingMixin:
         self,
         x,
         loss_function,
-        loss_weight=None,
-        output_kwargs={},
+        target_data=None,
         **kwargs
     ):
 
-        loss = self._calculate_loss(
-            x,
-            loss_function,
-            loss_weight=loss_weight,
-            output_kwargs=output_kwargs,
-            **kwargs
+        if target_data is None:
+            target_data = self.output_data(x)
+
+        loss = loss_function(
+            self._slice_data_and_forward(x, **kwargs),
+            target_data
         ).item()
 
         return (loss, )
 
-    def _calculate_loss(
-        self,
-        x,
-        loss_function,
-        loss_weight=None,
-        output_kwargs={},
-        **kwargs
-    ):
-
-        loss = loss_function(
-            self._slice_data_and_forward(x, **kwargs),
-            self.output_data(x, **output_kwargs)
-        )
-
-        if loss_weight is not None:
-            loss = loss * loss_weight
-
-        return loss
-
     def _calculate_validation_loss(
         self,
         validation_dataloader,
-        loss_function
+        loss_function,
+        input_data_index=None,
+        output_data_index=None
     ):
         # Get validation losses during training
         # if validation data was provided
         if validation_dataloader is not None:
 
             _validation_batch_losses = []
+            _validation_n = []
 
             with torch.no_grad():
+                device = self._model_device
+
                 for val_x in validation_dataloader:
+
+                    if output_data_index is not None:
+                        val_target_x = val_x[output_data_index]
+                        val_target_x = to(val_target_x, device)
+                    else:
+                        val_target_x = None
+
+                    if input_data_index is not None:
+                        val_x = val_x[input_data_index]
+
+                    val_x = to(val_x, device)
 
                     _validation_batch_losses.append(
                         self._calculate_all_losses(
                             val_x,
-                            loss_function
+                            loss_function,
+                            target_data=val_target_x
                         )
                     )
 
-            return np.mean(np.array(_validation_batch_losses), axis=0)
+                    _validation_n.append(_nobs(val_x))
+
+            return (
+                np.average(
+                    np.array(_validation_batch_losses),
+                    axis=0,
+                    weights=np.array(_validation_n)
+                ),
+                np.sum(_validation_n)
+            )
 
     def set_dropouts(
         self,
         input_dropout_rate,
-        hidden_dropout_rate
+        hidden_dropout_rate,
+        intermediate_dropout_rate=None
     ):
 
         self.input_dropout = torch.nn.Dropout(
@@ -255,17 +268,27 @@ class _TrainingMixin:
         self.input_dropout_rate = input_dropout_rate
         self.hidden_dropout_rate = hidden_dropout_rate
 
+        if intermediate_dropout_rate is not None:
+            self.intermediate_dropout = torch.nn.Dropout(
+                p=intermediate_dropout_rate
+            )
+            self.intermediate_dropout_rate = intermediate_dropout_rate
+
         return self
 
     def process_optimizer(
         self,
-        optimizer
+        optimizer,
+        params=None
     ):
+
+        if params is None:
+            params = self.parameters()
 
         # If it's None, create a default Adam optimizer
         if optimizer is None:
             return torch.optim.Adam(
-                self.parameters(),
+                params,
                 **DEFAULT_OPTIMIZER_PARAMS
             )
 
@@ -275,7 +298,7 @@ class _TrainingMixin:
 
         # If it's a tuple, process the individual tuple elements
         # separately for optimizer
-        elif isinstance(optimizer, tuple):
+        elif isinstance(optimizer, (tuple, list)):
             return tuple(
                 self.process_optimizer(opt)
                 for opt in optimizer
@@ -288,7 +311,7 @@ class _TrainingMixin:
         # Otherwise assume it's a dict of Adam kwargs
         else:
             return torch.optim.Adam(
-                self.parameters(),
+                params,
                 **optimizer
             )
 
@@ -328,7 +351,10 @@ class _TrainingMixin:
     def r2(
         self,
         training_dataloader,
-        validation_dataloader=None
+        validation_dataloader=None,
+        multioutput='uniform_truncated_average',
+        input_data_index=None,
+        target_data_index=None
     ):
         """
         Calculate unweighted-average R2 score and store in the model object
@@ -344,48 +370,23 @@ class _TrainingMixin:
 
         self.eval()
 
-        self.training_r2 = _aggregate_r2(
-            self._calculate_r2_score(
-                training_dataloader
-            )
+        self.training_r2 = r2_score(
+            training_dataloader,
+            self,
+            multioutput=multioutput,
+            input_data_idx=input_data_index,
+            target_data_idx=target_data_index
         )
 
-        if validation_dataloader is not None:
-            self.validation_r2 = _aggregate_r2(
-                self._calculate_r2_score(
-                    validation_dataloader
-                )
-            )
+        self.validation_r2 = r2_score(
+            validation_dataloader,
+            self,
+            multioutput=multioutput,
+            input_data_idx=input_data_index,
+            target_data_idx=target_data_index
+        )
 
-        return self.training_r2, self.validation_r2
-
-    @torch.inference_mode()
-    def _calculate_r2_score(
-        self,
-        dataloader
-    ):
-
-        if dataloader is None:
-            return None
-
-        _rss = 0
-        _ss = 0
-
-        with torch.no_grad():
-            for data in dataloader:
-
-                output_data = self.output_data(data)
-
-                _rss += _calculate_rss(
-                    output_data,
-                    self._slice_data_and_forward(data),
-                )
-
-                _ss += _calculate_tss(
-                    output_data
-                )
-
-        return _calculate_r2(_rss, _ss)
+        return to(self.training_r2, 'cpu'), to(self.validation_r2, 'cpu')
 
     def _slice_data_and_forward(
         self,
@@ -452,7 +453,7 @@ class _TrainingMixin:
         else:
             loss_offset = self.loss_offset
 
-        _, output_offset = self._check_data_offsets(
+        _, output_offset = _check_data_offsets(
             x.shape[1],
             _t_plus_one,
             self.n_additional_predictions,
@@ -508,57 +509,6 @@ class _TrainingMixin:
 
         return x
 
-    @staticmethod
-    def _get_data_offsets(
-        L,
-        output_t_plus_one=False,
-        n_additional_predictions=0,
-        loss_offset=0
-    ):
-        """
-        Returns slice indices for input (O:input_offset) and
-        for output (output_offset:L) based on slice parameters
-        """
-
-        if loss_offset is None:
-            loss_offset = 0
-
-        if n_additional_predictions is None:
-            n_additional_predictions = 0
-
-        input_offset = L - n_additional_predictions
-        output_offset = loss_offset
-
-        if output_t_plus_one:
-            input_offset -= 1
-            output_offset += 1
-
-        return input_offset, output_offset
-
-    @staticmethod
-    def _check_data_offsets(
-        L,
-        output_t_plus_one=False,
-        n_additional_predictions=0,
-        loss_offset=0
-    ):
-
-        in_offset, out_offset = _TrainingMixin._get_data_offsets(
-            L,
-            output_t_plus_one,
-            n_additional_predictions,
-            loss_offset
-        )
-
-        if in_offset < 1 or out_offset >= L:
-            raise ValueError(
-                f"Cannot train on {L} sequence length with "
-                f"{n_additional_predictions} additional predictions and "
-                f"{loss_offset} values excluded from loss"
-            )
-
-        return in_offset, out_offset
-
     def save(
         self,
         file_name,
@@ -571,7 +521,11 @@ class _TrainingMixin:
         :type file_name: str
         """
 
+        _current_device = self._model_device
+
+        to(self, 'cpu')
         write(self, file_name, **kwargs)
+        to(self, _current_device)
 
     def set_training_time(
         self,
@@ -580,6 +534,72 @@ class _TrainingMixin:
         if reset or self.training_time is None:
             self.training_time = time.time()
 
+    @staticmethod
+    def _process_loss(
+        existing_loss,
+        loss,
+        loss_idx=None
+    ):
+        if loss is None:
+            return existing_loss
+
+        loss = np.asanyarray(loss).reshape(1, -1)
+
+        if loss_idx is not None:
+            loss_idx = np.asanyarray(loss_idx).reshape(-1)
+
+            _n_losses = max(
+                np.max(loss_idx) + 1,
+                len(loss_idx),
+                loss.shape[1],
+                existing_loss.shape[1] if existing_loss is not None else 0
+            )
+
+            _loss = np.zeros((1, _n_losses))
+            _loss[:, loss_idx] = loss
+            loss = _loss
+
+        if existing_loss is None:
+            return loss
+        else:
+            return np.append(
+                existing_loss,
+                loss,
+                axis=0
+            )
+
+    def append_loss(
+        self,
+        training_loss=None,
+        training_n=None,
+        training_loss_idx=None,
+        validation_loss=None,
+        validation_n=None,
+        validation_loss_idx=None
+    ):
+
+        self._training_loss = self._process_loss(
+            self._training_loss,
+            training_loss,
+            training_loss_idx
+        )
+
+        self._training_n = self._process_loss(
+            self._training_n,
+            training_n
+        )
+
+        self._validation_loss = self._process_loss(
+            self._validation_loss,
+            validation_loss,
+            validation_loss_idx
+        )
+
+        self._validation_n = self._process_loss(
+            self._validation_n,
+            validation_n
+        )
+
     def _loss_df(self, loss_array):
 
         if loss_array.size == 0:
@@ -587,23 +607,19 @@ class _TrainingMixin:
         elif loss_array.ndim == 1:
             loss_array = loss_array.reshape(-1, 1)
 
-        _loss = pd.DataFrame(loss_array.T)
+        _loss = pd.DataFrame(loss_array).T
 
-        if _loss.shape[0] == 1:
-            _loss.insert(0, 'loss_model', self.type_name)
-
-        elif self._loss_type_names is not None:
+        if self._loss_type_names is not None:
             _loss.insert(0, 'loss_model', self._loss_type_names)
+        else:
+            _loss.insert(0, 'loss_model', self.type_name)
 
         return _loss
 
     @staticmethod
     def to_tensor(x):
 
-        if not torch.is_tensor(x):
-            x = torch.Tensor(x)
-
-        return x
+        return _to_tensor(x)
 
     @torch.inference_mode()
     def predict(
@@ -623,12 +639,13 @@ class _TrainingMixin:
         """
 
         self.eval()
+        device = self._model_device
 
         # Recursive call if x is a DataLoader
         if isinstance(x, DataLoader):
             results = [
                 self(
-                    batch_x,
+                    to(batch_x, device),
                     **kwargs
                 )
                 for batch_x in x
@@ -638,21 +655,76 @@ class _TrainingMixin:
                 return results[0]
 
             if isinstance(results[0], torch.Tensor):
-                return _cat(results, 0)
+                return to(_cat(results, 0), 'cpu')
 
             else:
                 return tuple(
-                    _cat([results[i][j] for i in range(len(results))], 0)
+                    to(
+                        _cat(
+                            [results[i][j] for i in range(len(results))],
+                            0
+                        ),
+                        'cpu'
+                    )
                     for j in range(len(results[0]))
                 )
 
         elif not torch.is_tensor(x):
             x = torch.Tensor(x)
 
-        return self(
-            x,
-            **kwargs
+        return to(
+            self(
+                to(x, device),
+                **kwargs
+            ),
+            'cpu'
         )
+
+    @torch.inference_mode()
+    def score(
+        self,
+        dataloader,
+        loss_function=torch.nn.MSELoss(),
+        reduction='sum',
+        **kwargs
+    ):
+
+        if dataloader is None:
+            return None
+
+        _score = []
+        _count = []
+
+        with torch.no_grad():
+            for data in dataloader:
+                _score.append(
+                    loss_function(
+                        self._slice_data_and_forward(data),
+                        self.output_data(data),
+                        **kwargs
+                    )
+                )
+                _count.append(
+                    self.input_data(data).shape[0]
+                )
+
+        _score = torch.Tensor(_score)
+        _count = torch.Tensor(_count)
+
+        if reduction == 'mean':
+            _score = torch.sum(
+                torch.mul(_score, _count) / torch.sum(_count)
+            )
+        elif reduction == 'sum':
+            _score = torch.sum(_score)
+        elif reduction is None:
+            pass
+        else:
+            raise ValueError(
+                f'reduction must be `mean`, `sum` or None; {reduction} passed'
+            )
+
+        return _score
 
 
 def _shuffle_time_data(dl):
@@ -660,69 +732,3 @@ def _shuffle_time_data(dl):
         dl.dataset.shuffle()
     except AttributeError:
         pass
-
-
-class _TimeOffsetMixinRecurrent:
-
-    def input_data(self, x):
-
-        if self._offset_data:
-            input_offset, _ = _TrainingMixin._check_data_offsets(
-                x.shape[1],
-                output_t_plus_one=self.output_t_plus_one,
-                loss_offset=self.loss_offset,
-                n_additional_predictions=self.n_additional_predictions
-            )
-            return x[:, 0:input_offset, :]
-
-        else:
-            return x
-
-
-class _TimeOffsetMixinStatic:
-
-    def input_data(self, x):
-
-        if self._offset_data:
-            return x[:, [0], ...]
-        else:
-            return x
-
-    def output_data(
-        self,
-        x,
-        output_t_plus_one=None,
-        **kwargs
-    ):
-
-        if not self._offset_data:
-            return x
-
-        L = x.shape[1]
-        max_L = 1
-
-        if output_t_plus_one is None:
-            output_t_plus_one = self.output_t_plus_one
-
-        if output_t_plus_one:
-            max_L += 1
-
-        if self.n_additional_predictions is not None:
-            max_L += self.n_additional_predictions
-
-        if max_L == L:
-            return super().output_data(
-                x,
-                output_t_plus_one=output_t_plus_one,
-                **kwargs
-            )
-        elif max_L > L:
-            raise ValueError(
-                f"Cannot train on {L} sequence length with "
-                f"{self.n_additional_predictions} additional predictions and "
-                f"{self.loss_offset} values excluded from loss"
-            )
-        else:
-            return super().output_data(
-                x[:, 0:max_L, ...]
-            )

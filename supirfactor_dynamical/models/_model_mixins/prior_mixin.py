@@ -3,7 +3,7 @@ import pandas as pd
 import warnings
 
 from torch.nn.utils import prune
-from .._utils import _process_weights_to_tensor
+from supirfactor_dynamical._utils import _process_weights_to_tensor
 
 
 class _PriorMixin:
@@ -13,13 +13,27 @@ class _PriorMixin:
 
     _drop_tf = None
 
-    prior_network = None
     prior_network_labels = (None, None)
+
+    @property
+    def prior_network_dataframe(self):
+        if self.prior_network is None:
+            return None
+
+        elif isinstance(self.prior_network, tuple):
+            return self.prior_network
+
+        else:
+            return self._to_dataframe(
+                self.prior_network,
+                transpose=True
+            )
 
     def drop_encoder(
         self,
         x
     ):
+
         x = self.encoder(x)
 
         if self._drop_tf is not None:
@@ -27,7 +41,7 @@ class _PriorMixin:
             _mask = ~self.prior_network_labels[1].isin(self._drop_tf)
 
             x = x @ torch.diag(
-                torch.Tensor(_mask.astype(int))
+                torch.Tensor(_mask.astype(int)).to(self._model_device)
             )
 
         x = self.hidden_dropout(x)
@@ -55,7 +69,6 @@ class _PriorMixin:
         )
 
         # Set prior instance variables
-        self.prior_network = prior_network
         self.prior_network_labels = prior_network_labels
         self.k, self.g = prior_network.shape
 
@@ -68,9 +81,14 @@ class _PriorMixin:
         activation='softplus'
     ):
 
-        prior_network = self.process_prior(
-            prior_network
-        )
+        if isinstance(prior_network, tuple):
+            self.g, self.k = prior_network
+            self.prior_network = prior_network
+
+        else:
+            self.prior_network = self.process_prior(
+                prior_network
+            )
 
         self.encoder = torch.nn.Sequential(
             torch.nn.Linear(self.g, self.k, bias=False)
@@ -83,18 +101,47 @@ class _PriorMixin:
 
         self.activation = activation
 
-        # Replace initialized encoder weights with prior weights
-        self.mask_input_weights(
-            prior_network,
-            use_mask_weights=use_prior_weights,
-            layer_name='weight'
-        )
+        if not isinstance(prior_network, tuple):
+            # Replace initialized encoder weights with prior weights
+            self.mask_input_weights(
+                self.prior_network,
+                use_mask_weights=use_prior_weights,
+                layer_name='weight'
+            )
 
         return self
 
+    def create_submodule(
+        self,
+        widths,
+        activation='relu',
+        dropout_rate=0.0
+    ):
+
+        _module = torch.nn.Sequential()
+
+        if widths is not None and len(widths) > 1:
+
+            for s1, s2 in zip(widths[0:-1], widths[1:]):
+                _module.append(
+                    torch.nn.Linear(s1, s2, bias=False)
+                )
+                _module.append(
+                    self.get_activation_function(activation)
+                )
+                _module.append(
+                    torch.nn.Dropout(p=dropout_rate)
+                )
+
+        return _module
+
     def set_decoder(
         self,
-        activation='softplus'
+        activation='softplus',
+        intermediate_activation=None,
+        decoder_sizes=None,
+        dropout_rate=0.0,
+        output_nodes=None
     ):
         """
         Set decoder
@@ -104,13 +151,30 @@ class _PriorMixin:
         :type relu: bool, optional
         """
 
-        self.output_activation = activation
+        if intermediate_activation is None:
+            intermediate_activation = activation
 
-        decoder = self.append_activation_function(
-            torch.nn.Sequential(
-                torch.nn.Linear(self.k, self.g, bias=False),
-            ),
-            activation
+        if decoder_sizes is None:
+            decoder_sizes = [self.k]
+
+        if len(decoder_sizes) > 1:
+
+            decoder = self.create_submodule(
+                decoder_sizes,
+                activation=intermediate_activation,
+                dropout_rate=dropout_rate
+            )
+        else:
+            decoder = torch.nn.Sequential()
+
+        if output_nodes is None:
+            output_nodes = self.g
+
+        decoder.append(
+            torch.nn.Linear(decoder_sizes[-1], output_nodes, bias=False)
+        )
+        decoder.append(
+            self.get_activation_function(activation)
         )
 
         return decoder
@@ -118,12 +182,36 @@ class _PriorMixin:
     def mask_input_weights(
         self,
         mask,
+        module=None,
         use_mask_weights=False,
-        layer_name='weight_ih_l0',
+        layer_name='weight',
         weight_vstack=None
     ):
+        """
+        Apply a mask to layer weights
 
-        if isinstance(self.encoder, torch.nn.Sequential):
+        :param mask: Mask tensor. Non-zero values will be retained,
+            and zero values will be masked to zero in the layer weights
+        :type mask: torch.Tensor
+        :param encoder: Module to mask, use self.encoder if this is None,
+            defaults to None
+        :type encoder: torch.nn.Module, optional
+        :param use_mask_weights: Set the weights equal to values in mask,
+            defaults to False
+        :type use_mask_weights: bool, optional
+        :param layer_name: Module weight name,
+            defaults to 'weight'
+        :type layer_name: str, optional
+        :param weight_vstack: Number of times to stack the mask, for cases
+            where the layer weights are also stacked, defaults to None
+        :type weight_vstack: _type_, optional
+        :raises ValueError: Raise error if the mask and module weights are
+            different sizes
+        """
+
+        if module is not None:
+            encoder = module
+        elif isinstance(self.encoder, torch.nn.Sequential):
             encoder = self.encoder[0]
         else:
             encoder = self.encoder
@@ -226,8 +314,7 @@ class _PriorMixin:
         """
 
         try:
-            with torch.no_grad():
-                x = x.numpy()
+            x = x.to('cpu').numpy()
 
         except AttributeError:
             pass
@@ -248,163 +335,32 @@ class _PriorMixin:
         # Build the encoder module
         if activation is None:
             pass
-        elif activation.lower() == 'sigmoid':
-            module.append(torch.nn.Sigmoid(**kwargs))
-        elif activation.lower() == 'softplus':
-            module.append(torch.nn.Softplus(**kwargs))
-        elif activation.lower() == 'relu':
-            module.append(torch.nn.ReLU(**kwargs))
-        elif activation.lower() == 'tanh':
-            module.append(torch.nn.Tanh(**kwargs))
         else:
-            raise ValueError(
-                f"Activation {activation} unknown"
+            module.append(
+                _PriorMixin.get_activation_function(
+                    activation,
+                    **kwargs
+                )
             )
 
         return module
 
-
-class _ScalingMixin:
-
-    _count_inverse_scaler = None
-    _velocity_inverse_scaler = None
-
-    count_to_velocity_scaler = None
-    velocity_to_count_scaler = None
-
-    @property
-    def count_scaler(self):
-        if self._count_inverse_scaler is not None:
-            return torch.diag(self._count_inverse_scaler)
-        else:
-            return None
-
-    @property
-    def velocity_scaler(self):
-        if self._velocity_inverse_scaler is not None:
-            return torch.diag(self._velocity_inverse_scaler)
-        else:
-            return None
-
-    def set_scaling(
-        self,
-        count_scaling=False,
-        velocity_scaling=False
-    ):
-        """
-        If count or velocity is scaled, fix the scaling so that
-        they match.
-
-        Needed to calculate t+1 from count and velocity at t
-
-        x_(t+1) = x(t) + dx/dx * (count_scaling / velocity_scaling)
-
-        :param count_scaling: Count scaler [G] vector,
-            None disables count scaling.
-        :type count_scaling: torch.Tensor, np.ndarray, optional
-        :param velocity_scaling: Velocity scaler [G] vector,
-            None disables velocity scaling
-        :type velocity_scaling: torch.Tensor, np.ndarray, optional
-        """
-
-        if count_scaling is None:
-            self._count_inverse_scaler = None
-
-        elif count_scaling is not False:
-            self._count_inverse_scaler = self.to_tensor(count_scaling)
-
-        if velocity_scaling is None:
-            self._velocity_inverse_scaler = None
-
-        elif velocity_scaling is not False:
-            self._velocity_inverse_scaler = self.to_tensor(velocity_scaling)
-
-        self.count_to_velocity_scaler = self._zero_safe_div(
-            self._count_inverse_scaler,
-            self._velocity_inverse_scaler
-        )
-
-        self.velocity_to_count_scaler = self._zero_safe_div(
-            self._velocity_inverse_scaler,
-            self._count_inverse_scaler
-        )
-
-        return self
-
-    def unscale_counts(self, x):
-        if self._count_inverse_scaler is not None:
-            return torch.matmul(x, self.count_scaler)
-        else:
-            return x
-
-    def unscale_velocity(self, x):
-        if self._velocity_inverse_scaler is not None:
-            return torch.matmul(x, self.velocity_scaler)
-        else:
-            return x
-
-    def rescale_velocity(self, x):
-        if self._velocity_inverse_scaler is not None:
-            return torch.matmul(
-                x,
-                self._zero_safe_div(
-                    None,
-                    self._velocity_inverse_scaler
-                )
-            )
-        else:
-            return x
-
-    def rescale_counts(self, x):
-        if self._count_inverse_scaler is not None:
-            return torch.matmul(
-                x,
-                self._zero_safe_div(
-                    None,
-                    self._count_inverse_scaler
-                )
-            )
-        else:
-            return x
-
-    def scale_count_to_velocity(
-        self,
-        count
-    ):
-        if self.count_to_velocity_scaler is not None:
-            return torch.matmul(count, self.count_to_velocity_scaler)
-        else:
-            return count
-
-    def scale_velocity_to_count(
-        self,
-        velocity
-    ):
-        if self.velocity_to_count_scaler is not None:
-            return torch.matmul(velocity, self.velocity_to_count_scaler)
-        else:
-            return velocity
-
     @staticmethod
-    def _zero_safe_div(x, y):
-        """
-        Return z = x / y
-        z = 1 for y == 0
-        Allow for Nones
-        """
-
-        if x is None and y is None:
-            return None
-
-        elif x is None:
-            _z = 1 / y
-            _z[y == 0] = 1
-
-        elif y is None:
-            _z = x
-
+    def get_activation_function(
+        activation,
+        **kwargs
+    ):
+        if activation is None:
+            return torch.nn.Identity()
+        elif activation.lower() == 'sigmoid':
+            return torch.nn.Sigmoid(**kwargs)
+        elif activation.lower() == 'softplus':
+            return torch.nn.Softplus(**kwargs)
+        elif activation.lower() == 'relu':
+            return torch.nn.ReLU(**kwargs)
+        elif activation.lower() == 'tanh':
+            return torch.nn.Tanh(**kwargs)
         else:
-            _z = torch.div(x, y)
-            _z[y == 0] = 1
-
-        return torch.diag(_z)
+            raise ValueError(
+                f"Activation {activation} unknown"
+            )

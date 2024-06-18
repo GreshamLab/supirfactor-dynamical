@@ -1,6 +1,7 @@
 from .ae_model import (
     TFAutoencoder,
-    TFMetaAutoencoder
+    TFMetaAutoencoder,
+    TFMultilayerAutoencoder
 )
 
 from .recurrent_models import (
@@ -11,46 +12,66 @@ from .recurrent_models import (
 
 from .biophysical_model import SupirFactorBiophysical
 from .decay_model import DecayModule
+from .chromatin_model import (
+    ChromatinModule,
+    ChromatinAwareModel
+)
 
 # Standard mixins
-from ._base_velocity_model import (
-    _VelocityMixin
+from ._model_mixins import (
+    _TrainingMixin,
+    _VelocityMixin,
+    _MultiSubmoduleMixin,
+    _MultiModalDataMixin
 )
 from ._base_model import _TFMixin
-from ._base_trainer import _TrainingMixin
 
 
 _CLASS_DICT = {
     TFAutoencoder.type_name: TFAutoencoder,
     TFMetaAutoencoder.type_name: TFMetaAutoencoder,
+    TFMultilayerAutoencoder.type_name: TFMultilayerAutoencoder,
     TFRNNDecoder.type_name: TFRNNDecoder,
     TFGRUDecoder.type_name: TFGRUDecoder,
     TFLSTMDecoder.type_name: TFLSTMDecoder,
     SupirFactorBiophysical.type_name: SupirFactorBiophysical,
-    DecayModule.type_name: DecayModule
+    DecayModule.type_name: DecayModule,
+    ChromatinAwareModel.type_name: ChromatinAwareModel,
+    ChromatinModule.type_name: ChromatinModule
 }
 
 _not_velocity = [
     SupirFactorBiophysical,
-    DecayModule
+    DecayModule,
+    ChromatinModule,
+    ChromatinAwareModel
 ]
 
 
 def get_model(
     model,
-    velocity=False
+    velocity=False,
+    multisubmodel=False,
+    multimodal_data=False
 ) -> _TFMixin:
 
     try:
         model = _CLASS_DICT[model]
     except KeyError:
-        pass
+        model = model
 
     if velocity and (model not in _not_velocity):
-        class TFVelocity(_VelocityMixin, model):
-            pass
-
-        return TFVelocity
-
+        model = [_VelocityMixin] + [model]
     else:
-        return model
+        model = [model]
+
+    if multisubmodel:
+        model = [_MultiSubmoduleMixin] + model
+
+    if multimodal_data:
+        model = [_MultiModalDataMixin] + model
+
+    class SupirFactorModel(*model):
+        pass
+
+    return SupirFactorModel

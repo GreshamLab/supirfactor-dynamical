@@ -14,14 +14,16 @@ from supirfactor_dynamical import (
     get_model
 )
 
-from supirfactor_dynamical.train import (
-    model_training
+from supirfactor_dynamical.training import (
+    dynamical_model_training as model_training
 )
 
 from supirfactor_dynamical.models import (
     SupirFactorBiophysical,
     DecayModule
 )
+
+from supirfactor_dynamical._utils import _get_data_offsets
 
 from ._stubs import (
     A,
@@ -118,11 +120,11 @@ class TestDynamicalModel(unittest.TestCase):
         with torch.no_grad():
             for data in self.velocity_data:
 
-                predicts = self.dynamical_model(data[..., 0])
+                predicts = self.dynamical_model(data[..., 0])[0]
                 predict_pos, predict_neg = self.dynamical_model(
                     data[..., 0],
                     return_submodels=True
-                )
+                )[0]
 
                 if self.decay_model is False:
                     self.assertIsNone(
@@ -132,9 +134,9 @@ class TestDynamicalModel(unittest.TestCase):
                     self.assertGreaterEqual(predict_pos.min(), 0)
                     self.assertGreaterEqual(0, predict_neg.max())
 
-                    npt.assert_almost_equal(
-                        (predict_pos + predict_neg).numpy(),
-                        predicts.numpy()
+                    torch.testing.assert_close(
+                        (predict_pos + predict_neg),
+                        predicts
                     )
 
     def test_training_offset(self):
@@ -142,28 +144,35 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        x = self.dynamical_model(XTV_tensor[..., 0])
+        x = self.dynamical_model(
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device)
+        )[0]
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
         (xp, xn) = self.dynamical_model(
-            XTV_tensor[..., 0],
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device),
             return_submodels=True
-        )
+        )[0]
+
+        x = x.to('cpu').detach()
+        xp = xp.to('cpu').detach()
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
         if self.decay_model is False:
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
+            torch.testing.assert_close(
+                xp,
+                x
             )
         else:
-            self.assertTrue(np.all(xp.detach().numpy() >= 0))
-            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-            self.assertTrue(np.all(xn.detach().numpy() <= 0))
+            xn = xn.to('cpu').detach()
 
-            npt.assert_almost_equal(
-                xn.detach().numpy() + xp.detach().numpy(),
-                x.detach().numpy()
+            self.assertTrue(np.all(xp.numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.numpy() <= 0))
+
+            torch.testing.assert_close(
+                xn + xp,
+                x
             )
 
     def test_predict_wrapper(self):
@@ -174,9 +183,6 @@ class TestDynamicalModel(unittest.TestCase):
         predicts = self.dynamical_model.predict(
             self.count_data,
             return_submodels=True,
-            return_counts=True,
-            return_velocities=True,
-            return_decays=True,
             n_time_steps=2
         )
 
@@ -212,29 +218,36 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        x = self.dynamical_model(XTV_tensor[..., 0])
+        x = self.dynamical_model(
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device)
+        )[0]
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
 
         (xp, xn) = self.dynamical_model(
-            XTV_tensor[..., 0],
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device),
             return_submodels=True
-        )
+        )[0]
+
+        x = x.to('cpu').detach()
+        xp = xp.to('cpu').detach()
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
         if self.decay_model is False:
-            npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
+            torch.testing.assert_close(
+                xp,
+                x
             )
         else:
-            self.assertTrue(np.all(xp.detach().numpy() >= 0))
-            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-            self.assertTrue(np.all(xn.detach().numpy() <= 0))
+            xn = xn.to('cpu').detach()
 
-            npt.assert_almost_equal(
-                xn.detach().numpy() + xp.detach().numpy(),
-                x.detach().numpy()
+            self.assertTrue(np.all(xp.numpy() >= 0))
+            self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
+            self.assertTrue(np.all(xn.numpy() <= 0))
+
+            torch.testing.assert_close(
+                xn + xp,
+                x
             )
 
     def test_training_scale(self):
@@ -247,29 +260,31 @@ class TestDynamicalModel(unittest.TestCase):
         self.dynamical_model.train_model(self.velocity_data, 50)
         self.dynamical_model.eval()
 
-        x = self.dynamical_model(XTV_tensor[..., 0])
+        x = self.dynamical_model(
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device)
+        )[0]
         self.assertEqual(x.shape, XTV_tensor[..., 0].shape)
 
         (xp, xn) = self.dynamical_model(
-            XTV_tensor[..., 0],
+            XTV_tensor[..., 0].to(self.dynamical_model._model_device),
             return_submodels=True
-        )
+        )[0]
 
         self.assertEqual(xp.shape, XTV_tensor[..., 0].shape)
 
         if self.decay_model is False:
             npt.assert_almost_equal(
-                xp.detach().numpy(),
-                x.detach().numpy()
+                xp.to('cpu').detach().numpy(),
+                x.to('cpu').detach().numpy()
             )
         else:
-            self.assertTrue(np.all(xp.detach().numpy() >= 0))
+            self.assertTrue(np.all(xp.to('cpu').detach().numpy() >= 0))
             self.assertEqual(xn.shape, XTV_tensor[..., 0].shape)
-            self.assertTrue(np.all(xn.detach().numpy() <= 0))
+            self.assertTrue(np.all(xn.to('cpu').detach().numpy() <= 0))
 
             npt.assert_almost_equal(
-                xn.detach().numpy() + xp.detach().numpy(),
-                x.detach().numpy()
+                xn.to('cpu').detach().numpy() + xp.to('cpu').detach().numpy(),
+                x.to('cpu').detach().numpy()
             )
 
     def test_train_loop(self):
@@ -326,17 +341,15 @@ class TestDynamicalModel(unittest.TestCase):
             npt.assert_almost_equal(
                 dynamical_model.input_data(self.ordered_data).numpy() + 0.1,
                 dynamical_model(
-                    dynamical_model.input_data(self.ordered_data),
-                    return_counts=True
-                ).numpy()
+                    dynamical_model.input_data(self.ordered_data)
+                )[1].numpy()
             )
 
         self.assertEqual(
             dynamical_model(
                 dynamical_model.input_data(self.ordered_data[:, [0], ...]),
-                n_time_steps=9,
-                return_counts=True
-            ).shape,
+                n_time_steps=9
+            )[1].shape,
             (1, 10, 2)
         )
 
@@ -358,7 +371,7 @@ class TestDynamicalModel(unittest.TestCase):
         with torch.no_grad():
             v = dynamical_model(
                 self.ordered_data[..., 0]
-            )
+            )[0]
 
             npt.assert_almost_equal(
                 v.numpy(),
@@ -367,9 +380,8 @@ class TestDynamicalModel(unittest.TestCase):
 
             c = dynamical_model(
                 self.ordered_data[:, [0], :, 0],
-                return_counts=True,
                 n_time_steps=9
-            )
+            )[1]
 
             c_expect = self.ordered_data[..., 0].numpy()
             c_expect += self.ordered_data[..., 1].numpy()
@@ -403,7 +415,7 @@ class TestDynamicalModel(unittest.TestCase):
         with torch.no_grad():
             v = dynamical_model(
                 self.ordered_data[..., 0]
-            )
+            )[0]
 
             npt.assert_almost_equal(
                 v.numpy() * 0.1,
@@ -412,9 +424,8 @@ class TestDynamicalModel(unittest.TestCase):
 
             c = dynamical_model(
                 self.ordered_data[:, [0], :, 0],
-                return_counts=True,
                 n_time_steps=9
-            )
+            )[1]
 
             c_expect = self.ordered_data[..., 0].numpy()
             c_expect += self.ordered_data[..., 1].numpy()
@@ -455,7 +466,7 @@ class TestDynamicalModel(unittest.TestCase):
         )
 
         self.assertEqual(
-            self.dynamical_model._get_data_offsets(
+            _get_data_offsets(
                 L,
                 loss_offset=self.dynamical_model.loss_offset
             ),
@@ -509,7 +520,7 @@ class TestDynamicalModel(unittest.TestCase):
         v = self.dynamical_model.output_data(XTVD_tensor)
         v_bar = self.dynamical_model(
             self.dynamical_model.input_data(XTVD_tensor)
-        )
+        )[0]
         v_mse = torch.nn.MSELoss()(
             v,
             v_bar
@@ -517,11 +528,10 @@ class TestDynamicalModel(unittest.TestCase):
 
         self.assertAlmostEqual(
             v_mse,
-            self.dynamical_model._calculate_loss(
+            torch.nn.MSELoss()(
                 self.dynamical_model(
                     self.dynamical_model.input_data(XTVD_tensor)
-                ),
-                torch.nn.MSELoss(),
+                )[0],
                 self.dynamical_model.output_data(XTVD_tensor)
             ).item(),
             places=5
@@ -534,7 +544,7 @@ class TestDynamicalModel(unittest.TestCase):
         v = self.dynamical_model.output_data(XTVD_tensor)
         v_bar = self.dynamical_model(
             self.dynamical_model.input_data(XTVD_tensor)
-        )
+        )[0]
         v_mse = torch.nn.MSELoss()(
             v,
             v_bar
@@ -567,7 +577,7 @@ class TestDynamicalModel(unittest.TestCase):
             self.dynamical_model(
                 self.dynamical_model.input_data(XTVD_tensor),
                 n_time_steps=1
-            ),
+            )[0],
             keep_all_dims=True,
             offset_only=True
         )
@@ -623,7 +633,8 @@ class TestDynamicalModel(unittest.TestCase):
             num_epoch,
             train_x,
             optimizer,
-            loss_function
+            loss_function,
+            target_x=None
         ):
 
             self.assertEqual(
@@ -700,3 +711,11 @@ class TestDynamicalModelOptimizeDecay(TestDynamicalModelTuneDecay):
 class TestDynamicalModelOptimizeDecayDelay(TestDynamicalModelOptimizeDecay):
 
     decay_delay = 5
+
+
+class TestDynamicalModelCUDA(TestDynamicalModel):
+
+    def setUp(self) -> None:
+        super().setUp()
+        if torch.cuda.is_available():
+            self.dynamical_model.device = 'cuda'

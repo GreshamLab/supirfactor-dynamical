@@ -1,170 +1,118 @@
 import torch
 
 from ._base_model import _TFMixin
-from ._base_trainer import (
+from ._model_mixins import (
     _TrainingMixin,
     _TimeOffsetMixinStatic
 )
 
 
-class TFAutoencoder(
+class TFMultilayerAutoencoder(
     torch.nn.Module,
     _TimeOffsetMixinStatic,
     _TFMixin,
     _TrainingMixin
 ):
 
-    type_name = "static"
+    type_name = "static_multilayer"
 
-    def __init__(
-        self,
-        prior_network,
-        use_prior_weights=False,
-        input_dropout_rate=0.5,
-        hidden_dropout_rate=0.0,
-        activation='relu',
-        output_activation='relu'
-    ):
-        """
-        Create a TF Autoencoder module
+    _serialize_args = [
+        'prior_network',
+        'input_dropout_rate',
+        'hidden_dropout_rate',
+        'intermediate_dropout_rate',
+        'intermediate_sizes',
+        'decoder_sizes',
+        'tfa_activation',
+        'activation',
+        'output_activation',
+        'output_nodes'
+    ]
 
-        :param prior_network: 2D mask to connect genes to the TF hidden layer,
-            where genes are on 0 (index) and TFs are on 1 (columns).
-            Nonzero values are connections.
-            Must match training data gene order.
-        :type prior_network: pd.DataFrame [G x K], torch.Tensor [G x K]
-        :param use_prior_weights: Use values in the prior_network as the
-            initalization for encoder weights, defaults to False
-        :type use_prior_weights: bool, optional
-        :param input_dropout_rate: Training dropout for input genes,
-            defaults to 0.5
-        :type input_dropout_rate: float, optional
-        :param activation: Apply activation function to hidden
-            layer, defaults to ReLU
-        :type activation: bool, optional
-        :param output_activation: Apply activation function to output
-            layer, defaults to ReLU
-        :type output_activation: bool, optional
-        """
+    intermediate_sizes = None
+    decoder_sizes = None
 
-        super().__init__()
+    intermediate_dropout_rate = 0.2
 
-        self.set_encoder(
-            prior_network,
-            use_prior_weights=use_prior_weights,
-            activation=activation
-        )
-
-        self.decoder = self.set_decoder(
-            activation=output_activation
-        )
-
-        self.set_dropouts(
-            input_dropout_rate,
-            hidden_dropout_rate
-        )
-
-    def forward(
-        self,
-        x,
-        hidden_state=None,
-        n_time_steps=0,
-        return_tfa=False
-    ):
-
-        return self._forward(
-            x,
-            hidden_state,
-            n_time_steps,
-            return_tfa
-        )
-
-
-class TFMetaAutoencoder(
-    torch.nn.Module,
-    _TimeOffsetMixinStatic,
-    _TFMixin,
-    _TrainingMixin
-):
-
-    type_name = "static_meta"
+    tfa_activation = 'relu'
 
     @property
     def intermediate_weights(self):
-        return self._intermediate[0].weight
+        if self.intermediate_sizes is None:
+            return None
+
+        return [
+            self._intermediate[3 * i].weight.to('cpu')
+            for i in range(len(self.intermediate_sizes))
+        ]
 
     @property
     def decoder_weights(self):
-        return self._decoder[0].weight
+        return self._decoder[-2].weight.to('cpu')
 
     def __init__(
         self,
-        prior_network,
+        prior_network=None,
         use_prior_weights=False,
         input_dropout_rate=0.5,
         hidden_dropout_rate=0.0,
+        intermediate_dropout_rate=0.0,
+        intermediate_sizes=(100, ),
+        decoder_sizes=(100, ),
+        tfa_activation='relu',
         activation='relu',
-        output_activation='relu'
+        output_activation='relu',
+        output_nodes=None
     ):
-        """
-        Create a TF Autoencoder module
-
-        :param prior_network: 2D mask to connect genes to the TF hidden layer,
-            where genes are on 0 (index) and TFs are on 1 (columns).
-            Nonzero values are connections.
-            Must match training data gene order.
-        :type prior_network: pd.DataFrame [G x K], torch.Tensor [G x K]
-        :param use_prior_weights: Use values in the prior_network as the
-            initalization for encoder weights, defaults to False
-        :type use_prior_weights: bool, optional
-        :param input_dropout_rate: Training dropout for input genes,
-            defaults to 0.5
-        :type input_dropout_rate: float, optional
-        :param activation: Apply activation function to hidden
-            layer, defaults to ReLU
-        :type activation: bool, optional
-        :param output_activation: Apply activation function to output
-            layer, defaults to ReLU
-        :type output_activation: bool, optional
-        """
-
         super().__init__()
 
         self.set_encoder(
             prior_network,
             use_prior_weights=use_prior_weights,
-            activation=activation
+            activation=tfa_activation
         )
 
-        self._intermediate = self.append_activation_function(
-            torch.nn.Sequential(
-                torch.nn.Linear(self.k, self.k, bias=False)
-            ),
-            activation
-        )
+        self.intermediate_sizes = intermediate_sizes
+        self.decoder_sizes = decoder_sizes
+
+        self.tfa_activation = tfa_activation
+        self.activation = activation
+        self.output_activation = output_activation
+        self.output_nodes = output_nodes
+
+        intermediates = [self.k]
+
+        if intermediate_sizes is not None:
+            intermediates = intermediates + list(intermediate_sizes)
+
+            self._intermediate = self.create_submodule(
+                intermediates,
+                activation=activation,
+                dropout_rate=intermediate_dropout_rate
+            )
+        else:
+            self._intermediate = torch.nn.Sequential()
+
+        decoders = [intermediates[-1]]
+
+        if decoder_sizes is not None:
+            decoders = decoders + list(decoder_sizes)
+
+        if output_nodes is None:
+            output_nodes = self.g
 
         self._decoder = self.set_decoder(
-            activation=output_activation
+            output_activation,
+            intermediate_activation=activation,
+            decoder_sizes=decoders,
+            dropout_rate=intermediate_dropout_rate,
+            output_nodes=output_nodes
         )
 
         self.set_dropouts(
             input_dropout_rate,
-            hidden_dropout_rate
-        )
-
-    def forward(
-        self,
-        x,
-        hidden_state=None,
-        n_time_steps=0,
-        return_tfa=False
-    ):
-
-        return self._forward(
-            x,
-            hidden_state,
-            n_time_steps,
-            return_tfa
+            hidden_dropout_rate,
+            intermediate_dropout_rate
         )
 
     def decoder(
@@ -177,3 +125,149 @@ class TFMetaAutoencoder(
         x = self._decoder(x)
 
         return x
+
+    def latent_embedding(
+        self,
+        x
+    ):
+
+        x = self.drop_encoder(x)
+        return self._intermediate(x)
+
+    def forward(
+        self,
+        x,
+        n_time_steps=0,
+        return_tfa=False
+    ):
+
+        return self._forward(
+            x,
+            n_time_steps=n_time_steps,
+            return_tfa=return_tfa
+        )
+
+
+class TFMetaAutoencoder(TFMultilayerAutoencoder):
+
+    type_name = "static_meta"
+
+    _serialize_args = [
+        'prior_network',
+        'input_dropout_rate',
+        'hidden_dropout_rate',
+        'activation',
+        'output_activation'
+    ]
+
+    @property
+    def intermediate_weights(self):
+        return self._intermediate[0].weight.to('cpu')
+
+    @property
+    def decoder_weights(self):
+        return self._decoder[0].weight.to('cpu')
+
+    def __init__(
+        self,
+        prior_network=None,
+        use_prior_weights=False,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
+        activation='relu',
+        output_activation='relu'
+    ):
+        """
+        Create a TF Autoencoder module
+
+        :param prior_network: 2D mask to connect genes to the TF hidden layer,
+            where genes are on 0 (index) and TFs are on 1 (columns).
+            Nonzero values are connections.
+            Must match training data gene order.
+        :type prior_network: pd.DataFrame [G x K], torch.Tensor [G x K]
+        :param use_prior_weights: Use values in the prior_network as the
+            initalization for encoder weights, defaults to False
+        :type use_prior_weights: bool, optional
+        :param input_dropout_rate: Training dropout for input genes,
+            defaults to 0.5
+        :type input_dropout_rate: float, optional
+        :param activation: Apply activation function to hidden
+            layer, defaults to ReLU
+        :type activation: bool, optional
+        :param output_activation: Apply activation function to output
+            layer, defaults to ReLU
+        :type output_activation: bool, optional
+        """
+
+        if isinstance(prior_network, tuple):
+            self.g, self.k = prior_network
+        else:
+            self.g, self.k = prior_network.shape
+
+        super().__init__(
+            prior_network=prior_network,
+            use_prior_weights=use_prior_weights,
+            input_dropout_rate=input_dropout_rate,
+            hidden_dropout_rate=hidden_dropout_rate,
+            intermediate_sizes=(self.k, ),
+            decoder_sizes=None,
+            activation=activation,
+            tfa_activation=activation,
+            output_activation=output_activation
+        )
+
+
+class TFAutoencoder(TFMultilayerAutoencoder):
+
+    type_name = "static"
+
+    _serialize_args = [
+        'prior_network',
+        'input_dropout_rate',
+        'hidden_dropout_rate',
+        'activation',
+        'output_activation'
+    ]
+
+    def __init__(
+        self,
+        prior_network=None,
+        use_prior_weights=False,
+        input_dropout_rate=0.5,
+        hidden_dropout_rate=0.0,
+        activation='relu',
+        output_activation='relu'
+    ):
+        """
+        Create a TF Autoencoder module
+
+        :param prior_network: 2D mask to connect genes to the TF hidden layer,
+            where genes are on 0 (index) and TFs are on 1 (columns).
+            Nonzero values are connections.
+            Must match training data gene order.
+        :type prior_network: pd.DataFrame [G x K], torch.Tensor [G x K]
+        :param use_prior_weights: Use values in the prior_network as the
+            initalization for encoder weights, defaults to False
+        :type use_prior_weights: bool, optional
+        :param input_dropout_rate: Training dropout for input genes,
+            defaults to 0.5
+        :type input_dropout_rate: float, optional
+        :param activation: Apply activation function to hidden
+            layer, defaults to ReLU
+        :type activation: bool, optional
+        :param output_activation: Apply activation function to output
+            layer, defaults to ReLU
+        :type output_activation: bool, optional
+        """
+
+        super().__init__(
+            prior_network=prior_network,
+            use_prior_weights=use_prior_weights,
+            input_dropout_rate=input_dropout_rate,
+            hidden_dropout_rate=hidden_dropout_rate,
+            intermediate_sizes=None,
+            decoder_sizes=None,
+            activation=activation,
+            tfa_activation=activation,
+            output_activation=output_activation
+        )

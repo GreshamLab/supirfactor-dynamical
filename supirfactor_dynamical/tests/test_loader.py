@@ -1,10 +1,10 @@
 import unittest
-
 import anndata as ad
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
 import scipy.sparse as sps
+import torch
 
 from torch.utils.data import DataLoader
 
@@ -13,10 +13,15 @@ from ._stubs import (
     T
 )
 
-from supirfactor_dynamical import TimeDataset
+from supirfactor_dynamical.datasets import (
+    TimeDataset,
+    TimeDatasetIter
+)
 
 
 class TestTimeDataset(unittest.TestCase):
+
+    num_workers = 0
 
     def setUp(self) -> None:
         self.adata = ad.AnnData(
@@ -27,7 +32,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_stratified_sampling(self):
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -65,6 +70,13 @@ class TestTimeDataset(unittest.TestCase):
             np.arange(75, 100)
         )
 
+        self.assertTrue(
+            all(
+                self.adata.obs['time'].iloc[idx].is_monotonic_increasing
+                for idx in td.shuffle_idxes
+            )
+        )
+
         with self.assertRaises(AssertionError):
             npt.assert_equal(
                 td.shuffle_idxes[0],
@@ -75,7 +87,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             2,
         )
@@ -99,7 +111,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -107,7 +119,8 @@ class TestTimeDataset(unittest.TestCase):
 
         dl = DataLoader(
             td,
-            batch_size=5
+            batch_size=5,
+            num_workers=self.num_workers
         )
 
         self.assertEqual(len(td), 25)
@@ -129,14 +142,15 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             2
         )
 
         dl = DataLoader(
             td,
-            batch_size=10
+            batch_size=10,
+            num_workers=self.num_workers
         )
 
         self.assertEqual(len(td), 50)
@@ -156,7 +170,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -181,7 +195,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -206,7 +220,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_stratified_aggregation(self):
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -229,7 +243,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -257,7 +271,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_stratified_inorder(self):
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1
@@ -277,7 +291,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -311,7 +325,7 @@ class TestTimeDataset(unittest.TestCase):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -343,12 +357,11 @@ class TestTimeDataset(unittest.TestCase):
             _last_iteration = td.time_vector
             td.shuffle()
 
-
     def test_time_seq_randomize(self):
 
         td = TimeDataset(
             self.adata.X,
-            self.adata.obs['time'],
+            self.adata.obs['time'].values,
             0,
             4,
             t_step=1,
@@ -380,7 +393,12 @@ class TestTimeDataset(unittest.TestCase):
 
             self.assertGreater(len(td), 0)
 
-            dl = DataLoader(td, 2, drop_last=True)
+            dl = DataLoader(
+                td,
+                2,
+                drop_last=True,
+                num_workers=self.num_workers
+            )
 
             for data in dl:
 
@@ -394,7 +412,7 @@ class TestTimeDataset(unittest.TestCase):
     def test_time_seq_randomize_bad(self):
 
         with self.assertRaises(ValueError):
-            td = TimeDataset(
+            TimeDataset(
                 self.adata.X,
                 self.adata.obs['time'],
                 0,
@@ -405,6 +423,78 @@ class TestTimeDataset(unittest.TestCase):
                 random_seed=1
             )
 
+    def test_time_wrap(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            sequence_length=3,
+            random_seed=1,
+            wrap_times=True
+        )
+
+        self.assertFalse(
+            all(
+                self.adata.obs['time'].iloc[idx].is_monotonic_increasing
+                for idx in td.shuffle_idxes
+            )
+        )
+
+    def test_time_wrap_big(self):
+
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            sequence_length=10,
+            random_seed=1,
+            wrap_times=True
+        )
+
+        self.assertFalse(
+            all(
+                self.adata.obs['time'].iloc[idx].is_monotonic_increasing
+                for idx in td.shuffle_idxes
+            )
+        )
+
+        self.assertEqual(
+            len(td.shuffle_idxes[0]),
+            10
+        )
+
+    def test_return_times_too(self):
+        td = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1,
+            return_times=True
+        )
+
+        dl = DataLoader(
+            td,
+            batch_size=10,
+            num_workers=self.num_workers
+        )
+
+        t = next(iter(dl))
+
+        self.assertEqual(len(t), 2)
+        self.assertTrue(torch.is_tensor(t[0]))
+        self.assertTrue(torch.is_tensor(t[1]))
+
+        torch.testing.assert_close(
+            torch.tile(torch.Tensor([0, 1, 2, 3]), (10, 1)),
+            t[1]
+        )
+
 
 class TestTimeDatasetSparse(TestTimeDataset):
 
@@ -413,3 +503,79 @@ class TestTimeDatasetSparse(TestTimeDataset):
             sps.csr_matrix(X)
         )
         self.adata.obs['time'] = T
+
+
+class TestTimeDatasetDataloader(unittest.TestCase):
+
+    def setUp(self):
+
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+
+        self.adata.obs['time'] = T
+        self.dataset = TimeDataset(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1
+        )
+
+    def test_dataloader_run(self):
+
+        dl = DataLoader(
+            self.dataset,
+            2,
+            drop_last=True
+        )
+
+        for data in dl:
+
+            self.assertEqual(data.shape, (2, 4, 4))
+
+
+class TestTimeDatasetIterDataloader(unittest.TestCase):
+
+    def setUp(self):
+
+        self.adata = ad.AnnData(
+            sps.csr_matrix(X)
+        )
+
+        self.adata.obs['time'] = T
+        self.dataset = TimeDatasetIter(
+            self.adata.X,
+            self.adata.obs['time'],
+            0,
+            4,
+            t_step=1
+        )
+
+    def test_dataloader_serial(self):
+
+        dl = DataLoader(
+            self.dataset,
+            2,
+            drop_last=True
+        )
+
+        for data in dl:
+
+            self.assertEqual(data.shape, (2, 4, 4))
+
+    def test_dataloader_parallel(self):
+
+        dl = DataLoader(
+            self.dataset,
+            2
+        )
+
+        _n = 0
+        for data in dl:
+
+            _n = _n + data.shape[0]
+
+            self.assertEqual(data.shape[1:], (4, 4))
+
+        self.assertEqual(_n, self.adata.X.shape[0] / 4)
