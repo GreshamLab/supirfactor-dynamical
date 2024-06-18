@@ -86,8 +86,8 @@ def process_results_to_dataframes(
             results_object.all_scores[n]
             for n in score_cols
         ] + [
-            model_object.training_r2.item(),
-            model_object.validation_r2.item()
+            _get_tensor_value(model_object.training_r2),
+            _get_tensor_value(model_object.validation_r2)
         ]
 
         loss_df = pd.concat([
@@ -303,3 +303,15 @@ def _combine_weights(*args):
     weights /= len(args)
 
     return weights
+
+
+def _get_tensor_value(x):
+
+    if x is None:
+        return None
+
+    if torch.numel(x) > 1:
+        return x.numpy()
+
+    else:
+        return x.item()
