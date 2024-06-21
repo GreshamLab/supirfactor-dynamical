@@ -310,6 +310,9 @@ def _get_tensor_value(x):
     if x is None:
         return None
 
+    if not torch.is_tensor(x):
+        return x
+
     if torch.numel(x) > 1:
         return x.numpy()
 
