@@ -61,18 +61,6 @@ def train_simple_model(
     # Set training time
     model_ref.set_training_time()
 
-    def _input_data(x):
-        if separate_output_data:
-            return x[0]
-        else:
-            return x
-
-    def _output_data(x):
-        if separate_output_data:
-            return x[1]
-        else:
-            return x
-
     for epoch_num in (
         pbar := tqdm.trange(model_ref.current_epoch + 1, epochs)
     ):
@@ -86,12 +74,12 @@ def train_simple_model(
             to(train_x, device)
 
             predict_x = model_ref(
-                _input_data(train_x)
+                model_ref.input_data(train_x)
             )
 
             loss = loss_function(
                 predict_x,
-                _output_data(train_x)
+                model_ref.output_data(train_x)
             )
 
             loss.backward()
@@ -110,12 +98,12 @@ def train_simple_model(
                 to(val_x, device)
 
                 predict_x = model_ref(
-                    _input_data(val_x)
+                    model_ref.input_data(val_x)
                 )
 
                 loss = loss_function(
                     predict_x,
-                    _output_data(val_x)
+                    model_ref.output_data(val_x)
                 )
 
                 _validation_loss.append(loss.item())
