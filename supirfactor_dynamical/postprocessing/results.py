@@ -197,12 +197,27 @@ def add_classification_metrics_to_dataframe(
             input_data_idx=input_data_idx
         )
 
-        result_df[
-            ("training" + column_prefix + "_actual_" + _labels).tolist()
-        ] = _actuals.numpy()
-        result_df[
-            ("training" + column_prefix + "_predict_" + _labels).tolist()
-        ] = _predicts.numpy()
+        _dfs_to_add = []
+
+        _dfs_to_add.append(
+            pd.DataFrame(
+                [_actuals.numpy()] * len(result_df),
+                index=result_df.index,
+                columns=(
+                    "training" + column_prefix + "_actual_" + _labels
+                ).tolist()
+            )
+        )
+
+        _dfs_to_add.append(
+            pd.DataFrame(
+                [_predicts.numpy()] * len(result_df),
+                index=result_df.index,
+                columns=(
+                    "training" + column_prefix + "_predict_" + _labels
+                ).tolist()
+            )
+        )
 
         if validation_dataloader is not None:
             _predicts, _actuals, _labels = _get_classes(
@@ -212,12 +227,30 @@ def add_classification_metrics_to_dataframe(
                 input_data_idx=input_data_idx
             )
 
-            result_df[
-                ("validation" + column_prefix + "_actual_" + _labels).tolist()
-            ] = _actuals.numpy()
-            result_df[
-                ("validation" + column_prefix + "_predict_" + _labels).tolist()
-            ] = _predicts.numpy()
+        _dfs_to_add.append(
+            pd.DataFrame(
+                [_actuals.numpy()] * len(result_df),
+                index=result_df.index,
+                columns=(
+                    "validation" + column_prefix + "_actual_" + _labels
+                ).tolist()
+            )
+        )
+
+        _dfs_to_add.append(
+            pd.DataFrame(
+                [_predicts.numpy()] * len(result_df),
+                index=result_df.index,
+                columns=(
+                    "validation" + column_prefix + "_predict_" + _labels
+                ).tolist()
+            )
+        )
+
+        result_df = pd.concat(
+            [result_df] + _dfs_to_add,
+            axis=1
+        )
 
     return result_df
 
