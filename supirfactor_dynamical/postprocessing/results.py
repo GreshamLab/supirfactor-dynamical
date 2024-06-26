@@ -166,7 +166,8 @@ def add_classification_metrics_to_dataframe(
     column_prefix="",
     target_data_idx=1,
     input_data_idx=0,
-    add_class_counts=False
+    add_class_counts=False,
+    class_labels=None
 ):
 
     model_object.eval()
@@ -194,7 +195,8 @@ def add_classification_metrics_to_dataframe(
             model_object,
             training_dataloader,
             target_data_idx=target_data_idx,
-            input_data_idx=input_data_idx
+            input_data_idx=input_data_idx,
+            labels=class_labels
         )
 
         _dfs_to_add = []
@@ -224,28 +226,29 @@ def add_classification_metrics_to_dataframe(
                 model_object,
                 training_dataloader,
                 target_data_idx=target_data_idx,
-                input_data_idx=input_data_idx
+                input_data_idx=input_data_idx,
+                labels=class_labels
             )
 
-        _dfs_to_add.append(
-            pd.DataFrame(
-                [_actuals.numpy()] * len(result_df),
-                index=result_df.index,
-                columns=(
-                    "validation" + column_prefix + "_actual_" + _labels
-                ).tolist()
+            _dfs_to_add.append(
+                pd.DataFrame(
+                    [_actuals.numpy()] * len(result_df),
+                    index=result_df.index,
+                    columns=(
+                        "validation" + column_prefix + "_actual_" + _labels
+                    ).tolist()
+                )
             )
-        )
 
-        _dfs_to_add.append(
-            pd.DataFrame(
-                [_predicts.numpy()] * len(result_df),
-                index=result_df.index,
-                columns=(
-                    "validation" + column_prefix + "_predict_" + _labels
-                ).tolist()
+            _dfs_to_add.append(
+                pd.DataFrame(
+                    [_predicts.numpy()] * len(result_df),
+                    index=result_df.index,
+                    columns=(
+                        "validation" + column_prefix + "_predict_" + _labels
+                    ).tolist()
+                )
             )
-        )
 
         result_df = pd.concat(
             [result_df] + _dfs_to_add,
@@ -300,7 +303,8 @@ def _get_classes(
     model,
     data,
     target_data_idx=None,
-    input_data_idx=None
+    input_data_idx=None,
+    labels=None
 ):
 
     _training_classes = 0
@@ -327,10 +331,9 @@ def _get_classes(
                 minlength=_n_class
             )
 
-    try:
-        _labels = data.dataset.datasets[target_data_idx]._data_labels
-        _labels = _labels.str.lower().str.replace(" ", "_")
-    except AttributeError:
+    if labels is not None:
+        _labels = pd.Series(labels).str.lower().str.replace(" ", "_")
+    else:
         _labels = pd.Series([f'{x}' for x in range(_n_class)])
 
     return _training_classes, _actual_classes, _labels
