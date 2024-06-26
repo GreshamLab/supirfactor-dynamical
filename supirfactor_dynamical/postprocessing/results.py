@@ -279,10 +279,20 @@ def _get_classes(
             argmax_last_dim(_predicts),
             minlength=_n_class
         )
-        _actual_classes += torch.bincount(
-            argmax_last_dim(d[target_data_idx]),
-            minlength=_n_class
-        )
+
+        # One hot encoded targets
+        if d[target_data_idx].ndim > 1:
+            _actual_classes += torch.bincount(
+                argmax_last_dim(d[target_data_idx]),
+                minlength=_n_class
+            )
+
+        # Integer encoded targets
+        else:
+            _actual_classes += torch.bincount(
+                d[target_data_idx],
+                minlength=_n_class
+            )
 
     try:
         _labels = data.dataset.datasets[target_data_idx]._data_labels

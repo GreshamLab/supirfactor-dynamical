@@ -6,3 +6,4 @@ from .train_dynamics import (
     pretrain_and_tune_dynamic_model,
     joint_dynamical_model_training
 )
+from .train_simple_models import train_simple_model

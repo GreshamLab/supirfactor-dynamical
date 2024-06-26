@@ -35,7 +35,8 @@ from .training import (
     pretrain_and_tune_dynamic_model,
     train_model,
     train_decoder_submodels,
-    train_embedding_submodels
+    train_embedding_submodels,
+    train_simple_model
 )
 
 from ._io._loader import read
