@@ -1,12 +1,14 @@
 import torch
 from ._model_mixins import (
-    _TrainingMixin
+    _TrainingMixin,
+    _ScalingMixin
 )
 
 
 class LogisticRegressionTorch(
     torch.nn.Module,
-    _TrainingMixin
+    _TrainingMixin,
+    _ScalingMixin
 ):
 
     prior_network = None

@@ -238,11 +238,25 @@ class _H5ADFileLoader:
 
         obs_codes = []
 
+
+        # Apply levels if provided as arg
         for col in cols:
 
-            # Make sure the categories are unified from a master
-            # dataframe
+            # If there's only one column and col_level_dict is
+            # not actually a dict assume it's a list or whatever
+            # of levels for the only column
             if (
+                len(cols) == 1
+                and col_level_dict is not None
+                and not isinstance(col_level_dict, dict)
+            ):
+                obs_df[col].cat.set_categories(
+                    col_level_dict
+                )
+
+            # Otherwise assume it's a dict keyed by column
+            # with the levels for that column
+            elif (
                 col_level_dict is not None and
                 col in col_level_dict.keys()
             ):
