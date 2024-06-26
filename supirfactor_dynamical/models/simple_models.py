@@ -11,6 +11,8 @@ class LogisticRegressionTorch(
     _ScalingMixin
 ):
 
+    type_name = 'logistic_regression'
+
     prior_network = None
     input_dropout_rate = 0.0
     bias = False

@@ -75,3 +75,5 @@ class TestLogisticClass(unittest.TestCase):
         )
 
         self.assertEqual(df.shape, (2, 11))
+        self.assertEqual(model.training_loss_df.shape, (1, 11))
+        self.assertEqual(model.validation_loss_df.shape, (1, 11))
