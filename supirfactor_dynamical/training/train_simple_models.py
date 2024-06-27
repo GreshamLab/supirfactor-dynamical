@@ -71,7 +71,7 @@ def train_simple_model(
         _batch_n = []
         for train_x in training_dataloader:
 
-            to(train_x, device)
+            train_x = to(train_x, device)
 
             predict_x = model_ref(
                 model_ref.input_data(train_x)
@@ -95,7 +95,7 @@ def train_simple_model(
             _validation_n = []
             for val_x in training_dataloader:
 
-                to(val_x, device)
+                val_x = to(val_x, device)
 
                 predict_x = model_ref(
                     model_ref.input_data(val_x)

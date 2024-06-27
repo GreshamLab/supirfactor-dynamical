@@ -65,6 +65,8 @@ class TestLogisticClass(unittest.TestCase):
             separate_output_data=True
         )
 
+        model.to('cpu')
+
         df = add_classification_metrics_to_dataframe(
             pd.DataFrame(['t', 'v']),
             model,
@@ -77,3 +79,8 @@ class TestLogisticClass(unittest.TestCase):
         self.assertEqual(df.shape, (2, 11))
         self.assertEqual(model.training_loss_df.shape, (1, 11))
         self.assertEqual(model.validation_loss_df.shape, (1, 11))
+
+
+class TestLogisticClassCUDA(TestLogisticClass):
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
