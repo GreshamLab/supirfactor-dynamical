@@ -15,12 +15,14 @@ class LogisticRegressionTorch(
 
     prior_network = None
     input_dropout_rate = 0.0
+    hidden_dropout_rate = 0.0
     bias = False
 
     def __init__(
         self,
         prior_network=None,
         input_dropout_rate=0.0,
+        hidden_dropout_rate=0.0,
         bias=False
     ):
 

@@ -38,11 +38,18 @@ def write(
 
     for net_attr in _SERIALIZE_NETWORKS:
         if hasattr(model_object, net_attr) and net_attr == "prior_network":
-            write_network(
-                file_name,
-                model_object.prior_network_dataframe,
-                prefix + 'prior_network'
-            )
+            if isinstance(model_object.prior_network, tuple):
+                write_network(
+                    file_name,
+                    model_object.prior_network,
+                    prefix + 'prior_network'
+                )
+            else:
+                write_network(
+                    file_name,
+                    model_object.prior_network_dataframe,
+                    prefix + 'prior_network'
+                )
 
         elif hasattr(model_object, net_attr):
             write_network(

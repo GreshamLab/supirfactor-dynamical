@@ -17,6 +17,11 @@ from .chromatin_model import (
     ChromatinAwareModel
 )
 
+# Toy models
+from .simple_models import (
+    LogisticRegressionTorch
+)
+
 # Standard mixins
 from ._model_mixins import (
     _TrainingMixin,
@@ -37,7 +42,8 @@ _CLASS_DICT = {
     SupirFactorBiophysical.type_name: SupirFactorBiophysical,
     DecayModule.type_name: DecayModule,
     ChromatinAwareModel.type_name: ChromatinAwareModel,
-    ChromatinModule.type_name: ChromatinModule
+    ChromatinModule.type_name: ChromatinModule,
+    LogisticRegressionTorch.type_name: LogisticRegressionTorch
 }
 
 _not_velocity = [

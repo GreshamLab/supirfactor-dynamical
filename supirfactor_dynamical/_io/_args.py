@@ -12,7 +12,8 @@ _SERIALIZE_ARGS = [
     'tfa_activation',
     'activation',
     'intermediate_sizes',
-    'decoder_sizes'
+    'decoder_sizes',
+    'bias'
 ]
 
 _SERIALIZE_TIME_ARGS = [
