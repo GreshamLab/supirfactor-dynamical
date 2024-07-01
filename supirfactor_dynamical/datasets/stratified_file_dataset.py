@@ -42,7 +42,8 @@ class _H5ADFileLoader:
         layer,
         obs_include_mask=None,
         extra_layers=None,
-        append_obs=True
+        append_obs=True,
+        feature_mask=None
     ):
 
         with h5py.File(file_name) as file_handle:
@@ -57,7 +58,8 @@ class _H5ADFileLoader:
             _data = [_H5ADFileLoader.load_layer(
                 file_handle,
                 layer,
-                obs_include_mask
+                obs_include_mask,
+                feature_mask=feature_mask
             )]
 
             if extra_layers is not None:
@@ -82,7 +84,12 @@ class _H5ADFileLoader:
             return _data
 
     @staticmethod
-    def load_layer(file_handle, layer, obs_include_mask=None):
+    def load_layer(
+        file_handle,
+        layer,
+        obs_include_mask=None,
+        feature_mask=None
+    ):
 
         # Get OBS dataframe
         if layer == 'obs':
@@ -115,17 +122,23 @@ class _H5ADFileLoader:
             )
 
         if sparse_type := _H5ADFileLoader._issparse(_data_reference):
-            return _H5ADFileLoader._load_sparse(
+            data = _H5ADFileLoader._load_sparse(
                 _data_reference,
                 sparse_type,
                 obs_include_mask,
             )
 
         else:
-            return _H5ADFileLoader._load_dense(
+            data = _H5ADFileLoader._load_dense(
                 _data_reference,
                 obs_include_mask
             )
+
+        if feature_mask is not None:
+            feature_mask = torch.Tensor(feature_mask)
+            torch.mul(data, feature_mask[None, :], out=data)
+
+        return data
 
     @staticmethod
     def _get_shape(ref):
@@ -238,7 +251,6 @@ class _H5ADFileLoader:
 
         obs_codes = []
 
-
         # Apply levels if provided as arg
         for col in cols:
 
@@ -286,11 +298,15 @@ class _H5ADFileLoader:
     def get_stratification_indices(
         obs,
         stratification_columns,
-        discard_categories=None
+        discard_categories=None,
+        combine_categories=None
     ):
 
         obs = obs[stratification_columns].copy()
         obs['row_idx_loc'] = np.arange(obs.shape[0])
+
+        if combine_categories is not None:
+            obs = obs.replace(combine_categories)
 
         indices = []
 
@@ -335,12 +351,14 @@ class StratifySingleFileDataset(
         stratification_columns,
         obs_include_mask=None,
         discard_categories=None,
+        combine_categories=None,
         random_state=None,
         file_data_layer='X',
         yield_extra_layers=None,
         yield_obs_cats=None,
         obs_categories=None,
-        one_hot_obs_cats=True
+        one_hot_obs_cats=True,
+        feature_mask=None
     ):
 
         self.loaded_data = self.load_file(
@@ -367,7 +385,8 @@ class StratifySingleFileDataset(
         self.stratification_group_indexes = self.get_stratification_indices(
             obs,
             stratification_columns,
-            discard_categories=discard_categories
+            discard_categories=discard_categories,
+            combine_categories=combine_categories
         )
         self.min_strat_size = min(
             len(x)
