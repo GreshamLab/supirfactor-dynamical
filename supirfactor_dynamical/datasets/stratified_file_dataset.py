@@ -67,7 +67,8 @@ class _H5ADFileLoader:
                     _H5ADFileLoader.load_layer(
                         file_handle,
                         _elayer,
-                        obs_include_mask
+                        obs_include_mask,
+                        feature_mask=feature_mask
                     )
                     for _elayer in extra_layers
                 ]
@@ -366,7 +367,8 @@ class StratifySingleFileDataset(
             layer=file_data_layer,
             extra_layers=yield_extra_layers,
             append_obs=True,
-            obs_include_mask=obs_include_mask
+            obs_include_mask=obs_include_mask,
+            feature_mask=feature_mask
         )
         self.yields_tuple = len(self.loaded_data) > 1
 

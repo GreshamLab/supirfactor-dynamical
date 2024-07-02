@@ -789,6 +789,52 @@ class TestMemoryDenseStratified(unittest.TestCase):
             [3, 3, 3, 3]
         )
 
+    def test_combine_class(self):
+
+        dataset = StratifySingleFileDataset(
+            self.filename,
+            ['strat'],
+            yield_obs_cats=['strat'],
+            combine_categories={'D': 'C'},
+            random_state=10
+        )
+
+        self.assertEqual(
+            len(dataset.loaded_data),
+            2
+        )
+
+        self.assertEqual(
+            len(dataset.loaded_data[0]),
+            100
+        )
+
+        self.assertEqual(
+            [32, 32, 36],
+            list(map(len, dataset.stratification_group_indexes))
+        )
+
+        _classes = []
+
+        for i, (v, c) in enumerate(dataset):
+            self.assertEqual(
+                v.shape,
+                (4,)
+            )
+            self.assertEqual(
+                c.shape,
+                (4,)
+            )
+            _classes.append(c)
+
+        _classes = np.vstack(_classes).sum(0).astype(int)
+        self.assertEqual(i, 95)
+
+        npt.assert_equal(
+            _classes,
+            [32, 32, 29, 3]
+        )
+
     def test_h5_mask(self):
 
         dataset = StratifySingleFileDataset(
