@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import tqdm
+import warnings
 
 from supirfactor_dynamical._utils import (
     to,
@@ -8,18 +9,21 @@ from supirfactor_dynamical._utils import (
 )
 
 
-def train_simple_model(
+def train_simple_multidecoder(
     model,
     training_dataloader,
     epochs,
     device='cpu',
     validation_dataloader=None,
+    decoder_models=('default_decoder', ),
+    freeze_embeddings=False,
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
-    post_epoch_hook=None
+    post_epoch_hook=None,
+    training_loss_weights=None
 ):
     """
-    Train this model
+    Train this model with multiple decoders
 
     :param model: Torch model to be trained.
     :type model: torch.nn.Module
@@ -51,14 +55,33 @@ def train_simple_model(
     else:
         model_ref = model
 
-    to(model_ref, device)
+    if (
+        not hasattr(model_ref, "_multisubmodel_model") or
+        not model_ref._multisubmodel_model
+    ):
+        warnings.warn(
+            "This training loop requires a model with multiple subunits"
+        )
+
+    to(model, device=model.device)
+
+    # Set training time
+    model_ref.set_training_time()
+
+    [model_ref._check_label(x) for x in decoder_models]
+
+    if freeze_embeddings is True:
+        freeze_embeddings = decoder_models
 
     optimizer = model_ref.process_optimizer(
         optimizer
     )
 
-    # Set training time
-    model_ref.set_training_time()
+    if not isinstance(loss_function, (tuple, list)):
+        loss_function = [loss_function] * len(decoder_models)
+
+    if not isinstance(training_loss_weights, (tuple, list)):
+        training_loss_weights = [training_loss_weights] * len(decoder_models)
 
     for epoch_num in (
         pbar := tqdm.trange(model_ref.current_epoch + 1, epochs)
@@ -72,20 +95,36 @@ def train_simple_model(
 
             train_x = to(train_x, device)
 
-            predict_x = model_ref(
-                model_ref.input_data(train_x)
-            )
+            # Run through each decoder in order
+            _decoder_losses = []
+            for x, lf, _target_x, loss_weight in zip(
+                decoder_models,
+                loss_function,
+                train_x,
+                training_loss_weights
+            ):
 
-            loss = loss_function(
-                predict_x,
-                model_ref.output_data(train_x)
-            )
+                model_ref.select_submodel(x, 'decoder')
 
-            loss.backward()
+                predict_x = model_ref(
+                    model_ref.input_data(train_x[0])
+                )
+
+                loss = lf(
+                    predict_x,
+                    model_ref.output_data(_target_x)
+                )
+
+                if loss_weight is not None:
+                    loss *= loss_weight
+
+                loss.backward()
+                _decoder_losses.append(loss.item())
+
             optimizer.step()
             optimizer.zero_grad()
 
-            _batch_losses.append(loss.item())
+            _batch_losses.append(_decoder_losses)
             _batch_n.append(_nobs(train_x))
 
         if validation_dataloader is not None:
@@ -96,16 +135,27 @@ def train_simple_model(
 
                 val_x = to(val_x, device)
 
-                predict_x = model_ref(
-                    model_ref.input_data(val_x)
-                )
+                _decoder_losses = []
+                for x, lf, _target_x in zip(
+                    decoder_models,
+                    loss_function,
+                    val_x
+                ):
 
-                loss = loss_function(
-                    predict_x,
-                    model_ref.output_data(val_x)
-                )
+                    model_ref.select_submodel(x, 'decoder')
 
-                _validation_loss.append(loss.item())
+                    predict_x = model_ref(
+                        model_ref.input_data(val_x[0])
+                    )
+
+                    loss = lf(
+                        predict_x,
+                        model_ref.output_data(_target_x)
+                    )
+
+                    _decoder_losses.append(loss.item())
+
+                _validation_loss.append(_decoder_losses)
                 _validation_n.append(_nobs(val_x))
 
         model_ref.append_loss(

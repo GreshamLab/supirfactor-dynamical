@@ -13,7 +13,8 @@ _SERIALIZE_ARGS = [
     'activation',
     'intermediate_sizes',
     'decoder_sizes',
-    'bias'
+    'bias',
+    'output_nodes'
 ]
 
 _SERIALIZE_TIME_ARGS = [
@@ -58,7 +59,8 @@ _ENCODE_ACTIVATIONS = {
     'relu': 1,
     'softplus': 2,
     'sigmoid': 3,
-    'tanh': 4
+    'tanh': 4,
+    'softmax': 5
 }
 
 _SCALER_ARGS = [

@@ -63,8 +63,7 @@ class TestLogisticClass(unittest.TestCase):
             10,
             device=self.device,
             validation_dataloader=self.data,
-            loss_function=torch.nn.CrossEntropyLoss(),
-            separate_output_data=True
+            loss_function=torch.nn.CrossEntropyLoss()
         )
 
         model.to('cpu')

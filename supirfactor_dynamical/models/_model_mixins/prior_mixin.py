@@ -360,6 +360,8 @@ class _PriorMixin:
             return torch.nn.ReLU(**kwargs)
         elif activation.lower() == 'tanh':
             return torch.nn.Tanh(**kwargs)
+        elif activation.lower() == 'softmax':
+            return torch.nn.Softmax(**kwargs)
         else:
             raise ValueError(
                 f"Activation {activation} unknown"

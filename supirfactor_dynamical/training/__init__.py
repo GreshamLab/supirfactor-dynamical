@@ -7,3 +7,4 @@ from .train_dynamics import (
     joint_dynamical_model_training
 )
 from .train_simple_models import train_simple_model
+from .train_simple_decoders import train_simple_multidecoder
