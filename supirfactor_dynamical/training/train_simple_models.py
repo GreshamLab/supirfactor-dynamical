@@ -108,6 +108,17 @@ def train_simple_model(
                 _validation_loss.append(loss.item())
                 _validation_n.append(_nobs(val_x))
 
+            _validation_loss = np.average(
+                np.array(_validation_loss),
+                axis=0,
+                weights=np.array(_validation_n)
+            )
+            _validation_n = np.sum(_validation_n)
+
+        else:
+            _validation_loss = None
+            _validation_n = None
+
         model_ref.append_loss(
             training_loss=np.average(
                 np.array(_batch_losses),
@@ -115,13 +126,8 @@ def train_simple_model(
                 weights=np.array(_batch_n)
             ),
             training_n=np.sum(_batch_n),
-            validation_loss=np.average(
-                np.array(_validation_loss),
-                axis=0,
-                weights=np.array(_validation_n)
-            ),
-            validation_n=np.sum(_validation_n),
-
+            validation_loss=_validation_loss,
+            validation_n=_validation_n
         )
 
         model_ref.current_epoch = epoch_num

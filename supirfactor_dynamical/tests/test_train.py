@@ -12,7 +12,8 @@ from supirfactor_dynamical import (
     dynamical_model_training as model_training,
     pretrain_and_tune_dynamic_model,
     process_results_to_dataframes,
-    process_combined_results
+    process_combined_results,
+    train_simple_model
 )
 
 from supirfactor_dynamical.models import _CLASS_DICT
@@ -62,6 +63,30 @@ class _SetupMixin:
             index=['A', 'B', 'C', 'D'],
             columns=['A', 'B', 'C']
         )
+
+
+class TestSimpleTraining(_SetupMixin, unittest.TestCase):
+
+    def test_training(self):
+
+        model = get_model('static')(
+            self.prior
+        )
+        pre_weights = torch.clone(model.encoder[0].weight.detach())
+
+        train_simple_model(
+            model,
+            self.static_dataloader,
+            10
+        )
+
+        post_weights = torch.clone(model.encoder[0].weight.detach())
+
+        with self.assertRaises(AssertionError):
+            torch.testing.assert_close(
+                pre_weights,
+                post_weights
+            )
 
 
 class TestCoupledTraining(_SetupMixin, unittest.TestCase):
