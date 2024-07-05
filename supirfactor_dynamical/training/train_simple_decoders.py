@@ -170,8 +170,7 @@ def train_simple_multidecoder(
                 axis=0,
                 weights=np.array(_validation_n)
             ),
-            validation_n=np.sum(_validation_n),
-
+            validation_n=np.sum(_validation_n)
         )
 
         model_ref.current_epoch = epoch_num

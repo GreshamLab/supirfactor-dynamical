@@ -113,7 +113,10 @@ def read(
 
     for encoded_arg in _SERIALIZE_ENCODED_ARGS:
         if encoded_arg in kwargs:
-            kwargs[encoded_arg] = _DECODE_ACTIVATIONS[kwargs[encoded_arg]]
+            if kwargs[encoded_arg] is None:
+                pass
+            else:
+                kwargs[encoded_arg] = _DECODE_ACTIVATIONS[kwargs[encoded_arg]]
 
     # Do special loading stuff for the big biophysical model
     if _state_model == 'biophysical':
