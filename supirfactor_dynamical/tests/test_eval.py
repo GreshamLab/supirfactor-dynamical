@@ -52,7 +52,7 @@ class TestEvalR2Raw(unittest.TestCase):
         )
 
         r2s = r2_score(
-            [[target, predicts]],
+            [[[target, predicts]]],
             _ModelStub(),
             target_data_idx=0,
             input_data_idx=1,

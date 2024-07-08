@@ -13,10 +13,12 @@ from supirfactor_dynamical import (
     pretrain_and_tune_dynamic_model,
     process_results_to_dataframes,
     process_combined_results,
-    train_simple_model
+    train_simple_model,
+    train_model
 )
 
 from supirfactor_dynamical.models import _CLASS_DICT
+from supirfactor_dynamical.datasets import stack_dataloaders
 
 from ._stubs import (
     X,
@@ -79,6 +81,87 @@ class TestSimpleTraining(_SetupMixin, unittest.TestCase):
             model,
             self.static_dataloader,
             10
+        )
+
+        model(X_tensor)
+
+        post_weights = torch.clone(model.encoder[0].weight.detach())
+
+        with self.assertRaises(AssertionError):
+            torch.testing.assert_close(
+                pre_weights,
+                post_weights
+            )
+
+        torch.testing.assert_close(
+            pre_weights != 0,
+            post_weights != 0
+        )
+
+
+class TestStandardTraining(_SetupMixin, unittest.TestCase):
+
+    def test_training(self):
+
+        model = get_model('static')(
+            self.prior
+        )
+        pre_weights = torch.clone(model.encoder[0].weight.detach())
+
+        train_model(
+            model,
+            self.static_dataloader,
+            10
+        )
+
+        model(X_tensor)
+
+        post_weights = torch.clone(model.encoder[0].weight.detach())
+
+        with self.assertRaises(AssertionError):
+            torch.testing.assert_close(
+                pre_weights,
+                post_weights
+            )
+
+        torch.testing.assert_close(
+            pre_weights != 0,
+            post_weights != 0
+        )
+
+    def test_stacked_dl_training(self):
+
+        model = get_model('static')(
+            self.prior
+        )
+        pre_weights = torch.clone(model.encoder[0].weight.detach())
+
+        _stack_data = torch.cat([
+            x
+            for x in stack_dataloaders(
+                (self.static_dataloader, self.static_dataloader)
+            )
+        ])
+
+        _stack_data_2 = torch.cat([
+            x for x in self.static_dataloader
+        ])
+
+        _stack_data_2 = torch.cat([
+            _stack_data_2,
+            _stack_data_2
+        ])
+
+        torch.testing.assert_close(_stack_data, _stack_data_2)
+
+        train_model(
+            model,
+            (self.static_dataloader, self.static_dataloader),
+            10,
+            validation_dataloader=(
+                self.static_dataloader,
+                self.static_dataloader
+            )
         )
 
         model(X_tensor)

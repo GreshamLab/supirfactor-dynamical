@@ -3,7 +3,7 @@ import tqdm
 import warnings
 import numpy as np
 
-from supirfactor_dynamical.models._model_mixins.training_mixin import (
+from supirfactor_dynamical.datasets import (
     _shuffle_time_data
 )
 from supirfactor_dynamical.training._utils import _set_submodels

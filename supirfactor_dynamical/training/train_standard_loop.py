@@ -6,6 +6,10 @@ from supirfactor_dynamical._utils import (
     to,
     _nobs
 )
+from supirfactor_dynamical.datasets import (
+    stack_dataloaders,
+    _shuffle_time_data
+)
 
 
 def train_model(
@@ -65,7 +69,8 @@ def train_model(
 
         _batch_losses = []
         _batch_n = []
-        for train_x in training_dataloader:
+
+        for train_x in stack_dataloaders(training_dataloader):
 
             if output_data_index is not None:
                 target_x = to(
@@ -106,7 +111,7 @@ def train_model(
         if validation_dataloader is not None:
 
             _vloss, _vn = model_ref._calculate_validation_loss(
-                validation_dataloader,
+                stack_dataloaders(validation_dataloader),
                 loss_function,
                 input_data_index=input_data_index,
                 output_data_index=output_data_index
@@ -142,10 +147,3 @@ def train_model(
         to(model_ref, final_device)
 
     return model
-
-
-def _shuffle_time_data(dl):
-    try:
-        dl.dataset.shuffle()
-    except AttributeError:
-        pass

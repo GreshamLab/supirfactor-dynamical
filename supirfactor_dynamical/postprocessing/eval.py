@@ -13,6 +13,7 @@ from supirfactor_dynamical._utils.misc import (
     argmax_last_dim,
     to
 )
+from supirfactor_dynamical.datasets import stack_dataloaders
 
 
 def r2_score(
@@ -34,7 +35,7 @@ def r2_score(
     _n = 0
 
     with torch.no_grad():
-        for data in dataloader:
+        for data in stack_dataloaders(dataloader):
 
             input_data, target_data = _extract_data(
                 data,

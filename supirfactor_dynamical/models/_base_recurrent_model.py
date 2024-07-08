@@ -106,14 +106,14 @@ class _TF_RNN_mixin(
         self.eval()
 
         self.training_r2_over_time = [
-            r2_score([x], self, multioutput=multioutput)
+            r2_score([[x]], self, multioutput=multioutput)
             for x in training_dataloader.dataset.get_times_in_order()
         ]
 
         if validation_dataloader is not None:
 
             self.validation_r2_over_time = [
-                r2_score([x], self, multioutput=multioutput)
+                r2_score([[x]], self, multioutput=multioutput)
                 for x in validation_dataloader.dataset.get_times_in_order()
             ]
 

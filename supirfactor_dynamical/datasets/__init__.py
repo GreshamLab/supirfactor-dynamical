@@ -31,3 +31,34 @@ from .anndata_backed_dataset import (
 from .stratified_file_dataset import (
     StratifiedFilesDataset
 )
+
+
+def stack_dataloaders(loaders):
+
+    if loaders is None:
+        return None
+    elif (
+        isinstance(loaders, DataLoader) or
+        torch.is_tensor(loaders)
+    ):
+        yield from loaders
+    else:
+        for loader in loaders:
+            yield from loader
+
+
+def _shuffle_time_data(dl):
+    if dl is None:
+        return None
+
+    try:
+        dl.dataset.shuffle()
+    except AttributeError:
+        pass
+
+    if (
+        not isinstance(dl, DataLoader) and
+        not torch.is_tensor(dl)
+    ):
+        for d in dl:
+            _shuffle_time_data(d)

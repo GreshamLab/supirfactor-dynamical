@@ -13,6 +13,7 @@ from supirfactor_dynamical._utils import (
 from supirfactor_dynamical._io._writer import write
 from supirfactor_dynamical._utils import _check_data_offsets
 from supirfactor_dynamical.postprocessing.eval import r2_score
+from supirfactor_dynamical.datasets import stack_dataloaders
 
 from torch.utils.data import DataLoader
 
@@ -696,7 +697,7 @@ class _TrainingMixin:
         _count = []
 
         with torch.no_grad():
-            for data in dataloader:
+            for data in stack_dataloaders(dataloader):
                 _score.append(
                     loss_function(
                         self._slice_data_and_forward(data),
@@ -725,10 +726,3 @@ class _TrainingMixin:
             )
 
         return _score
-
-
-def _shuffle_time_data(dl):
-    try:
-        dl.dataset.shuffle()
-    except AttributeError:
-        pass

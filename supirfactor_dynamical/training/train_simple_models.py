@@ -6,6 +6,7 @@ from supirfactor_dynamical._utils import (
     to,
     _nobs
 )
+from supirfactor_dynamical.datasets import stack_dataloaders
 
 
 def train_simple_model(
@@ -69,7 +70,7 @@ def train_simple_model(
 
         _batch_losses = []
         _batch_n = []
-        for train_x in training_dataloader:
+        for train_x in stack_dataloaders(training_dataloader):
 
             train_x = to(train_x, device)
 
@@ -93,7 +94,7 @@ def train_simple_model(
 
             _validation_loss = []
             _validation_n = []
-            for val_x in training_dataloader:
+            for val_x in stack_dataloaders(validation_dataloader):
 
                 val_x = to(val_x, device)
 
