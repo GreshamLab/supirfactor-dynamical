@@ -16,7 +16,8 @@ def train_simple_model(
     validation_dataloader=None,
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
-    post_epoch_hook=None
+    post_epoch_hook=None,
+    loss_index=None
 ):
     """
     Train this model
@@ -127,7 +128,9 @@ def train_simple_model(
             ),
             training_n=np.sum(_batch_n),
             validation_loss=_validation_loss,
-            validation_n=_validation_n
+            validation_n=_validation_n,
+            training_loss_idx=loss_index,
+            validation_loss_idx=loss_index
         )
 
         model_ref.current_epoch = epoch_num

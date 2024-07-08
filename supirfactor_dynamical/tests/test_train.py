@@ -22,7 +22,8 @@ from ._stubs import (
     X,
     A,
     T,
-    XV_tensor
+    XV_tensor,
+    X_tensor
 )
 
 
@@ -80,6 +81,8 @@ class TestSimpleTraining(_SetupMixin, unittest.TestCase):
             10
         )
 
+        model(X_tensor)
+
         post_weights = torch.clone(model.encoder[0].weight.detach())
 
         with self.assertRaises(AssertionError):
@@ -87,6 +90,11 @@ class TestSimpleTraining(_SetupMixin, unittest.TestCase):
                 pre_weights,
                 post_weights
             )
+
+        torch.testing.assert_close(
+            pre_weights != 0,
+            post_weights != 0
+        )
 
 
 class TestCoupledTraining(_SetupMixin, unittest.TestCase):

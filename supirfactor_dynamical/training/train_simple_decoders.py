@@ -20,7 +20,8 @@ def train_simple_multidecoder(
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
     post_epoch_hook=None,
-    training_loss_weights=None
+    training_loss_weights=None,
+    loss_index=None
 ):
     """
     Train this model with multiple decoders
@@ -170,7 +171,9 @@ def train_simple_multidecoder(
                 axis=0,
                 weights=np.array(_validation_n)
             ),
-            validation_n=np.sum(_validation_n)
+            validation_n=np.sum(_validation_n),
+            training_loss_idx=loss_index,
+            validation_loss_idx=loss_index
         )
 
         model_ref.current_epoch = epoch_num
