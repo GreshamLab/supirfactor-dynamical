@@ -37,6 +37,9 @@ from ._stubs import (
     PEAK_TO_TF_PRIOR
 )
 
+from packaging.version import Version
+NUMPY_2 = Version(np.__version__) >= Version('2.0.0')
+
 
 class _ModelStub:
 
@@ -82,6 +85,7 @@ class _SetupMixin:
             )
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializeHelpers(_SetupMixin, unittest.TestCase):
 
     def test_index_strings(self):
@@ -173,6 +177,7 @@ class TestSerializeHelpers(_SetupMixin, unittest.TestCase):
         pdt.assert_index_equal(adata.var_names, adata2.var_names)
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializer(_SetupMixin, unittest.TestCase):
 
     velocity = False
@@ -515,24 +520,28 @@ class TestSerializer(_SetupMixin, unittest.TestCase):
             )
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializeDF(TestSerializer):
 
     prior = pd.DataFrame(A)
     inv_prior = pd.DataFrame(pinv(A)).T.values
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializeAD(TestSerializer):
 
     prior = ad.AnnData(A)
     inv_prior = pd.DataFrame(pinv(A)).T.values
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializeADSparseCSR(TestSerializer):
 
     prior = ad.AnnData(csr_matrix(A))
     inv_prior = pd.DataFrame(pinv(A)).T.values
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestBiophysical(_SetupMixin, unittest.TestCase):
 
     prior = A
@@ -767,6 +776,7 @@ class TestBiophysical(_SetupMixin, unittest.TestCase):
         )
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestChromatin(_SetupMixin, unittest.TestCase):
 
     def test_h5_chromatin(self):
@@ -837,6 +847,7 @@ class TestChromatin(_SetupMixin, unittest.TestCase):
         )
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializerVelocity(TestSerializer):
 
     velocity = True
@@ -846,6 +857,7 @@ class TestSerializerVelocity(TestSerializer):
         pass
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):
 
     prior = A
@@ -925,11 +937,38 @@ class TestSerializeMultimodel(_SetupMixin, unittest.TestCase):
         )
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestSerializerCUDA(TestSerializer):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
 class TestBiophysicalCUDA(TestBiophysical):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
+@unittest.skipIf(NUMPY_2, 'NUMPY_TABLES_FIX')
+class TestSerializeSimple(unittest.TestCase):
+
+    def test_serialize(self):
+
+        model = get_model('logistic_regression')(
+            (4, 2),
+            bias=True
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            _model_file = os.path.join(tempdir, 'model.h5')
+            model.save(_model_file)
+            model_load = read(_model_file)
+
+            torch.testing.assert_close(
+                model.classifier[1].weight,
+                model_load.classifier[1].weight
+            )
+            torch.testing.assert_close(
+                model.classifier[1].bias,
+                model_load.classifier[1].bias
+            )

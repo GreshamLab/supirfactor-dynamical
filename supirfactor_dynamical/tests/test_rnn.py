@@ -17,6 +17,7 @@ from ._stubs import (
     X,
     X_tensor,
     A,
+    A_tensor,
     T
 )
 
@@ -95,14 +96,14 @@ class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
         self.dyn_ae.set_drop_tfs(None)
 
         npt.assert_almost_equal(
-            self._activation((X_tensor @ A).numpy()),
+            self._activation((X_tensor @ A_tensor).numpy()),
             self.dyn_ae.latent_layer(X_tensor).numpy(),
             decimal=5
         )
 
         self.dyn_ae.set_drop_tfs(0)
 
-        ll = (X_tensor @ A).numpy()
+        ll = (X_tensor @ A_tensor).numpy()
         ll[:, 0] = 0.
         npt.assert_almost_equal(
             ll,
@@ -111,7 +112,7 @@ class TestTFRecurrentDecoder(_SetupMixin, unittest.TestCase):
 
         self.dyn_ae.set_drop_tfs([0, 1])
 
-        ll = (X_tensor @ A).numpy()
+        ll = (X_tensor @ A_tensor).numpy()
         ll = self._activation(ll)
         ll[:, [0, 1]] = 0.
         npt.assert_almost_equal(
@@ -561,12 +562,12 @@ class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            train_r2,
+            train_r2.item(),
             0.75
         )
 
         npt.assert_almost_equal(
-            val_r2,
+            val_r2.item(),
             0.75
         )
 
@@ -634,7 +635,7 @@ class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            train_r2[0],
+            train_r2[0].item(),
             0.75
         )
 
@@ -644,7 +645,7 @@ class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            val_r2[0],
+            val_r2[0].item(),
             0.75
         )
 
@@ -675,7 +676,7 @@ class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            train_r2[0],
+            train_r2[0].item(),
             0.75
         )
 
@@ -685,7 +686,7 @@ class TestTFRecurrentExtras(_SetupMixin, unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            val_r2[0],
+            val_r2[0].item(),
             0.75
         )
 

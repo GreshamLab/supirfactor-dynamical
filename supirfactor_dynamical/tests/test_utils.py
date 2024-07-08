@@ -20,6 +20,7 @@ from ._stubs import (
     X,
     X_SP,
     A,
+    A_tensor,
     X_tensor
 )
 
@@ -167,9 +168,10 @@ class TestMathUtils(unittest.TestCase):
     def test_erv(self):
 
         a_inv = pinv(A)
+        a_inv_tensor = torch.Tensor(a_inv)
 
-        latent = X_tensor @ A
-        full = (X_tensor - latent @ a_inv) ** 2
+        latent = X_tensor @ A_tensor
+        full = (X_tensor - latent @ a_inv_tensor) ** 2
         full = full.sum(axis=0)
 
         rss_manual = torch.zeros(4, 3)
@@ -177,7 +179,9 @@ class TestMathUtils(unittest.TestCase):
         for i in range(3):
             latent_drop = torch.clone(latent)
             latent_drop[:, i] = 0
-            rss_manual[:, i] = (X_tensor - latent_drop @ a_inv ** 2).sum(
+            rss_manual[:, i] = (
+                X_tensor - latent_drop @ a_inv_tensor ** 2
+            ).sum(
                 axis=0
             )
 
@@ -194,6 +198,7 @@ class TestMathUtils(unittest.TestCase):
     def test_rss(self):
 
         a_inv = pinv(A)
+        a_inv_tensor = torch.Tensor(a_inv)
 
         npt.assert_almost_equal(
             np.sum(
@@ -202,7 +207,7 @@ class TestMathUtils(unittest.TestCase):
             ),
             _calculate_rss(
                 X_tensor,
-                X_tensor @ A @ a_inv
+                X_tensor @ A_tensor @ a_inv_tensor
             ),
             decimal=5
         )
@@ -210,10 +215,11 @@ class TestMathUtils(unittest.TestCase):
     def test_r2_ybar(self):
 
         a_inv = pinv(A)
+        a_inv_tensor = torch.Tensor(a_inv)
 
         rss = _calculate_rss(
             X_tensor,
-            X_tensor @ A @ a_inv
+            X_tensor @ A_tensor @ a_inv_tensor
         )
 
         tss = _calculate_tss(
@@ -235,10 +241,11 @@ class TestMathUtils(unittest.TestCase):
     def test_r2(self):
 
         a_inv = pinv(A)
+        a_inv_tensor = torch.Tensor(a_inv)
 
         rss = _calculate_rss(
             X_tensor,
-            X_tensor @ A @ a_inv
+            X_tensor @ A_tensor @ a_inv_tensor
         )
 
         tss = _calculate_tss(

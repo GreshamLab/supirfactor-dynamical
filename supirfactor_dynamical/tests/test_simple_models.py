@@ -1,11 +1,9 @@
 import unittest
 import pandas as pd
 import torch
-import tempfile
-import os
 from torch.utils.data import DataLoader
 
-from supirfactor_dynamical import train_simple_model, read
+from supirfactor_dynamical import train_simple_model
 from supirfactor_dynamical.postprocessing.results import (
     add_classification_metrics_to_dataframe
 )
@@ -80,27 +78,6 @@ class TestLogisticClass(unittest.TestCase):
         self.assertEqual(df.shape, (2, 11))
         self.assertEqual(model.training_loss_df.shape, (1, 11))
         self.assertEqual(model.validation_loss_df.shape, (1, 11))
-
-    def test_serialize(self):
-
-        model = LogisticRegressionTorch(
-            (4, 2),
-            bias=True
-        )
-
-        with tempfile.TemporaryDirectory() as tempdir:
-            _model_file = os.path.join(tempdir, 'model.h5')
-            model.save(_model_file)
-            model_load = read(_model_file)
-
-            torch.testing.assert_close(
-                model.classifier[1].weight,
-                model_load.classifier[1].weight
-            )
-            torch.testing.assert_close(
-                model.classifier[1].bias,
-                model_load.classifier[1].bias
-            )
 
 
 class TestLogisticClassCUDA(TestLogisticClass):

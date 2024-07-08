@@ -28,6 +28,7 @@ G_TO_PEAK_PRIOR = _rng.choice([0, 1], size=(4, 25), p=[0.75, 0.25])
 PEAK_TO_TF_PRIOR = _rng.choice([0, 1], size=(25, 3), p=[0.75, 0.25])
 
 X_tensor = torch.Tensor(X)
+A_tensor = torch.Tensor(A)
 
 _V_BASE = np.diff(np.vstack((
     np.zeros(4),

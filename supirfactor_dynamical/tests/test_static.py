@@ -19,6 +19,7 @@ from ._stubs import (
     X,
     X_tensor,
     A,
+    A_tensor,
     T
 )
 
@@ -335,12 +336,12 @@ class TestTFAutoencoder(unittest.TestCase):
         )
 
         npt.assert_almost_equal(
-            train_r2,
+            train_r2.item(),
             0.75
         )
 
         npt.assert_almost_equal(
-            val_r2,
+            val_r2.item(),
             0.75
         )
 
@@ -455,7 +456,7 @@ class TestTFDropouts(unittest.TestCase):
         self.ae.set_drop_tfs(None)
 
         npt.assert_almost_equal(
-            (X_tensor @ A).numpy(),
+            (X_tensor @ A_tensor).numpy(),
             self.ae.latent_layer(X_tensor).numpy()
         )
 
@@ -474,13 +475,13 @@ class TestTFDropouts(unittest.TestCase):
         self.ae.set_drop_tfs(None)
 
         npt.assert_almost_equal(
-            (X_tensor @ A).numpy(),
+            (X_tensor @ A_tensor).numpy(),
             self.ae.latent_layer(X_tensor).numpy()
         )
 
         self.ae.set_drop_tfs(0)
 
-        ll = (X_tensor @ A).numpy()
+        ll = (X_tensor @ A_tensor).numpy()
         ll[:, 0] = 0.
         npt.assert_almost_equal(
             ll,
@@ -489,7 +490,7 @@ class TestTFDropouts(unittest.TestCase):
 
         self.ae.set_drop_tfs([0, 1])
 
-        ll = (X_tensor @ A).numpy()
+        ll = (X_tensor @ A_tensor).numpy()
         ll[:, [0, 1]] = 0.
         npt.assert_almost_equal(
             ll,
