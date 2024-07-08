@@ -156,7 +156,7 @@ def _get_data_from_ad(
 
     if densify:
         try:
-            _output = _output.A
+            _output = _output.toarray()
         except AttributeError:
             pass
 

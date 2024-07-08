@@ -172,7 +172,7 @@ class TestSerializeHelpers(_SetupMixin, unittest.TestCase):
 
         adata2 = _read_ad(self.temp_file_name, "adata")
 
-        npt.assert_almost_equal(adata.X.A, adata2.X.A)
+        npt.assert_almost_equal(adata.X.toarray(), adata2.X.toarray())
         pdt.assert_index_equal(adata.obs_names, adata2.obs_names)
         pdt.assert_index_equal(adata.var_names, adata2.var_names)
 

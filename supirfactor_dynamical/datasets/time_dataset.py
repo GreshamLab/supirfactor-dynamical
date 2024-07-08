@@ -380,8 +380,9 @@ class _TimeDataMixin:
 
         if issparse(_data) and not keep_sparse:
 
+            _data = _data.toarray()
             _data = torch.Tensor(
-                _data.A.reshape(-1) if _data.shape[0] == 1 else _data.A
+                _data.reshape(-1) if _data.shape[0] == 1 else _data
             )
 
         return _data

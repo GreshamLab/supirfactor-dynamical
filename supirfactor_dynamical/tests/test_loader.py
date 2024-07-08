@@ -96,7 +96,7 @@ class TestTimeDataset(unittest.TestCase):
         self.assertIsNone(td.strat_idxes)
 
         try:
-            x = self.adata.X.A
+            x = self.adata.X.toarray()
         except AttributeError:
             x = self.adata.X
 

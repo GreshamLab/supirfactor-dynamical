@@ -1,6 +1,6 @@
 import anndata as ad
 import numpy as np
-
+import scipy.sparse as sps
 
 from pandas.api.types import is_float_dtype
 
@@ -112,7 +112,7 @@ def load_data_files_jtb_2023(
             count_data = count_scaling.fit_transform(count_data)
 
             try:
-                count_data = count_data.A
+                count_data = count_data.toarray()
             except AttributeError:
                 pass
 
@@ -226,7 +226,7 @@ def _shuffle_data(
         return _sim_ints(
             pvec / pvec.sum(),
             np.full(pvec.shape, 3099, dtype=int),
-            sparse=hasattr(x, 'A')
+            sparse=sps.issparse(x)
         )
 
     elif sim_velo:
