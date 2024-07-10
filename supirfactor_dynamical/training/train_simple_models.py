@@ -92,30 +92,31 @@ def train_simple_model(
 
         if validation_dataloader is not None:
 
-            _validation_loss = []
-            _validation_n = []
-            for val_x in stack_dataloaders(validation_dataloader):
+            with torch.no_grad():
+                _validation_loss = []
+                _validation_n = []
+                for val_x in stack_dataloaders(validation_dataloader):
 
-                val_x = to(val_x, device)
+                    val_x = to(val_x, device)
 
-                predict_x = model_ref(
-                    model_ref.input_data(val_x)
+                    predict_x = model_ref(
+                        model_ref.input_data(val_x)
+                    )
+
+                    loss = loss_function(
+                        predict_x,
+                        model_ref.output_data(val_x)
+                    )
+
+                    _validation_loss.append(loss.item())
+                    _validation_n.append(_nobs(val_x))
+
+                _validation_loss = np.average(
+                    np.array(_validation_loss),
+                    axis=0,
+                    weights=np.array(_validation_n)
                 )
-
-                loss = loss_function(
-                    predict_x,
-                    model_ref.output_data(val_x)
-                )
-
-                _validation_loss.append(loss.item())
-                _validation_n.append(_nobs(val_x))
-
-            _validation_loss = np.average(
-                np.array(_validation_loss),
-                axis=0,
-                weights=np.array(_validation_n)
-            )
-            _validation_n = np.sum(_validation_n)
+                _validation_n = np.sum(_validation_n)
 
         else:
             _validation_loss = None

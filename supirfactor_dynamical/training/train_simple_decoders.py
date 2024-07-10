@@ -7,6 +7,7 @@ from supirfactor_dynamical._utils import (
     to,
     _nobs
 )
+from supirfactor_dynamical.datasets import stack_dataloaders
 
 
 def train_simple_multidecoder(
@@ -16,6 +17,8 @@ def train_simple_multidecoder(
     device='cpu',
     validation_dataloader=None,
     decoder_models=('default_decoder', ),
+    skip_decoder_training_models=tuple(),
+    decoder_models_validation=None,
     freeze_embeddings=False,
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
@@ -74,6 +77,9 @@ def train_simple_multidecoder(
     if freeze_embeddings is True:
         freeze_embeddings = decoder_models
 
+    if decoder_models_validation is None:
+        decoder_models_validation = decoder_models
+
     optimizer = model_ref.process_optimizer(
         optimizer
     )
@@ -92,7 +98,7 @@ def train_simple_multidecoder(
 
         _batch_losses = []
         _batch_n = []
-        for train_x in training_dataloader:
+        for train_x in stack_dataloaders(training_dataloader):
 
             train_x = to(train_x, device)
 
@@ -105,7 +111,14 @@ def train_simple_multidecoder(
                 training_loss_weights
             ):
 
+                if x in skip_decoder_training_models:
+                    continue
+
                 model_ref.select_submodel(x, 'decoder')
+
+                if x in freeze_embeddings:
+                    model_ref.freeze_submodel('encoder')
+                    model_ref.freeze_submodel('intermediate')
 
                 predict_x = model_ref(
                     model_ref.input_data(train_x[0])
@@ -122,6 +135,10 @@ def train_simple_multidecoder(
                 loss.backward()
                 _decoder_losses.append(loss.item())
 
+                if x in freeze_embeddings:
+                    model_ref.freeze_submodel('encoder', unfreeze=True)
+                    model_ref.freeze_submodel('intermediate', unfreeze=True)
+
             optimizer.step()
             optimizer.zero_grad()
 
@@ -132,32 +149,39 @@ def train_simple_multidecoder(
 
             _validation_loss = []
             _validation_n = []
-            for val_x in training_dataloader:
 
-                val_x = to(val_x, device)
+            with torch.no_grad():
 
-                _decoder_losses = []
-                for x, lf, _target_x in zip(
-                    decoder_models,
-                    loss_function,
-                    val_x
-                ):
+                for val_x in stack_dataloaders(training_dataloader):
 
-                    model_ref.select_submodel(x, 'decoder')
+                    val_x = to(val_x, device)
 
-                    predict_x = model_ref(
-                        model_ref.input_data(val_x[0])
-                    )
+                    _decoder_losses = []
+                    for x, lf, _target_x in zip(
+                        decoder_models,
+                        loss_function,
+                        val_x
+                    ):
 
-                    loss = lf(
-                        predict_x,
-                        model_ref.output_data(_target_x)
-                    )
+                        model_ref.select_submodel(x, 'decoder')
 
-                    _decoder_losses.append(loss.item())
+                        predict_x = model_ref(
+                            model_ref.input_data(val_x[0])
+                        )
 
-                _validation_loss.append(_decoder_losses)
-                _validation_n.append(_nobs(val_x))
+                        loss = lf(
+                            predict_x,
+                            model_ref.output_data(_target_x)
+                        )
+
+                        _decoder_losses.append(loss.item())
+
+                    _validation_loss.append(_decoder_losses)
+                    _validation_n.append(_nobs(val_x))
+
+        else:
+            _validation_loss = None
+            _validation_n = None
 
         model_ref.append_loss(
             training_loss=np.average(

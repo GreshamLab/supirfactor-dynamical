@@ -37,14 +37,29 @@ def stack_dataloaders(loaders):
 
     if loaders is None:
         return None
+
+    # If the loader is a DataLoader or a Tensor
+    # yield from it, making this essentially a
+    # noop
     elif (
         isinstance(loaders, DataLoader) or
         torch.is_tensor(loaders)
     ):
         yield from loaders
+
+    # Otherwise treat it as an iterable of generators
     else:
         for loader in loaders:
-            yield from loader
+            # IF this is a tensor, yield it
+            # because it's probably a list of tensors
+            # for training
+            if torch.is_tensor(loader):
+                yield loader
+
+            # Otherwise yield from it because it's
+            # probably a DataLoader
+            else:
+                yield from loader
 
 
 def _shuffle_time_data(dl):
