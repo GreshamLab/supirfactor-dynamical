@@ -19,7 +19,7 @@ def train_simple_multidecoder(
     decoder_models=('default_decoder', ),
     skip_decoder_training_models=tuple(),
     decoder_models_validation=None,
-    freeze_embeddings=False,
+    freeze_embeddings=tuple(),
     loss_function=torch.nn.MSELoss(),
     optimizer=None,
     post_epoch_hook=None,
