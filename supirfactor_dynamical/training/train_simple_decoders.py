@@ -112,6 +112,7 @@ def train_simple_multidecoder(
             ):
 
                 if x in skip_decoder_training_models:
+                    _decoder_losses.append(0.)
                     continue
 
                 model_ref.select_submodel(x, 'decoder')
