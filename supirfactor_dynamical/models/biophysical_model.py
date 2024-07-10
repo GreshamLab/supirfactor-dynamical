@@ -372,37 +372,22 @@ class SupirFactorBiophysical(
             return_decay_constants=True
         )
 
-    def train_model(
-        self,
-        training_dataloader,
-        epochs,
-        validation_dataloader=None,
-        loss_function=torch.nn.MSELoss(),
-        optimizer=None,
-        **kwargs
-    ):
+    def process_optimizer(self, optimizer, params=None):
 
-        # Create separate optimizers for the decay and transcription
-        # models and pass them as tuple
-        optimizer = (
+        # Create separate optimizers for the decay, for the
+        # transcription, and for the combined models
+
+        return (
             self._transcription_model.process_optimizer(
                 optimizer
             ),
             self._decay_model.process_optimizer(
                 optimizer
             ) if self.has_decay else False,
-            self.process_optimizer(
-                optimizer
+            super().process_optimizer(
+                optimizer,
+                params=params
             )
-        )
-
-        return super().train_model(
-            training_dataloader,
-            epochs,
-            validation_dataloader,
-            loss_function,
-            optimizer,
-            **kwargs
         )
 
     def _training_step(

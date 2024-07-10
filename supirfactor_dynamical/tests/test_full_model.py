@@ -102,7 +102,7 @@ class TestDynamicalModel(unittest.TestCase):
             _opt = None
 
         self.opt = (
-            self.dynamical_model.process_optimizer(None),
+            self.dynamical_model.process_optimizer(None)[2],
             self.dynamical_model._transcription_model.process_optimizer(None),
             _opt
         )
