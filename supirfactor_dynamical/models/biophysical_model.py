@@ -441,8 +441,7 @@ class SupirFactorBiophysical(
             train_x,
             optimizer[2] if self._decay_optimize(epoch_num) else
             optimizer[0],
-            loss_function,
-            input_x=self._slice_data_and_forward(train_x)
+            loss_function
         )
 
         return loss, decay_loss
