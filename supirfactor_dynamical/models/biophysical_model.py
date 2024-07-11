@@ -41,6 +41,7 @@ class SupirFactorBiophysical(
     separately_optimize_decay_model = False
     decay_epoch_delay = 0
     decay_k = 20
+    decay_loss_weight = None
 
     @property
     def has_decay(self):
@@ -52,6 +53,7 @@ class SupirFactorBiophysical(
         decay_model=None,
         decay_epoch_delay=None,
         decay_k=20,
+        decay_loss_weight=None,
         separately_optimize_decay_model=False,
         use_prior_weights=False,
         input_dropout_rate=0.5,
@@ -104,6 +106,7 @@ class SupirFactorBiophysical(
 
         self.decay_epoch_delay = decay_epoch_delay
         self.separately_optimize_decay_model = separately_optimize_decay_model
+        self.decay_loss_weight = decay_loss_weight
 
         if decay_model is False:
             output_activation = None
@@ -433,31 +436,16 @@ class SupirFactorBiophysical(
 
             decay_loss = 0.
 
-        loss = self._training_step_joint(
-                epoch_num,
-                train_x,
-                optimizer[2] if self._decay_optimize(epoch_num) else
-                optimizer[0],
-                loss_function
-            )
-
-        return loss, decay_loss
-
-    def _training_step_joint(
-        self,
-        epoch_num,
-        train_x,
-        optimizer,
-        loss_function
-    ):
-
-        return super()._training_step(
+        loss = super()._training_step(
             epoch_num,
             train_x,
-            optimizer,
+            optimizer[2] if self._decay_optimize(epoch_num) else
+            optimizer[0],
             loss_function,
             input_x=self._slice_data_and_forward(train_x)
         )
+
+        return loss, decay_loss
 
     def _training_step_decay(
         self,
@@ -494,7 +482,8 @@ class SupirFactorBiophysical(
             optimizer,
             loss_function,
             input_x=neg,
-            target_x=_compare_x
+            target_x=_compare_x,
+            loss_weight=self.decay_loss_weight
         )
 
     def _calculate_all_losses(

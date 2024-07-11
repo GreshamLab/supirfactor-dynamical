@@ -5,6 +5,7 @@ _SERIALIZE_ARGS = [
     'time_dependent_decay',
     'decay_k',
     'decay_epoch_delay',
+    'decay_loss_weight',
     'n_genes',
     'hidden_layer_width',
     'n_peaks',

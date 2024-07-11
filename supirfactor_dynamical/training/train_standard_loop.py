@@ -132,7 +132,11 @@ def train_model(
         pbar.set_description(f"[{epoch_num} n={np.sum(_batch_n)}]")
 
         if post_epoch_hook is not None:
-            post_epoch_hook(model_ref)
+
+            # If the hook returns True
+            # it's early stopping time
+            if post_epoch_hook(model_ref) is True:
+                break
 
     model_ref.eval()
 
