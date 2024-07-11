@@ -33,3 +33,5 @@ from .time_offsets import (
     _get_data_offsets,
     _check_data_offsets
 )
+
+from .early_stopping import check_loss_for_early_stop
