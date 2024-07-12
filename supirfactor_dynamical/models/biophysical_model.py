@@ -422,14 +422,28 @@ class SupirFactorBiophysical(
         :rtype: float, float, float
         """
 
-        if self.separately_optimize_decay_model:
+        if (
+            self.separately_optimize_decay_model and
+            self._decay_optimize(epoch_num)
+        ):
 
-            decay_loss = self._training_step_decay(
+            # Call the training step and compare the negative velocity
+            # to the decay output data
+            decay_loss = super()._training_step(
                 epoch_num,
                 train_x,
-                optimizer[1],
+                None,
                 loss_function,
-                compare_decay_data=True
+                input_x=self._slice_data_and_forward(
+                    train_x,
+                    return_submodels=True
+                )[1],
+                target_x=self.output_data(
+                    train_x,
+                    decay=True
+                ),
+                loss_weight=self.decay_loss_weight,
+                optimizer_step=False
             )
 
         else:
@@ -445,45 +459,6 @@ class SupirFactorBiophysical(
         )
 
         return loss, decay_loss
-
-    def _training_step_decay(
-        self,
-        epoch_num,
-        train_x,
-        optimizer,
-        loss_function,
-        compare_decay_data=False
-    ):
-
-        if not self._decay_optimize(epoch_num):
-            return 0
-
-        # Get model output for training data
-        pos, neg = self._slice_data_and_forward(
-            train_x,
-            return_submodels=True
-        )
-
-        if compare_decay_data:
-            _compare_x = self.output_data(
-                train_x,
-                decay=True
-            )
-        else:
-            _compare_x = torch.sub(
-                self.output_data(train_x),
-                pos.detach()
-            )
-
-        return super()._training_step(
-            epoch_num,
-            train_x,
-            optimizer,
-            loss_function,
-            input_x=neg,
-            target_x=_compare_x,
-            loss_weight=self.decay_loss_weight
-        )
 
     def _calculate_all_losses(
         self,

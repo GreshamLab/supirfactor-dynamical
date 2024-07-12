@@ -157,10 +157,10 @@ class _TrainingMixin:
         train_x,
         optimizer,
         loss_function,
-        retain_graph=False,
         input_x=None,
         target_x=None,
         loss_weight=None,
+        optimizer_step=True,
         **kwargs
     ):
 
@@ -178,9 +178,11 @@ class _TrainingMixin:
         if loss_weight is not None:
             mse = mse * loss_weight
 
-        mse.backward(retain_graph=retain_graph)
-        optimizer.step()
-        optimizer.zero_grad()
+        mse.backward()
+
+        if optimizer_step:
+            optimizer.step()
+            optimizer.zero_grad()
 
         return mse.item()
 
