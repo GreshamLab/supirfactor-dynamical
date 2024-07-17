@@ -422,7 +422,10 @@ class SupirFactorBiophysical(
         :rtype: float, float, float
         """
 
-        if self.separately_optimize_decay_model:
+        if (
+            self.separately_optimize_decay_model and
+            self._decay_optimize(epoch_num)
+        ):
 
             # Call the training step and compare the negative velocity
             # to the decay output data
