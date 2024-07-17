@@ -427,8 +427,20 @@ class SupirFactorBiophysical(
             self._decay_optimize(epoch_num)
         ):
 
+            # Pass training data into the decay submodule for a step
+            self._decay_model._training_step(
+                epoch_num,
+                train_x,
+                optimizer[1],
+                loss_function,
+                target_x=self._decay_model.output_data(
+                    train_x
+                )
+            )
+
             # Call the training step and compare the negative velocity
             # to the decay output data
+            # This propagates gradients into both submodels
             decay_loss = super()._training_step(
                 epoch_num,
                 train_x,
