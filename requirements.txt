@@ -7,3 +7,4 @@ tqdm
 torch
 torcheval
 tables
+scself
