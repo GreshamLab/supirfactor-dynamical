@@ -35,3 +35,4 @@ from .time_offsets import (
 )
 
 from .early_stopping import check_loss_for_early_stop
+from .activation import get_activation_function

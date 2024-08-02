@@ -1,11 +1,13 @@
 import torch
+from supirfactor_dynamical._utils import get_activation_function
 
 
 def basic_classifier(
     input_width,
     hl_width,
     output_classes,
-    dropout=0.0
+    dropout=0.0,
+    activation=None
 ):
 
     return torch.nn.Sequential(
@@ -13,7 +15,8 @@ def basic_classifier(
         torch.nn.Linear(input_width, hl_width, bias=False),
         torch.nn.Tanh(),
         torch.nn.Dropout(dropout),
-        torch.nn.Linear(hl_width, output_classes, bias=False)
+        torch.nn.Linear(hl_width, output_classes, bias=False),
+        get_activation_function(activation)
     )
 
 
@@ -22,7 +25,7 @@ def basic_count_predictor(
     widths,
     output_width,
     dropout=0.0,
-    softplus=False
+    activation='ReLU'
 ):
 
     if not isinstance(widths, (tuple, list)):
@@ -36,5 +39,5 @@ def basic_count_predictor(
         torch.nn.Tanh(),
         torch.nn.Dropout(dropout),
         torch.nn.Linear(widths[1], output_width, bias=False),
-        torch.nn.Softplus() if softplus else torch.nn.ReLU()
+        get_activation_function(activation)
     )

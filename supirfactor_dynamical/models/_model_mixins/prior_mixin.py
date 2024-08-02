@@ -3,7 +3,10 @@ import pandas as pd
 import warnings
 
 from torch.nn.utils import prune
-from supirfactor_dynamical._utils import _process_weights_to_tensor
+from supirfactor_dynamical._utils import (
+    _process_weights_to_tensor,
+    get_activation_function
+)
 
 
 class _PriorMixin:
@@ -350,19 +353,7 @@ class _PriorMixin:
         activation,
         **kwargs
     ):
-        if activation is None:
-            return torch.nn.Identity()
-        elif activation.lower() == 'sigmoid':
-            return torch.nn.Sigmoid(**kwargs)
-        elif activation.lower() == 'softplus':
-            return torch.nn.Softplus(**kwargs)
-        elif activation.lower() == 'relu':
-            return torch.nn.ReLU(**kwargs)
-        elif activation.lower() == 'tanh':
-            return torch.nn.Tanh(**kwargs)
-        elif activation.lower() == 'softmax':
-            return torch.nn.Softmax(**kwargs)
-        else:
-            raise ValueError(
-                f"Activation {activation} unknown"
-            )
+        return get_activation_function(
+            activation,
+            **kwargs
+        )
