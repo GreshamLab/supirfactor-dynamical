@@ -9,7 +9,8 @@ from ._args import (
     _SERIALIZE_MODEL_TYPE_ATTRS,
     _SERIALIZE_RUNTIME_ATTRS,
     _SERIALIZE_ENCODED_ARGS,
-    _ENCODE_ACTIVATIONS
+    _ENCODE_ACTIVATIONS,
+    _DEPRECATED_ARGS
 )
 from ._torch_state import (
     _read_torch_state,
@@ -29,12 +30,12 @@ _FORCE_UNIT = {
     'hidden_layer_width': int
 }
 
-
 def read(
     file_name,
     model_class=None,
     prefix='',
-    submodule_templates=None
+    submodule_templates=None,
+    load_v1=False
 ):
     """
     Load a model from a file
@@ -45,6 +46,10 @@ def read(
         using the file to determine model class,
         defaults to None
     :type model_class: class
+    :param prefix: Load model prefixed with this string
+    :type prefix: str
+    :param load_v1: Load a v1.0.0 model
+    :type load_v1: bool
     """
 
     _pre_len = len(prefix)
@@ -80,6 +85,10 @@ def read(
                         module_name
                     )
                 )
+
+    if load_v1:
+        for arg in _DEPRECATED_ARGS:
+            kwargs.pop(arg, None)
 
     for k, func in _FORCE_UNIT.items():
         if k in kwargs and kwargs[k] is not None:

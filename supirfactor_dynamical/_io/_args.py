@@ -68,3 +68,5 @@ _SCALER_ARGS = [
     ('_count_inverse_scaler', 'count_scaling'),
     ('_velocity_inverse_scaler', 'velocity_scaling')
 ]
+
+_DEPRECATED_ARGS = ['k', 'g', 'time_dependent_decay']
