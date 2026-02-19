@@ -87,6 +87,10 @@ def read(
                 )
 
     if load_v1:
+        if _state_model == 'decay':
+            kwargs['n_genes'] = kwargs.pop('g', None)
+            kwargs['hidden_layer_width'] = kwargs.pop('k', None)
+
         for arg in _DEPRECATED_ARGS:
             kwargs.pop(arg, None)
 
